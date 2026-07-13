@@ -1,7 +1,9 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -43,6 +45,18 @@ function targetName(url: string): string {
   return last.startsWith('@') ? last : `@${last}`;
 }
 
+async function openTask(task: Task) {
+  if (!task.targetUrl) {
+    Alert.alert('Coming soon', 'Quizzes are on the way — check back soon!');
+    return;
+  }
+  try {
+    await Linking.openURL(task.targetUrl);
+  } catch {
+    Alert.alert('Could not open link', 'Copy the link and open it manually.');
+  }
+}
+
 function TaskCard({ task, dark }: { task: Task; dark: boolean }) {
   const meta = PLATFORM_META[task.platform] ?? {
     label: task.platform,
@@ -51,7 +65,8 @@ function TaskCard({ task, dark }: { task: Task; dark: boolean }) {
   return (
     <TouchableOpacity
       style={[styles.card, dark && styles.cardDark]}
-      activeOpacity={0.7}>
+      activeOpacity={0.7}
+      onPress={() => openTask(task)}>
       <View style={[styles.platformBadge, { backgroundColor: meta.color }]}>
         <Text style={styles.platformBadgeText}>{meta.label[0]}</Text>
       </View>
