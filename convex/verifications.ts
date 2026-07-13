@@ -6,7 +6,6 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { creditHelper } from "./points";
 
 // Task Verification State Machine (plan §5):
 // CREATED → USER_CLAIMED_DONE → PROOF_SUBMITTED
@@ -145,7 +144,7 @@ export const release = internalMutation({
       return;
     }
     await ctx.db.patch(args.verificationId, { state: "RELEASED" });
-    await creditHelper(ctx, {
+    await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
       delta: task.points,
       reason: "TASK_COMPLETED",
@@ -156,6 +155,24 @@ export const release = internalMutation({
         userId: verification.userId,
         normalizedUrl: normalizeUrl(task.targetUrl),
       });
+    }
+  },
+});
+
+export const purgeOldScreenshots = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    const verifications = await ctx.db
+      .query("verifications")
+      .withIndex("by_state", (q) => q.eq("state", "RELEASED"))
+      .collect();
+
+    for (const v of verifications) {
+      if (v._creationTime < cutoff && v.screenshotStorageId) {
+        await ctx.storage.delete(v.screenshotStorageId);
+        await ctx.db.patch(v._id, { screenshotStorageId: undefined });
+      }
     }
   },
 });

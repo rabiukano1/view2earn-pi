@@ -8,8 +8,18 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
+import type * as ads from "../ads.js";
+import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
+import type * as http from "../http.js";
+import type * as lib_guards from "../lib/guards.js";
+import type * as linkedProfiles from "../linkedProfiles.js";
 import type * as points from "../points.js";
+import type * as quiz from "../quiz.js";
+import type * as surveys from "../surveys.js";
 import type * as tasks from "../tasks.js";
+import type * as telegram from "../telegram.js";
 import type * as users from "../users.js";
 import type * as verifications from "../verifications.js";
 
@@ -20,8 +30,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
+  ads: typeof ads;
+  auth: typeof auth;
+  crons: typeof crons;
+  http: typeof http;
+  "lib/guards": typeof lib_guards;
+  linkedProfiles: typeof linkedProfiles;
   points: typeof points;
+  quiz: typeof quiz;
+  surveys: typeof surveys;
   tasks: typeof tasks;
+  telegram: typeof telegram;
   users: typeof users;
   verifications: typeof verifications;
 }>;

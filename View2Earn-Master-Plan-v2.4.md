@@ -686,12 +686,18 @@ Launch set: streak + daily quiz + progress bar + weekly leaderboard.
 ## 8. Build Phases
 
 ### Phase 1 — Foundation (Weeks 1–3)
-- `npx @react-native-community/cli init View2Earn` + `npm install convex` + `npx convex dev`
-- react-native-code-push configured (expo-updates blocked by RN 0.86 incompatibility)
-- Monorepo workspaces; Convex schema deployed (Section 6)
-- Ecosystem guard middleware; Sidra auth flow writing to `users`
-- `packages/core`: reward rules + state machine definitions + tests
-- Append-only `pointsLedger` mutations
+- [x] `npx @react-native-community/cli init View2Earn` + `npm install convex` + `npx convex dev`
+- [x] react-native-code-push configured (expo-updates blocked by RN 0.86 incompatibility)
+- [x] Monorepo workspaces (`packages/*` with npm workspaces)
+- [x] Convex schema deployed (Section 6 — 12 tables with indexes)
+- [x] `packages/core`: shared types, reward rules, state machine definitions
+- [x] Ecosystem guard middleware (`convex/lib/guards.ts`)
+- [x] Append-only `pointsLedger` mutations (credit, balance, history, creditHelper)
+- [x] Task seed data + feed query (`convex/tasks.ts`)
+- [x] Verification state machine + screenshot flow (`convex/verifications.ts`)
+- [x] Dev user auth (`convex/users.ts`)
+- [x] Sidra auth flow (`convex/auth.ts`): token verification, user creation, background identity check
+- [x] `packages/core` test suite (14 tests: state machine transitions + constants validation)
 
 ### Phase 2 — Verification & Task MVP (Weeks 3–7)
 - Profile linking + bio-code ownership (Tier 2) + 30-day lock + GLOBAL

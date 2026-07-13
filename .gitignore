@@ -83,6 +83,9 @@ yarn-error.log
 .agents/
 .claude/
 
+# Project master plan (internal, not for repo)
+View2Earn-Master-Plan-v2.4.md
+
 # Convex auto-generated skill lock
 skills-lock.json
 

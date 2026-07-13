@@ -205,7 +205,7 @@ export default function TaskFeedScreen() {
   const generateUploadUrl = useMutation(api.verifications.generateUploadUrl);
   const submitProof = useMutation(api.verifications.submitProof);
 
-  const tasks = useQuery(api.tasks.list);
+  const tasks = useQuery(api.tasks.list, userId ? { userId } : "skip");
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const verifications = useQuery(
     api.verifications.listMine,

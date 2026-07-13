@@ -1,19 +1,61 @@
-import { query, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireUser } from "./lib/guards";
 
-// Active, non-expired tasks for the feed. Completion counts are NEVER
-// returned to the client (key design rule: counts stay hidden).
+function normalizeUrl(url: string): string {
+  return url
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "");
+}
+
+function getPlatform(url: string): string | null {
+  const n = normalizeUrl(url);
+  if (n.includes("facebook.com") || n.includes("fb.com")) return "facebook";
+  if (n.includes("tiktok.com")) return "tiktok";
+  if (n.includes("t.me") || n.includes("telegram")) return "telegram";
+  if (n.includes("instagram.com")) return "instagram";
+  return null;
+}
+
 export const list = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
     const now = Date.now();
+
+    const completed = await ctx.db
+      .query("completedTargets")
+      .withIndex("by_user_url", (q) => q.eq("userId", userId))
+      .collect();
+    const doneUrls = new Set(completed.map((c) => c.normalizedUrl));
+
+    const inProgress = await ctx.db
+      .query("verifications")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const inProgressTaskIds = new Set(
+      inProgress
+        .filter((v) => v.state !== "REJECTED" && v.state !== "CANCELLED" && v.state !== "RELEASED")
+        .map((v) => v.taskId),
+    );
+
     const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .order("desc")
-      .take(50);
+      .take(100);
+
     return tasks
-      .filter((t) => t.expiresAt > now)
+      .filter((t) => {
+        if (t.expiresAt <= now) return false;
+        if (t.creatorUserId === userId) return false;
+        const url = normalizeUrl(t.targetUrl);
+        if (doneUrls.has(url)) return false;
+        if (inProgressTaskIds.has(t._id)) return false;
+        return true;
+      })
       .map((t) => ({
         _id: t._id,
         type: t.type,
@@ -25,7 +67,32 @@ export const list = query({
   },
 });
 
-// Dev-only sample data so the feed has something to show.
+export const dailyRemaining = query({
+  args: { userId: v.id("users"), platform: v.string() },
+  handler: async (ctx, { userId, platform }) => {
+    await requireUser(ctx, userId);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const verifications = await ctx.db
+      .query("verifications")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    const todayCount = verifications.filter((v) => {
+      const task = v.taskId;
+      if (!task || v.state === "CANCELLED") return false;
+      return v._creationTime >= todayStart.getTime();
+    }).length;
+
+    const limits = await ctx.db.query("platformLimits").collect();
+    const platformLimit = limits.find((l) => l.platform === platform);
+    const limit = platformLimit?.dailyTaskLimit ?? 15;
+
+    return { used: todayCount, remaining: Math.max(0, limit - todayCount), limit };
+  },
+});
+
 export const seed = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -54,5 +121,32 @@ export const seed = internalMutation({
       });
     }
     return `seeded ${samples.length} tasks`;
+  },
+});
+
+export const create = mutation({
+  args: {
+    userId: v.id("users"),
+    type: v.string(),
+    platform: v.string(),
+    targetUrl: v.string(),
+    points: v.number(),
+    verifier: v.string(),
+    maxCompletions: v.number(),
+    expiresAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await requireUser(ctx, args.userId);
+    return await ctx.db.insert("tasks", {
+      type: args.type,
+      platform: args.platform,
+      targetUrl: args.targetUrl,
+      points: args.points,
+      verifier: args.verifier,
+      maxCompletions: args.maxCompletions,
+      creatorUserId: args.userId,
+      status: "active",
+      expiresAt: args.expiresAt,
+    });
   },
 });
