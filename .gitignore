@@ -53,8 +53,9 @@ yarn-error.log
 **/fastlane/screenshots
 **/fastlane/test_output
 
-# Bundle artifact
+# Bundle artifacts
 *.jsbundle
+.bundle/
 
 # Ruby / CocoaPods
 **/Pods/
@@ -73,3 +74,17 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Environment secrets
+.env.local
+.env.*.local
+
+# AI agent workspace files
+.agents/
+.claude/
+
+# Convex auto-generated skill lock
+skills-lock.json
+
+# Convex telemetry
+.convex-configure-*
