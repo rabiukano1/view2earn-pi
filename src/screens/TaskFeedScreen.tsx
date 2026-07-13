@@ -45,16 +45,41 @@ function targetName(url: string): string {
   return last.startsWith('@') ? last : `@${last}`;
 }
 
+// Candidate URLs per platform, best first: native app scheme, then the
+// plain https link (which Android app-links may still route to the app,
+// and otherwise opens in the browser).
+function deepLinkCandidates(task: Task): string[] {
+  const url = task.targetUrl;
+  const handle = url.replace(/\/+$/, '').split('/').pop() ?? '';
+  switch (task.platform) {
+    case 'telegram':
+      return [`tg://resolve?domain=${handle.replace(/^@/, '')}`, url];
+    case 'facebook':
+      // Full fb deep-linking uses numeric page IDs (plan §7); until tasks
+      // carry one, facewebmodal opens the page inside the Facebook app.
+      return [`fb://facewebmodal/f?href=${encodeURIComponent(url)}`, url];
+    default:
+      return [url];
+  }
+}
+
 async function openTask(task: Task) {
   if (!task.targetUrl) {
     Alert.alert('Coming soon', 'Quizzes are on the way — check back soon!');
     return;
   }
-  try {
-    await Linking.openURL(task.targetUrl);
-  } catch {
-    Alert.alert('Could not open link', 'Copy the link and open it manually.');
+  for (const candidate of deepLinkCandidates(task)) {
+    try {
+      await Linking.openURL(candidate);
+      return;
+    } catch {
+      // App not installed / scheme unsupported — try the next candidate.
+    }
   }
+  Alert.alert(
+    'Could not open link',
+    `Open it manually:\n${task.targetUrl}`,
+  );
 }
 
 function TaskCard({ task, dark }: { task: Task; dark: boolean }) {
