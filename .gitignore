@@ -91,3 +91,5 @@ skills-lock.json
 
 # Convex telemetry
 .convex-configure-*
+.next/
+apps/*/node_modules/
