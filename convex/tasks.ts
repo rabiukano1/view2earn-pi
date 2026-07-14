@@ -61,6 +61,7 @@ export const list = query({
         type: t.type,
         platform: t.platform,
         targetUrl: t.targetUrl,
+        pageId: t.pageId,
         points: t.points,
         verifier: t.verifier,
       }));
@@ -73,23 +74,80 @@ export const dailyRemaining = query({
     await requireUser(ctx, userId);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const since = todayStart.getTime();
 
-    const verifications = await ctx.db
+    const mine = await ctx.db
       .query("verifications")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
 
-    const todayCount = verifications.filter((v) => {
-      const task = v.taskId;
-      if (!task || v.state === "CANCELLED") return false;
-      return v._creationTime >= todayStart.getTime();
+    const todayCount = mine.filter((v) => {
+      if (v.state === "CANCELLED" || v.state === "REJECTED") return false;
+      if (v.platform !== platform) return false;
+      return v._creationTime >= since;
     }).length;
 
     const limits = await ctx.db.query("platformLimits").collect();
-    const platformLimit = limits.find((l) => l.platform === platform);
-    const limit = platformLimit?.dailyTaskLimit ?? 15;
+    const cfg = limits.find((l) => l.platform === platform);
+    const limit = cfg?.dailyTaskLimit ?? 15;
 
-    return { used: todayCount, remaining: Math.max(0, limit - todayCount), limit };
+    return {
+      used: todayCount,
+      remaining: Math.max(0, limit - todayCount),
+      limit,
+      cooldownMinutes: cfg?.cooldownMinutes ?? 3,
+    };
+  },
+});
+
+// Honest follow-limit UI (plan §7.9b): remaining for every social platform in
+// one call, so the feed can show "protects your account" caps up front.
+const SOCIAL_PLATFORMS = ["facebook", "tiktok", "telegram"] as const;
+
+export const myLimits = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const since = todayStart.getTime();
+
+    const mine = await ctx.db
+      .query("verifications")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const active = mine.filter(
+      (v) => v.state !== "CANCELLED" && v.state !== "REJECTED" && v._creationTime >= since,
+    );
+
+    const limits = await ctx.db.query("platformLimits").collect();
+    return SOCIAL_PLATFORMS.map((platform) => {
+      const cfg = limits.find((l) => l.platform === platform);
+      const limit = cfg?.dailyTaskLimit ?? 15;
+      const used = active.filter((v) => v.platform === platform).length;
+      return {
+        platform,
+        used,
+        remaining: Math.max(0, limit - used),
+        limit,
+        cooldownMinutes: cfg?.cooldownMinutes ?? 3,
+      };
+    });
+  },
+});
+
+export const seedLimits = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const existing = await ctx.db.query("platformLimits").take(1);
+    if (existing.length > 0) return "already seeded";
+    const rows = [
+      { platform: "facebook", dailyTaskLimit: 15, cooldownMinutes: 3, newProfileFactor: 0.5 },
+      { platform: "tiktok", dailyTaskLimit: 15, cooldownMinutes: 3, newProfileFactor: 0.5 },
+      { platform: "telegram", dailyTaskLimit: 10, cooldownMinutes: 3, newProfileFactor: 0.5 },
+    ];
+    for (const r of rows) await ctx.db.insert("platformLimits", r);
+    return `seeded ${rows.length} platform limits`;
   },
 });
 
@@ -130,6 +188,7 @@ export const create = mutation({
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
+    pageId: v.optional(v.string()),
     points: v.number(),
     verifier: v.string(),
     maxCompletions: v.number(),
@@ -141,6 +200,7 @@ export const create = mutation({
       type: args.type,
       platform: args.platform,
       targetUrl: args.targetUrl,
+      pageId: args.pageId,
       points: args.points,
       verifier: args.verifier,
       maxCompletions: args.maxCompletions,

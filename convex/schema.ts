@@ -2,6 +2,33 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  // Daily check-in streak (plan §7.11b): one row per user.
+  streaks: defineTable({
+    userId: v.id("users"),
+    current: v.number(),        // consecutive-day streak length
+    longest: v.number(),
+    lastDay: v.number(),        // UTC day number of last check-in
+  }).index("by_user", ["userId"]),
+
+  // Daily mystery box (plan §7.11b): one open per day after 3 tasks.
+  dailyBoxes: defineTable({
+    userId: v.id("users"),
+    lastDay: v.number(),        // UTC day number the box was last opened
+  }).index("by_user", ["userId"]),
+
+  // Daily task combo (plan §7.11b): follow + telegram join + quiz in one day.
+  combos: defineTable({
+    userId: v.id("users"),
+    lastDay: v.number(),        // UTC day number the combo bonus was claimed
+  }).index("by_user", ["userId"]),
+
+  // Sliding-window rate limits (plan §7.9 Layer 5): one row per action attempt.
+  rateLimits: defineTable({
+    userId: v.id("users"),
+    action: v.string(),
+    at: v.number(),
+  }).index("by_user_action", ["userId", "action"]),
+
   users: defineTable({
     ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
     externalUid: v.string(),
@@ -29,6 +56,7 @@ export default defineSchema({
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
+    pageId: v.optional(v.string()),      // numeric FB page ID (plan §7.9d)
     points: v.number(),
     verifier: v.string(),
     maxCompletions: v.number(),
@@ -40,6 +68,7 @@ export default defineSchema({
   verifications: defineTable({
     taskId: v.id("tasks"),
     userId: v.id("users"),
+    platform: v.optional(v.string()),
     state: v.string(),
     screenshotStorageId: v.optional(v.id("_storage")),
     screenshotPhash: v.optional(v.string()),
@@ -143,4 +172,27 @@ export default defineSchema({
     total: v.number(),
     questionIds: v.array(v.id("quizQuestions")),
   }).index("by_user", ["userId"]),
+
+  bioCodes: defineTable({
+    userId: v.id("users"),
+    code: v.string(),
+    platform: v.string(),
+    createdAt: v.number(),
+  }).index("by_code", ["code"])
+    .index("by_user", ["userId"]),
+
+  marketplaceListings: defineTable({
+    userId: v.id("users"),
+    taskId: v.id("tasks"),
+    platform: v.string(),
+    targetUrl: v.string(),
+    pageId: v.optional(v.string()),
+    pointsReward: v.number(),
+    listingFee: v.number(),
+    maxCompletions: v.number(),
+    completionsSoFar: v.number(),
+    status: v.string(),
+    expiresAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_status", ["status"]),
 });

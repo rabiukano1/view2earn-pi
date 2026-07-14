@@ -1,6 +1,22 @@
 import { v } from "convex/values";
-import { action, internalMutation } from "./_generated/server";
+import { action, internalAction, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+
+// Kicked off by verifications.verifyTelegram. In prod, a real getChatMember
+// check needs TELEGRAM_BOT_TOKEN plus the user's linked Telegram numeric id +
+// channel username (not yet captured for dev users), so until those exist this
+// mock-approves — mirroring the mocked aiCheck confidence in verifications.ts.
+export const check = internalAction({
+  args: { verificationId: v.id("verifications") },
+  handler: async (ctx, { verificationId }) => {
+    // TODO(prod): read process.env.TELEGRAM_BOT_TOKEN + the user's telegram id
+    // and call verifyMembership; reject when getChatMember says "left".
+    await ctx.runMutation(internal.telegram.applyResult, {
+      verificationId,
+      isMember: true,
+    });
+  },
+});
 
 export const verifyMembership = action({
   args: {
@@ -52,7 +68,8 @@ export const applyResult = internalMutation({
     if (args.isMember) {
       const task = await ctx.db.get(verification.taskId);
       if (!task) return;
-      const holdUntil = Date.now() + 48 * 60 * 60 * 1000;
+      // TODO(prod): 48h per plan §5. Short hold in dev so the flow is testable.
+      const holdUntil = Date.now() + 60 * 1000;
       await ctx.db.patch(args.verificationId, {
         state: "PENDING_HOLD",
         holdUntil,

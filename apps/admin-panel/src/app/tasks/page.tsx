@@ -10,6 +10,7 @@ type TaskForm = {
   type: string;
   platform: string;
   targetUrl: string;
+  pageId: string;
   points: number;
   verifier: string;
   maxCompletions: number;
@@ -20,6 +21,7 @@ const EMPTY: TaskForm = {
   type: "FOLLOW_PAGE",
   platform: "facebook",
   targetUrl: "",
+  pageId: "",
   points: 50,
   verifier: "screenshot-ai",
   maxCompletions: 1000,
@@ -49,6 +51,7 @@ export default function TasksPage() {
       type: t.type,
       platform: t.platform,
       targetUrl: t.targetUrl,
+      pageId: t.pageId ?? "",
       points: t.points,
       verifier: t.verifier,
       maxCompletions: t.maxCompletions,
@@ -58,8 +61,9 @@ export default function TasksPage() {
   };
 
   const save = async () => {
-    const { expiresDays, ...fields } = form;
+    const { expiresDays, pageId, ...rest } = form;
     const expiresAt = Date.now() + expiresDays * 86400000;
+    const fields = { ...rest, pageId: pageId.trim() || undefined };
     try {
       if (editing) {
         await updateTask({ taskId: editing, ...fields, expiresAt });
@@ -161,6 +165,15 @@ export default function TasksPage() {
             placeholder="https://facebook.com/yourpage"
           />
         </Field>
+        {form.platform === "facebook" && (
+          <Field label="Facebook Page ID (numeric — reliable deep links on FB Lite)">
+            <input
+              value={form.pageId}
+              onChange={(e) => set({ pageId: e.target.value })}
+              placeholder="e.g. 100064860796750"
+            />
+          </Field>
+        )}
         <div className="form-grid">
           <Field label="Points">
             <input type="number" value={form.points} onChange={(e) => set({ points: Number(e.target.value) })} />

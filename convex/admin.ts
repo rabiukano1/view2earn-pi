@@ -5,6 +5,17 @@ import { internal } from "./_generated/api";
 // TODO(prod): every function here must require an authenticated admin
 // (ctx.auth + role check) before the panel is exposed anywhere.
 
+// Admin panel sign-in. Verifies against the ADMIN_PASSWORD Convex env var
+// (set with: npx convex env set ADMIN_PASSWORD <password>). Defaults to
+// "admin" until set — change it before exposing the panel.
+export const checkPassword = query({
+  args: { password: v.string() },
+  handler: async (_ctx, { password }) => {
+    const expected = process.env.ADMIN_PASSWORD ?? "admin";
+    return password === expected;
+  },
+});
+
 const VERIFICATION_STATES = [
   "USER_CLAIMED_DONE",
   "PROOF_SUBMITTED",
@@ -109,6 +120,7 @@ export const createTask = mutation({
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
+    pageId: v.optional(v.string()),
     points: v.number(),
     verifier: v.string(),
     maxCompletions: v.number(),
@@ -125,6 +137,7 @@ export const updateTask = mutation({
     type: v.optional(v.string()),
     platform: v.optional(v.string()),
     targetUrl: v.optional(v.string()),
+    pageId: v.optional(v.string()),
     points: v.optional(v.number()),
     verifier: v.optional(v.string()),
     maxCompletions: v.optional(v.number()),

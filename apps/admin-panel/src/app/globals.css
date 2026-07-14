@@ -395,3 +395,88 @@ td.truncate { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white
 }
 
 .shot-full { max-width: 100%; border-radius: 10px; display: block; }
+
+/* ── Admin sign-in gate ─────────────────────────────────────────── */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 24px;
+}
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.login-brand {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  background: var(--accent-weak);
+  padding: 5px 12px;
+  border-radius: 999px;
+  margin-bottom: 14px;
+}
+.login-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.login-sub {
+  font-size: 14px;
+  color: var(--text-2);
+  margin: 2px 0 16px;
+}
+.login-card input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 15px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  outline: none;
+}
+.login-card input:focus {
+  border-color: var(--accent);
+}
+.login-card .btn {
+  margin-top: 14px;
+  justify-content: center;
+  padding: 12px;
+  font-size: 15px;
+}
+.login-error {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--danger);
+}
+.logout-btn {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 50;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.logout-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}

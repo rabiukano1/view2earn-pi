@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
+import { enforceRateLimit } from "./lib/ratelimit";
 
 export const generateQuestions = internalAction({
   args: { ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")), count: v.number() },
@@ -116,6 +117,7 @@ export const submitQuiz = mutation({
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx, args.userId);
+    await enforceRateLimit(ctx, args.userId, "quiz");
     let score = 0;
     const questionIds: string[] = [];
 

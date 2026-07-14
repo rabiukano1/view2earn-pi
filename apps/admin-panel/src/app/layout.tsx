@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Providers } from "./providers";
 import { Sidebar } from "./sidebar";
+import { AuthGate } from "./AuthGate";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,10 +13,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <Providers>
-          <div className="layout">
-            <Sidebar />
-            <main className="main">{children}</main>
-          </div>
+          <AuthGate>
+            <div className="layout">
+              <Sidebar />
+              <main className="main">{children}</main>
+            </div>
+          </AuthGate>
         </Providers>
       </body>
     </html>
