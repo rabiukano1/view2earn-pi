@@ -16,6 +16,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
+import QuizScreen from './QuizScreen';
 
 const PLATFORM_META: Record<string, { label: string; color: string }> = {
   facebook: { label: 'Facebook', color: '#1877F2' },
@@ -73,9 +74,18 @@ function deepLinkCandidates(task: Task): string[] {
   }
 }
 
-async function openTask(task: Task) {
+type OpenTaskArgs = {
+  task: Task;
+  onQuizOpen?: () => void;
+};
+
+async function openTask({ task, onQuizOpen }: OpenTaskArgs) {
+  if (task.type === 'QUIZ') {
+    onQuizOpen?.();
+    return;
+  }
   if (!task.targetUrl) {
-    Alert.alert('Coming soon', 'Quizzes are on the way — check back soon!');
+    Alert.alert('Coming soon', 'This task type is coming soon — check back!');
     return;
   }
   for (const candidate of deepLinkCandidates(task)) {
@@ -131,12 +141,14 @@ function TaskCard({
   dark,
   onClaim,
   onUpload,
+  onQuizOpen,
 }: {
   task: Task;
   verification: Verification | undefined;
   dark: boolean;
   onClaim: (task: Task) => void;
   onUpload: (verification: Verification) => void;
+  onQuizOpen?: () => void;
 }) {
   const meta = PLATFORM_META[task.platform] ?? {
     label: task.platform,
@@ -150,7 +162,7 @@ function TaskCard({
       <TouchableOpacity
         style={styles.cardTop}
         activeOpacity={0.7}
-        onPress={() => openTask(task)}>
+        onPress={() => openTask({ task, onQuizOpen })}>
         <View style={[styles.platformBadge, { backgroundColor: meta.color }]}>
           <Text style={styles.platformBadgeText}>{meta.label[0]}</Text>
         </View>
@@ -199,6 +211,8 @@ export default function TaskFeedScreen() {
   const insets = useSafeAreaInsets();
   const [userId, setUserId] = useState<Id<'users'> | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [quizVisible, setQuizVisible] = useState(false);
+  const [userEcosystem, setUserEcosystem] = useState<'PI' | 'SIDRA'>('PI');
 
   const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const claim = useMutation(api.verifications.claim);
@@ -214,7 +228,10 @@ export default function TaskFeedScreen() {
 
   useEffect(() => {
     getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then(setUserId)
+      .then((user) => {
+        setUserId(user._id);
+        setUserEcosystem(user.ecosystem);
+      })
       .catch((e) => Alert.alert('Sign-in failed', String(e)));
   }, [getOrCreateDevUser]);
 
@@ -320,6 +337,7 @@ export default function TaskFeedScreen() {
               dark={dark}
               onClaim={handleClaim}
               onUpload={handleUpload}
+              onQuizOpen={() => setQuizVisible(true)}
             />
           )}
           contentContainerStyle={[
@@ -333,6 +351,14 @@ export default function TaskFeedScreen() {
           <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.uploadText}>Uploading screenshot…</Text>
         </View>
+      )}
+      {userId && (
+        <QuizScreen
+          visible={quizVisible}
+          onClose={() => setQuizVisible(false)}
+          userId={userId}
+          ecosystem={userEcosystem}
+        />
       )}
     </View>
   );

@@ -17,6 +17,7 @@ import type * as lib_guards from "../lib/guards.js";
 import type * as linkedProfiles from "../linkedProfiles.js";
 import type * as points from "../points.js";
 import type * as quiz from "../quiz.js";
+import type * as quizSeed from "../quizSeed.js";
 import type * as surveys from "../surveys.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   linkedProfiles: typeof linkedProfiles;
   points: typeof points;
   quiz: typeof quiz;
+  quizSeed: typeof quizSeed;
   surveys: typeof surveys;
   tasks: typeof tasks;
   telegram: typeof telegram;
