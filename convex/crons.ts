@@ -23,4 +23,10 @@ crons.interval(
   { ecosystem: "SIDRA", count: 5 },
 );
 
+// Tier 3 count-delta fraud signal (plan §4).
+crons.interval("count-delta-scan", { hours: 12 }, internal.countDelta.scan);
+
+// Recompute fraud scores so they decay as old events age out (plan §7.9).
+crons.interval("recompute-fraud-scores", { hours: 24 }, internal.fraud.recomputeAll);
+
 export default crons;

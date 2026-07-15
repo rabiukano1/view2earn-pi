@@ -7,6 +7,8 @@ import {
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { enforceRateLimit } from "./lib/ratelimit";
+import { isImpossibleSpeed } from "@view2earn/core";
+import { recomputeUserScore } from "./fraud";
 
 // Task Verification State Machine (plan §5):
 // CREATED → USER_CLAIMED_DONE → PROOF_SUBMITTED
@@ -174,6 +176,20 @@ export const submitProof = mutation({
       state: "PROOF_SUBMITTED",
       screenshotStorageId: args.storageId,
     });
+
+    // Layer 4 behavioral signal (plan §7.9): proof arriving bot-fast after the
+    // claim is a flag, not a hard block — the raised score forces verification.
+    if (isImpossibleSpeed(Date.now() - verification._creationTime)) {
+      await ctx.db.insert("fraudEvents", {
+        userId: verification.userId,
+        type: "impossible-speed",
+        detailsJson: JSON.stringify({
+          verificationId: args.verificationId,
+          elapsedMs: Date.now() - verification._creationTime,
+        }),
+      });
+      await recomputeUserScore(ctx, verification.userId);
+    }
 
     if (await shouldVerify(ctx, verification.userId)) {
       // Run AI vision (sampled = true set in applyAiResult).

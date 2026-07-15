@@ -16,6 +16,11 @@ export default defineSchema({
     lastDay: v.number(),        // UTC day number the box was last opened
   }).index("by_user", ["userId"]),
 
+  dailySpins: defineTable({
+    userId: v.id("users"),
+    lastDay: v.number(),        // UTC day number the wheel was last spun
+  }).index("by_user", ["userId"]),
+
   // Daily task combo (plan §7.11b): follow + telegram join + quiz in one day.
   combos: defineTable({
     userId: v.id("users"),
@@ -63,6 +68,11 @@ export default defineSchema({
     creatorUserId: v.optional(v.id("users")),
     status: v.string(),
     expiresAt: v.number(),
+    // Tier 3 count-delta snapshot (convex/countDelta.ts): last public-count
+    // reading + claimed-follow count at that reading, to compute per-run deltas.
+    lastCount: v.optional(v.number()),
+    lastCountClaims: v.optional(v.number()),
+    lastCountAt: v.optional(v.number()),
   }).index("by_status", ["status"]),
 
   verifications: defineTable({
@@ -77,7 +87,8 @@ export default defineSchema({
     reviewedBy: v.optional(v.id("users")),
     holdUntil: v.optional(v.number()),
   }).index("by_user", ["userId"])
-    .index("by_state", ["state"]),
+    .index("by_state", ["state"])
+    .index("by_task", ["taskId"]),
 
   pointsLedger: defineTable({
     userId: v.id("users"),
@@ -171,6 +182,23 @@ export default defineSchema({
     score: v.number(),
     total: v.number(),
     questionIds: v.array(v.id("quizQuestions")),
+  }).index("by_user", ["userId"]),
+
+  // Academy progress (plan §7.11b): one row per level a user has passed.
+  // Web3 wallet sign-in nonces (plan §7.1). One pending nonce per address; the
+  // wallet signs `message`, the server verifies the signature over it.
+  walletNonces: defineTable({
+    address: v.string(), // lowercased 0x…
+    message: v.string(),
+    expiresAt: v.number(),
+    used: v.boolean(),
+  }).index("by_address", ["address"]),
+
+  academyProgress: defineTable({
+    userId: v.id("users"),
+    ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
+    level: v.number(),
+    passedAt: v.number(),
   }).index("by_user", ["userId"]),
 
   bioCodes: defineTable({

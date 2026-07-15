@@ -1,8 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
-import { PageHeader, EmptyRow, timeAgo } from "@/components/ui";
+import { PageHeader, EmptyRow, RiskBadge, timeAgo } from "@/components/ui";
 
 const STATUS_BADGE: Record<string, string> = {
   fulfilled: "badge-green",
@@ -12,8 +12,8 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default function RedemptionsPage() {
-  const redemptions = useQuery(api.admin.listRedemptions);
-  const updateStatus = useMutation(api.admin.updateRedemptionStatus);
+  const redemptions = useAdminQuery(api.admin.listRedemptions);
+  const updateStatus = useAdminMutation(api.admin.updateRedemptionStatus);
 
   return (
     <div>
@@ -23,6 +23,7 @@ export default function RedemptionsPage() {
           <thead>
             <tr>
               <th>User</th>
+              <th>Risk</th>
               <th>Amount</th>
               <th>Paid with</th>
               <th>Phone</th>
@@ -34,7 +35,8 @@ export default function RedemptionsPage() {
           <tbody>
             {redemptions?.map((r) => (
               <tr key={r._id}>
-                <td className="mono">{r.userId.slice(0, 12)}…</td>
+                <td style={{ fontWeight: 600 }}>{r.username}</td>
+                <td><RiskBadge score={r.fraudScore} tier={r.fraudTier} /></td>
                 <td className="num">{r.amount}</td>
                 <td><span className="badge badge-gray">{r.paidWith}</span></td>
                 <td className="num">{r.phoneNumber}</td>
@@ -70,7 +72,7 @@ export default function RedemptionsPage() {
               </tr>
             ))}
             {(!redemptions || redemptions.length === 0) && (
-              <EmptyRow colSpan={7} text="No redemptions yet" />
+              <EmptyRow colSpan={8} text="No redemptions yet" />
             )}
           </tbody>
         </table>

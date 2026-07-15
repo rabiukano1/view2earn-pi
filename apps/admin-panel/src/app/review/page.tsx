@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
-import { Modal, PageHeader, EmptyRow, timeAgo } from "@/components/ui";
+import { Modal, PageHeader, EmptyRow, RiskBadge, timeAgo } from "@/components/ui";
 
 const FILTERS = [
   { value: "ADMIN_REVIEW", label: "Needs review" },
@@ -15,9 +15,9 @@ const FILTERS = [
 
 export default function ReviewPage() {
   const [filter, setFilter] = useState("ADMIN_REVIEW");
-  const rows = useQuery(api.admin.listVerifications, filter ? { state: filter } : {});
-  const approve = useMutation(api.admin.approveVerification);
-  const reject = useMutation(api.admin.rejectVerification);
+  const rows = useAdminQuery(api.admin.listVerifications, filter ? { state: filter } : {});
+  const approve = useAdminMutation(api.admin.approveVerification);
+  const reject = useAdminMutation(api.admin.rejectVerification);
   const [preview, setPreview] = useState<string | null>(null);
 
   const act = async (fn: () => Promise<unknown>) => {
@@ -51,6 +51,7 @@ export default function ReviewPage() {
             <tr>
               <th>Screenshot</th>
               <th>User</th>
+              <th>Risk</th>
               <th>Task</th>
               <th>Points</th>
               <th>AI confidence</th>
@@ -76,6 +77,7 @@ export default function ReviewPage() {
                   )}
                 </td>
                 <td style={{ fontWeight: 600 }}>{r.username}</td>
+                <td><RiskBadge score={r.fraudScore} tier={r.fraudTier} /></td>
                 <td>{r.taskLabel}</td>
                 <td className="num">+{r.points}</td>
                 <td className="num">
@@ -116,7 +118,7 @@ export default function ReviewPage() {
                 </td>
               </tr>
             ))}
-            {(!rows || rows.length === 0) && <EmptyRow colSpan={8} text="Nothing here" />}
+            {(!rows || rows.length === 0) && <EmptyRow colSpan={9} text="Nothing here" />}
           </tbody>
         </table>
       </div>

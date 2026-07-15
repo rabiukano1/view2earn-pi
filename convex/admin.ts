@@ -1,9 +1,18 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { recomputeUserScore } from "./fraud";
+import { fraudTier } from "@view2earn/core";
 
-// TODO(prod): every function here must require an authenticated admin
-// (ctx.auth + role check) before the panel is exposed anywhere.
+// Every admin function requires the shared admin secret (ADMIN_PASSWORD) as a
+// `token` arg, checked by requireAdmin below. The Next.js panel gate is UI-only,
+// so this is what actually stops direct calls to these endpoints.
+// ponytail: shared-secret auth. Upgrade to real per-admin identity
+// (ctx.auth + role check via a JWT provider) once one exists — see convex-setup-auth.
+function requireAdmin(token: string) {
+  const expected = process.env.ADMIN_PASSWORD ?? "admin";
+  if (token !== expected) throw new Error("Unauthorized");
+}
 
 // Admin panel sign-in. Verifies against the ADMIN_PASSWORD Convex env var
 // (set with: npx convex env set ADMIN_PASSWORD <password>). Defaults to
@@ -30,8 +39,9 @@ const VERIFICATION_STATES = [
 const HOLD_MS = 60 * 1000;
 
 export const getStats = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
     const tasks = await ctx.db
       .query("tasks")
       .withIndex("by_status", (q) => q.eq("status", "active"))
@@ -75,23 +85,82 @@ export const getStats = query({
   },
 });
 
+// Analytics for the dashboard. ponytail: full-table scans per load — fine at
+// current scale; precompute/roll up if the tables grow large.
+export const getAnalytics = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+
+    const ledger = await ctx.db.query("pointsLedger").collect();
+    let issued = 0;
+    let spent = 0;
+    for (const e of ledger) {
+      if (e.delta >= 0) issued += e.delta;
+      else spent += -e.delta;
+    }
+
+    const users = await ctx.db.query("users").collect();
+    const tiers = { normal: 0, watch: 0, restricted: 0, banned: 0 };
+    for (const u of users) tiers[fraudTier(u.fraudScore)]++;
+
+    const DAY = 86400000;
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const start = todayStart.getTime();
+    const newUsersByDay = Array.from({ length: 7 }, (_, i) => {
+      const dayStart = start - (6 - i) * DAY;
+      return {
+        ts: dayStart,
+        count: users.filter(
+          (u) => u._creationTime >= dayStart && u._creationTime < dayStart + DAY,
+        ).length,
+      };
+    });
+
+    const redemptions = await ctx.db.query("redemptions").collect();
+    const redemptionsByStatus: Record<string, number> = {};
+    for (const r of redemptions) {
+      redemptionsByStatus[r.status] = (redemptionsByStatus[r.status] ?? 0) + 1;
+    }
+
+    const fraudEvents = await ctx.db.query("fraudEvents").collect();
+    const fraudByType: Record<string, number> = {};
+    for (const f of fraudEvents) {
+      fraudByType[f.type] = (fraudByType[f.type] ?? 0) + 1;
+    }
+
+    return {
+      points: { issued, spent, outstanding: issued - spent },
+      tiers,
+      newUsersByDay,
+      redemptionsByStatus,
+      fraudByType,
+      fraudEventsTotal: fraudEvents.length,
+    };
+  },
+});
+
 // ---------- Users ----------
 
 export const listUsers = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
     return await ctx.db.query("users").order("desc").take(100);
   },
 });
 
 export const updateUser = mutation({
   args: {
+    token: v.string(),
     userId: v.id("users"),
     tier: v.optional(v.number()),
     fraudScore: v.optional(v.number()),
     country: v.optional(v.string()),
   },
-  handler: async (ctx, { userId, ...fields }) => {
+  handler: async (ctx, { token, userId, ...fields }) => {
+    requireAdmin(token);
     const patch = Object.fromEntries(
       Object.entries(fields).filter(([, value]) => value !== undefined),
     );
@@ -100,8 +169,9 @@ export const updateUser = mutation({
 });
 
 export const deleteUser = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: { token: v.string(), userId: v.id("users") },
+  handler: async (ctx, { token, userId }) => {
+    requireAdmin(token);
     await ctx.db.delete(userId);
   },
 });
@@ -109,14 +179,16 @@ export const deleteUser = mutation({
 // ---------- Tasks ----------
 
 export const listActiveTasks = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
     return await ctx.db.query("tasks").order("desc").take(100);
   },
 });
 
 export const createTask = mutation({
   args: {
+    token: v.string(),
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
@@ -126,13 +198,15 @@ export const createTask = mutation({
     maxCompletions: v.number(),
     expiresAt: v.number(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { token, ...args }) => {
+    requireAdmin(token);
     return await ctx.db.insert("tasks", { ...args, status: "active" });
   },
 });
 
 export const updateTask = mutation({
   args: {
+    token: v.string(),
     taskId: v.id("tasks"),
     type: v.optional(v.string()),
     platform: v.optional(v.string()),
@@ -144,7 +218,8 @@ export const updateTask = mutation({
     status: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
   },
-  handler: async (ctx, { taskId, ...fields }) => {
+  handler: async (ctx, { token, taskId, ...fields }) => {
+    requireAdmin(token);
     const patch = Object.fromEntries(
       Object.entries(fields).filter(([, value]) => value !== undefined),
     );
@@ -153,8 +228,9 @@ export const updateTask = mutation({
 });
 
 export const deleteTask = mutation({
-  args: { taskId: v.id("tasks") },
-  handler: async (ctx, { taskId }) => {
+  args: { token: v.string(), taskId: v.id("tasks") },
+  handler: async (ctx, { token, taskId }) => {
+    requireAdmin(token);
     await ctx.db.delete(taskId);
   },
 });
@@ -162,8 +238,9 @@ export const deleteTask = mutation({
 // ---------- Verifications (review queue) ----------
 
 export const listVerifications = query({
-  args: { state: v.optional(v.string()) },
-  handler: async (ctx, { state }) => {
+  args: { token: v.string(), state: v.optional(v.string()) },
+  handler: async (ctx, { token, state }) => {
+    requireAdmin(token);
     const rows = state
       ? await ctx.db
           .query("verifications")
@@ -187,6 +264,8 @@ export const listVerifications = query({
           state: row.state,
           aiConfidence: row.aiConfidence,
           username: user?.username ?? "unknown",
+          fraudScore: user?.fraudScore ?? 0,
+          fraudTier: fraudTier(user?.fraudScore ?? 0),
           taskLabel: task ? `${task.type} · ${task.platform}` : "deleted task",
           points: task?.points ?? 0,
           screenshotUrl,
@@ -197,8 +276,9 @@ export const listVerifications = query({
 });
 
 export const approveVerification = mutation({
-  args: { verificationId: v.id("verifications") },
-  handler: async (ctx, { verificationId }) => {
+  args: { token: v.string(), verificationId: v.id("verifications") },
+  handler: async (ctx, { token, verificationId }) => {
+    requireAdmin(token);
     const verification = await ctx.db.get(verificationId);
     if (!verification) {
       throw new Error("Verification not found");
@@ -218,8 +298,9 @@ export const approveVerification = mutation({
 });
 
 export const rejectVerification = mutation({
-  args: { verificationId: v.id("verifications") },
-  handler: async (ctx, { verificationId }) => {
+  args: { token: v.string(), verificationId: v.id("verifications") },
+  handler: async (ctx, { token, verificationId }) => {
+    requireAdmin(token);
     const verification = await ctx.db.get(verificationId);
     if (!verification) {
       throw new Error("Verification not found");
@@ -228,20 +309,23 @@ export const rejectVerification = mutation({
       throw new Error("Already released — use a fraud clawback instead");
     }
     await ctx.db.patch(verificationId, { state: "REJECTED" });
+    await recomputeUserScore(ctx, verification.userId);
   },
 });
 
 // ---------- Providers ----------
 
 export const listProviders = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
     return await ctx.db.query("providers").collect();
   },
 });
 
 export const createProvider = mutation({
   args: {
+    token: v.string(),
     kind: v.union(v.literal("ADS"), v.literal("SURVEY"), v.literal("VAS")),
     name: v.string(),
     platform: v.union(
@@ -251,18 +335,21 @@ export const createProvider = mutation({
     ),
     configJson: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { token, ...args }) => {
+    requireAdmin(token);
     return await ctx.db.insert("providers", { ...args, enabled: false });
   },
 });
 
 export const updateProvider = mutation({
   args: {
+    token: v.string(),
     providerId: v.id("providers"),
     name: v.optional(v.string()),
     configJson: v.optional(v.string()),
   },
-  handler: async (ctx, { providerId, ...fields }) => {
+  handler: async (ctx, { token, providerId, ...fields }) => {
+    requireAdmin(token);
     const patch = Object.fromEntries(
       Object.entries(fields).filter(([, value]) => value !== undefined),
     );
@@ -271,15 +358,17 @@ export const updateProvider = mutation({
 });
 
 export const toggleProvider = mutation({
-  args: { providerId: v.id("providers"), enabled: v.boolean() },
-  handler: async (ctx, { providerId, enabled }) => {
+  args: { token: v.string(), providerId: v.id("providers"), enabled: v.boolean() },
+  handler: async (ctx, { token, providerId, enabled }) => {
+    requireAdmin(token);
     await ctx.db.patch(providerId, { enabled });
   },
 });
 
 export const deleteProvider = mutation({
-  args: { providerId: v.id("providers") },
-  handler: async (ctx, { providerId }) => {
+  args: { token: v.string(), providerId: v.id("providers") },
+  handler: async (ctx, { token, providerId }) => {
+    requireAdmin(token);
     await ctx.db.delete(providerId);
   },
 });
@@ -287,15 +376,28 @@ export const deleteProvider = mutation({
 // ---------- Redemptions ----------
 
 export const listRedemptions = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db.query("redemptions").order("desc").take(100);
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const rows = await ctx.db.query("redemptions").order("desc").take(100);
+    return await Promise.all(
+      rows.map(async (r) => {
+        const user = await ctx.db.get(r.userId);
+        return {
+          ...r,
+          username: user?.username ?? "unknown",
+          fraudScore: user?.fraudScore ?? 0,
+          fraudTier: fraudTier(user?.fraudScore ?? 0),
+        };
+      }),
+    );
   },
 });
 
 export const updateRedemptionStatus = mutation({
-  args: { redemptionId: v.id("redemptions"), status: v.string() },
-  handler: async (ctx, { redemptionId, status }) => {
+  args: { token: v.string(), redemptionId: v.id("redemptions"), status: v.string() },
+  handler: async (ctx, { token, redemptionId, status }) => {
+    requireAdmin(token);
     await ctx.db.patch(redemptionId, { status });
   },
 });
@@ -303,8 +405,9 @@ export const updateRedemptionStatus = mutation({
 // ---------- Fraud ----------
 
 export const listFraudEvents = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
     const events = await ctx.db.query("fraudEvents").order("desc").take(100);
     return await Promise.all(
       events.map(async (event) => {
@@ -316,15 +419,19 @@ export const listFraudEvents = query({
 });
 
 export const createFraudEvent = mutation({
-  args: { userId: v.id("users"), type: v.string(), detailsJson: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("fraudEvents", args);
+  args: { token: v.string(), userId: v.id("users"), type: v.string(), detailsJson: v.string() },
+  handler: async (ctx, { token, ...args }) => {
+    requireAdmin(token);
+    const id = await ctx.db.insert("fraudEvents", args);
+    await recomputeUserScore(ctx, args.userId);
+    return id;
   },
 });
 
 export const deleteFraudEvent = mutation({
-  args: { eventId: v.id("fraudEvents") },
-  handler: async (ctx, { eventId }) => {
+  args: { token: v.string(), eventId: v.id("fraudEvents") },
+  handler: async (ctx, { token, eventId }) => {
+    requireAdmin(token);
     await ctx.db.delete(eventId);
   },
 });

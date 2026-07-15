@@ -111,6 +111,14 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity
+          style={styles.linkButton}
+          onPress={() =>
+            stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined)
+          }>
+          <Text style={styles.linkButtonText}>📚 Learn Pi & Sidra</Text>
+        </TouchableOpacity>
+
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, dark && styles.textLight]}>Linked Profiles</Text>
           {!profiles ? (

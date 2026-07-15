@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
@@ -29,10 +29,10 @@ const EMPTY: TaskForm = {
 };
 
 export default function TasksPage() {
-  const tasks = useQuery(api.admin.listActiveTasks);
-  const createTask = useMutation(api.admin.createTask);
-  const updateTask = useMutation(api.admin.updateTask);
-  const deleteTask = useMutation(api.admin.deleteTask);
+  const tasks = useAdminQuery(api.admin.listActiveTasks);
+  const createTask = useAdminMutation(api.admin.createTask);
+  const updateTask = useAdminMutation(api.admin.updateTask);
+  const deleteTask = useAdminMutation(api.admin.deleteTask);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Id<"tasks"> | null>(null);

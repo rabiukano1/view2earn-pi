@@ -8,12 +8,16 @@
  * @module
  */
 
+import type * as academy from "../academy.js";
 import type * as admin from "../admin.js";
 import type * as ads from "../ads.js";
 import type * as auth from "../auth.js";
 import type * as bonus from "../bonus.js";
 import type * as combos from "../combos.js";
+import type * as countDelta from "../countDelta.js";
 import type * as crons from "../crons.js";
+import type * as deviceSignals from "../deviceSignals.js";
+import type * as fraud from "../fraud.js";
 import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as lib_guards from "../lib/guards.js";
@@ -24,12 +28,14 @@ import type * as points from "../points.js";
 import type * as quiz from "../quiz.js";
 import type * as quizSeed from "../quizSeed.js";
 import type * as rewards from "../rewards.js";
+import type * as spin from "../spin.js";
 import type * as streaks from "../streaks.js";
 import type * as surveys from "../surveys.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
 import type * as users from "../users.js";
 import type * as verifications from "../verifications.js";
+import type * as wallet from "../wallet.js";
 
 import type {
   ApiFromModules,
@@ -38,12 +44,16 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  academy: typeof academy;
   admin: typeof admin;
   ads: typeof ads;
   auth: typeof auth;
   bonus: typeof bonus;
   combos: typeof combos;
+  countDelta: typeof countDelta;
   crons: typeof crons;
+  deviceSignals: typeof deviceSignals;
+  fraud: typeof fraud;
   http: typeof http;
   leaderboard: typeof leaderboard;
   "lib/guards": typeof lib_guards;
@@ -54,12 +64,14 @@ declare const fullApi: ApiFromModules<{
   quiz: typeof quiz;
   quizSeed: typeof quizSeed;
   rewards: typeof rewards;
+  spin: typeof spin;
   streaks: typeof streaks;
   surveys: typeof surveys;
   tasks: typeof tasks;
   telegram: typeof telegram;
   users: typeof users;
   verifications: typeof verifications;
+  wallet: typeof wallet;
 }>;
 
 /**

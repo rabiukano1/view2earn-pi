@@ -14,8 +14,8 @@ import { useMutation, useQuery } from 'convex/react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import type { RootTabParamList } from '../navigation/types';
-import type { BottomTabNavigationProp, BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { RootStackParamList } from '../navigation/types';
+import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { deviceFingerprint } from '../lib/device';
 import { colors, radius, shadow } from '../theme';
 
@@ -30,12 +30,12 @@ type Answer = {
   selectedIndex: number;
 };
 
-type Props = BottomTabScreenProps<RootTabParamList, 'Quiz'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Quiz'>;
 
 export default function QuizScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Props['route']>();
   const [localUserId, setLocalUserId] = useState<Id<'users'> | null>(null);
   const [localEcosystem, setLocalEcosystem] = useState<'PI' | 'SIDRA'>('SIDRA');

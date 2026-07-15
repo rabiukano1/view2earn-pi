@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
@@ -13,11 +13,11 @@ type ProviderForm = { kind: Kind; name: string; platform: PlatformKind; configJs
 const EMPTY: ProviderForm = { kind: "ADS", name: "", platform: "both", configJson: "{}" };
 
 export default function ProvidersPage() {
-  const providers = useQuery(api.admin.listProviders);
-  const createProvider = useMutation(api.admin.createProvider);
-  const updateProvider = useMutation(api.admin.updateProvider);
-  const toggle = useMutation(api.admin.toggleProvider);
-  const deleteProvider = useMutation(api.admin.deleteProvider);
+  const providers = useAdminQuery(api.admin.listProviders);
+  const createProvider = useAdminMutation(api.admin.createProvider);
+  const updateProvider = useAdminMutation(api.admin.updateProvider);
+  const toggle = useAdminMutation(api.admin.toggleProvider);
+  const deleteProvider = useAdminMutation(api.admin.deleteProvider);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Id<"providers"> | null>(null);

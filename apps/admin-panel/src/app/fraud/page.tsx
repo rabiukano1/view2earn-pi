@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen, timeAgo } from "@/components/ui";
 
 export default function FraudPage() {
-  const events = useQuery(api.admin.listFraudEvents);
-  const users = useQuery(api.admin.listUsers);
-  const createEvent = useMutation(api.admin.createFraudEvent);
-  const deleteEvent = useMutation(api.admin.deleteFraudEvent);
+  const events = useAdminQuery(api.admin.listFraudEvents);
+  const users = useAdminQuery(api.admin.listUsers);
+  const createEvent = useAdminMutation(api.admin.createFraudEvent);
+  const deleteEvent = useAdminMutation(api.admin.deleteFraudEvent);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ userId: "", type: "MANUAL_FLAG", details: "" });

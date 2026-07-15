@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
 import { api } from "@convex/api";
+import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import type { Id } from "@convex/dataModel";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
 
 type UserForm = { tier: number; fraudScore: number; country: string };
 
 export default function UsersPage() {
-  const users = useQuery(api.admin.listUsers);
-  const updateUser = useMutation(api.admin.updateUser);
-  const deleteUser = useMutation(api.admin.deleteUser);
+  const users = useAdminQuery(api.admin.listUsers);
+  const updateUser = useAdminMutation(api.admin.updateUser);
+  const deleteUser = useAdminMutation(api.admin.deleteUser);
 
   const [editing, setEditing] = useState<Id<"users"> | null>(null);
   const [form, setForm] = useState<UserForm>({ tier: 0, fraudScore: 0, country: "" });

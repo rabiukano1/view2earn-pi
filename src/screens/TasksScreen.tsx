@@ -325,7 +325,7 @@ export default function TasksScreen() {
 
   const handleQuizNav = () => {
     if (!userId) return;
-    tabNav.navigate('Quiz', { userId, ecosystem: 'SIDRA' });
+    stackNav.navigate('Quiz', { userId, ecosystem: 'SIDRA' });
   };
 
   return (
