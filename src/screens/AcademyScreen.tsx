@@ -16,7 +16,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList } from '../navigation/types';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 
 type Ecosystem = 'PI' | 'SIDRA';
@@ -37,19 +37,8 @@ export default function AcademyScreen() {
   const route = useRoute();
   const params = (route.params ?? {}) as { userId?: string; ecosystem?: Ecosystem };
 
-  const [localUserId, setLocalUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
   const [ecosystem, setEcosystem] = useState<Ecosystem>(params.ecosystem ?? 'PI');
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
-
-  const userId = (params.userId ?? localUserId) as Id<'users'> | null;
-
-  useEffect(() => {
-    if (!params.userId) {
-      getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-        .then(setLocalUserId)
-        .catch(() => {});
-    }
-  }, [params.userId, getOrCreateDevUser]);
 
   const lessons = useQuery(
     api.academy.getAcademy,

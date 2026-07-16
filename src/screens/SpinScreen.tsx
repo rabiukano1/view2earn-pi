@@ -17,7 +17,7 @@ import { SPIN_PRIZES } from '@view2earn/core';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList } from '../navigation/types';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList, 'Spin'>;
@@ -36,19 +36,7 @@ export default function SpinScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNav>();
   const route = useRoute();
-  const params = (route.params ?? {}) as { userId?: string };
-
-  const [localUserId, setLocalUserId] = useState<Id<'users'> | null>(null);
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
-  const userId = (params.userId ?? localUserId) as Id<'users'> | null;
-
-  useEffect(() => {
-    if (!params.userId) {
-      getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-        .then(setLocalUserId)
-        .catch(() => {});
-    }
-  }, [params.userId, getOrCreateDevUser]);
+  const { userId } = useAuth();
 
   const status = useQuery(api.spin.getSpinStatus, userId ? { userId } : 'skip');
   const doSpin = useMutation(api.spin.spin);

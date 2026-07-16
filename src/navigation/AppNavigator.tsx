@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootTabParamList, RootStackParamList } from './types';
+import Icon from '../components/Icon';
 import { colors, radius, shadow } from '../theme';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -23,11 +24,11 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const TAB_META: Record<keyof RootTabParamList, { icon: string; label: string }> = {
-  Home: { icon: '🏠', label: 'Home' },
-  Tasks: { icon: '📋', label: 'Tasks' },
-  Rewards: { icon: '🎁', label: 'Rewards' },
-  Leaderboard: { icon: '🏆', label: 'Ranks' },
-  Profile: { icon: '👤', label: 'Profile' },
+  Home: { icon: 'house', label: 'Home' },
+  Tasks: { icon: 'list-check', label: 'Tasks' },
+  Rewards: { icon: 'gift', label: 'Rewards' },
+  Leaderboard: { icon: 'trophy', label: 'Ranks' },
+  Profile: { icon: 'user', label: 'Profile' },
 };
 
 // Floating pill tab bar: the active tab expands to show its label, the rest
@@ -67,9 +68,18 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
                 styles.pill,
                 focused && (dark ? styles.pillActiveDark : styles.pillActive),
               ]}>
-              <Text style={[styles.tabEmoji, focused && styles.tabEmojiFocused]}>
-                {meta.icon}
-              </Text>
+              <Icon
+                name={meta.icon}
+                iconStyle="solid"
+                size={20}
+                color={
+                  focused
+                    ? dark
+                      ? '#C4B5FD'
+                      : colors.primaryDeep
+                    : colors.textFaint
+                }
+              />
               {focused && (
                 <Text style={[styles.pillLabel, dark && styles.pillLabelDark]}>
                   {meta.label}

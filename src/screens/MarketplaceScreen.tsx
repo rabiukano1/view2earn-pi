@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -32,20 +32,14 @@ const PLATFORM_COLORS: Record<string, string> = {
 export default function MarketplaceScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
   const navigation = useNavigation<Nav>();
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const listings = useQuery(api.marketplace.listListings);
   const myListings = useQuery(api.marketplace.myListings, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const cancelListing = useMutation(api.marketplace.cancelListing);
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then((id) => setUserId(id))
-      .catch(() => {});
-  }, [getOrCreateDevUser]);
 
   const handleCancel = (listingId: Id<'marketplaceListings'>) => {
     Alert.alert('Cancel listing', 'Unused points will be refunded.', [

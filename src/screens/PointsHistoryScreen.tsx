@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 
 const REASON_META: Record<string, { label: string; icon: string }> = {
@@ -42,17 +42,11 @@ function formatTime(ms: number): string {
 export default function PointsHistoryScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const history = useQuery(api.points.history, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then((id) => setUserId(id))
-      .catch(() => {});
-  }, [getOrCreateDevUser]);
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>

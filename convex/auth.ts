@@ -1,103 +1,36 @@
-import { v } from "convex/values";
-import { mutation, query, action, internalMutation, internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { convexAuth } from "@convex-dev/auth/server";
+import { Password } from "@convex-dev/auth/providers/Password";
+import Google from "@auth/core/providers/google";
+import { ResendOTP } from "./ResendOTP";
+import { TelegramProvider } from "./TelegramProvider";
 
-async function generateUsername(ecosystem: string, externalUid: string): Promise<string> {
-  const prefix = ecosystem === "SIDRA" ? "sid" : "pi";
-  const suffix = externalUid.slice(-8);
-  return `${prefix}_${suffix}`;
-}
-
-export const sidraAuth = mutation({
-  args: {
-    sidraUid: v.string(),
-    sidraToken: v.string(),
-    deviceFingerprint: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_externalUid", (q) => q.eq("externalUid", args.sidraUid))
-      .unique();
-
-    if (existing) {
-      return { userId: existing._id, isNew: false };
-    }
-
-    const username = await generateUsername("SIDRA", args.sidraUid);
-
-    const userId = await ctx.db.insert("users", {
-      ecosystem: "SIDRA",
-      externalUid: args.sidraUid,
-      username,
-      tier: 0,
-      fraudScore: 0,
-      deviceFingerprint: args.deviceFingerprint,
-      signupIp: "pending",
-      country: "pending",
-    });
-
-    await ctx.scheduler.runAfter(0, internal.auth.verifySidraToken, {
-      userId,
-      sidraUid: args.sidraUid,
-      sidraToken: args.sidraToken,
-    });
-
-    return { userId, isNew: true };
-  },
-});
-
-export const verifySidraToken = internalAction({
-  args: { userId: v.id("users"), sidraUid: v.string(), sidraToken: v.string() },
-  handler: async (ctx, args) => {
-    try {
-      const response = await fetch("https://api.sidrachain.com/v1/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: args.sidraUid, token: args.sidraToken }),
+// Sign-in methods: email+password, email OTP (Resend), Google OAuth, Telegram.
+// Sidra KYC is added later as another provider.
+export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
+  providers: [Password(), Google({}), ResendOTP, TelegramProvider],
+  callbacks: {
+    // Central user creation for every provider — fills our app fields so each
+    // user row is complete (ecosystem, tier, fraudScore, …). Existing users
+    // (sign-in, or linking a second method) are returned untouched.
+    async createOrUpdateUser(ctx, { existingUserId, profile }) {
+      if (existingUserId) return existingUserId;
+      const email = profile.email as string | undefined;
+      const name = profile.name as string | undefined;
+      const image = profile.image as string | undefined;
+      return await ctx.db.insert("users", {
+        email,
+        name,
+        image,
+        emailVerificationTime: profile.emailVerified ? Date.now() : undefined,
+        ecosystem: "SIDRA",
+        externalUid: email ? `auth:${email}` : `auth:${crypto.randomUUID()}`,
+        username: name ?? email?.split("@")[0] ?? "user",
+        tier: 0,
+        fraudScore: 0,
+        deviceFingerprint: "auth",
+        signupIp: "unknown",
+        country: "unknown",
       });
-
-      if (!response.ok) {
-        throw new Error("Token verification failed");
-      }
-
-      const data = await response.json() as { username?: string; country?: string };
-      await ctx.runMutation(internal.auth.updateUserAfterVerification, {
-        userId: args.userId,
-        username: data.username,
-        country: data.country,
-      });
-    } catch {
-      await ctx.runMutation(internal.auth.updateUserAfterVerification, {
-        userId: args.userId,
-        username: undefined,
-        country: undefined,
-      });
-    }
-  },
-});
-
-export const updateUserAfterVerification = internalMutation({
-  args: {
-    userId: v.id("users"),
-    username: v.optional(v.string()),
-    country: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const patch: Record<string, any> = {};
-    if (args.username) patch.username = args.username;
-    if (args.country) patch.country = args.country;
-    if (Object.keys(patch).length > 0) {
-      await ctx.db.patch(args.userId, patch);
-    }
-  },
-});
-
-export const getMe = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const user = await ctx.db.get(userId);
-    if (!user) throw new Error("User not found");
-    return user;
+    },
   },
 });

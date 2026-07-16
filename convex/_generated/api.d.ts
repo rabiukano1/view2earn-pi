@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as ResendOTP from "../ResendOTP.js";
+import type * as TelegramProvider from "../TelegramProvider.js";
 import type * as academy from "../academy.js";
 import type * as admin from "../admin.js";
 import type * as ads from "../ads.js";
@@ -28,14 +30,15 @@ import type * as points from "../points.js";
 import type * as quiz from "../quiz.js";
 import type * as quizSeed from "../quizSeed.js";
 import type * as rewards from "../rewards.js";
+import type * as sidraAuth from "../sidraAuth.js";
 import type * as spin from "../spin.js";
 import type * as streaks from "../streaks.js";
 import type * as surveys from "../surveys.js";
 import type * as tasks from "../tasks.js";
 import type * as telegram from "../telegram.js";
+import type * as telegramAuth from "../telegramAuth.js";
 import type * as users from "../users.js";
 import type * as verifications from "../verifications.js";
-import type * as wallet from "../wallet.js";
 
 import type {
   ApiFromModules,
@@ -44,6 +47,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ResendOTP: typeof ResendOTP;
+  TelegramProvider: typeof TelegramProvider;
   academy: typeof academy;
   admin: typeof admin;
   ads: typeof ads;
@@ -64,14 +69,15 @@ declare const fullApi: ApiFromModules<{
   quiz: typeof quiz;
   quizSeed: typeof quizSeed;
   rewards: typeof rewards;
+  sidraAuth: typeof sidraAuth;
   spin: typeof spin;
   streaks: typeof streaks;
   surveys: typeof surveys;
   tasks: typeof tasks;
   telegram: typeof telegram;
+  telegramAuth: typeof telegramAuth;
   users: typeof users;
   verifications: typeof verifications;
-  wallet: typeof wallet;
 }>;
 
 /**

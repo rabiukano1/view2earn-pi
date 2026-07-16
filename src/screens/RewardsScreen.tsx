@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import PageHeader from '../components/PageHeader';
 
@@ -36,12 +36,11 @@ const STATUS_COLORS: Record<string, string> = {
 export default function RewardsScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
   const [selected, setSelected] = useState<CatalogItem | null>(null);
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const redeem = useMutation(api.rewards.redeem);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const catalog = useQuery(api.rewards.listCatalog, userId ? { userId } : 'skip');
@@ -50,11 +49,6 @@ export default function RewardsScreen() {
     userId ? { userId } : 'skip',
   );
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then(setUserId)
-      .catch((e) => Alert.alert('Sign-in failed', String(e)));
-  }, [getOrCreateDevUser]);
 
   const openRedeem = (item: CatalogItem) => {
     setSelected(item);

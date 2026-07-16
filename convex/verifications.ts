@@ -7,6 +7,7 @@ import {
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { enforceRateLimit } from "./lib/ratelimit";
+import { requireUser, requireAuth } from "./lib/guards";
 import { isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
 
@@ -104,6 +105,7 @@ async function checkPlatformLimit(
 export const claim = mutation({
   args: { taskId: v.id("tasks"), userId: v.id("users") },
   handler: async (ctx, args) => {
+    await requireUser(ctx, args.userId);
     await enforceRateLimit(ctx, args.userId, "claim");
     const task = await ctx.db.get(args.taskId);
     if (!task || task.status !== "active") {
@@ -137,6 +139,7 @@ export const verifyTelegram = mutation({
   handler: async (ctx, { verificationId }) => {
     const verification = await ctx.db.get(verificationId);
     if (!verification) throw new Error("Verification not found");
+    await requireUser(ctx, verification.userId);
     if (
       verification.state !== "USER_CLAIMED_DONE" &&
       verification.state !== "REJECTED"
@@ -151,6 +154,7 @@ export const verifyTelegram = mutation({
 export const generateUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireAuth(ctx);
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -165,6 +169,7 @@ export const submitProof = mutation({
     if (!verification) {
       throw new Error("Verification not found");
     }
+    await requireUser(ctx, verification.userId);
     if (
       verification.state !== "USER_CLAIMED_DONE" &&
       verification.state !== "REJECTED"
@@ -322,6 +327,7 @@ export const purgeOldScreenshots = internalMutation({
 export const listMine = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    await requireUser(ctx, args.userId);
     const mine = await ctx.db
       .query("verifications")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))

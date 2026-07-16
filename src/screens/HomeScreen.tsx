@@ -15,11 +15,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList, RootTabParamList } from '../navigation/types';
-import { deviceFingerprint, collectDeviceSignals } from '../lib/device';
+import { collectDeviceSignals } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, spacing, shadow } from '../theme';
 import StreakCard from '../components/StreakCard';
 import DailyBox from '../components/DailyBox';
 import ProgressToReward from '../components/ProgressToReward';
+import Icon from '../components/Icon';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Home'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
@@ -29,17 +31,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const recordSignals = useMutation(api.deviceSignals.record);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
-
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then(setUserId)
-      .catch(() => {});
-  }, [getOrCreateDevUser]);
 
   // Layer 2 fingerprint: record device signals once the user is known (no-op on
   // repeat opens — the server dedups by fingerprint).
@@ -50,28 +45,28 @@ export default function HomeScreen() {
 
   // Each shortcut carries its own navigation so tabs and pushed screens mix freely.
   const shortcuts: { icon: string; label: string; tint: string; go: () => void }[] = [
-    { icon: '📋', label: 'Tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') },
-    { icon: '🛍️', label: 'Market', tint: '#0EA5E9', go: () => stackNav.navigate('Marketplace') },
+    { icon: 'list-check', label: 'Tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') },
+    { icon: 'store', label: 'Market', tint: '#0EA5E9', go: () => stackNav.navigate('Marketplace') },
     {
-      icon: '📚',
+      icon: 'graduation-cap',
       label: 'Learn',
       tint: '#F59E0B',
       go: () => stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined),
     },
     {
-      icon: '🧠',
+      icon: 'brain',
       label: 'Daily Quiz',
       tint: '#8B5CF6',
       go: () => stackNav.navigate('Quiz', userId ? { userId, ecosystem: 'SIDRA' } : undefined),
     },
     {
-      icon: '🎡',
+      icon: 'arrows-spin',
       label: 'Spin',
       tint: '#EC4899',
       go: () => stackNav.navigate('Spin', userId ? { userId } : undefined),
     },
-    { icon: '🎁', label: 'Rewards', tint: '#10B981', go: () => tabNav.navigate('Rewards') },
-    { icon: '🏆', label: 'Leaderboard', tint: '#EF4444', go: () => tabNav.navigate('Leaderboard') },
+    { icon: 'gift', label: 'Rewards', tint: '#10B981', go: () => tabNav.navigate('Rewards') },
+    { icon: 'trophy', label: 'Leaderboard', tint: '#EF4444', go: () => tabNav.navigate('Leaderboard') },
   ];
 
   return (
@@ -109,7 +104,7 @@ export default function HomeScreen() {
                 activeOpacity={0.85}
                 onPress={s.go}>
                 <View style={[styles.cardIcon, { backgroundColor: s.tint + '22' }]}>
-                  <Text style={styles.cardEmoji}>{s.icon}</Text>
+                  <Icon name={s.icon} iconStyle="solid" size={22} color={s.tint} />
                 </View>
                 <Text style={[styles.cardLabel, dark && styles.textLight]}>{s.label}</Text>
               </TouchableOpacity>

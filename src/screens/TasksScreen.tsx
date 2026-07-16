@@ -20,13 +20,14 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, RootTabParamList } from '../navigation/types';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import StreakCard from '../components/StreakCard';
 import ProgressToReward from '../components/ProgressToReward';
 import DailyBox from '../components/DailyBox';
 import ComboTracker from '../components/ComboTracker';
 import PageHeader from '../components/PageHeader';
+import PlatformIcon from '../components/PlatformIcon';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
@@ -189,7 +190,7 @@ function TaskCard({
         activeOpacity={0.7}
         onPress={() => openTask(task, onQuizNav)}>
         <View style={[styles.platformBadge, { backgroundColor: meta.color }]}>
-          <Text style={styles.platformBadgeText}>{meta.label[0]}</Text>
+          <PlatformIcon platform={task.platform} size={18} color="#fff" />
         </View>
         <View style={styles.cardBody}>
           <Text style={[styles.cardTitle, dark && styles.textLight]}>
@@ -244,12 +245,11 @@ function TaskCard({
 export default function TasksScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
   const [uploading, setUploading] = useState(false);
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const claim = useMutation(api.verifications.claim);
   const generateUploadUrl = useMutation(api.verifications.generateUploadUrl);
   const submitProof = useMutation(api.verifications.submitProof);
@@ -263,11 +263,6 @@ export default function TasksScreen() {
     userId ? { userId } : 'skip',
   );
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then((id) => setUserId(id))
-      .catch((e) => Alert.alert('Sign-in failed', String(e)));
-  }, [getOrCreateDevUser]);
 
   const verificationByTask = new Map<string, Verification>(
     (verifications ?? []).map((verification) => [

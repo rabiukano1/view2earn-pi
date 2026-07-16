@@ -1,29 +1,16 @@
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Dev-only identity until Sidra auth lands (plan §7.1): one user per device
-// fingerprint, stored as externalUid "dev:<fingerprint>".
-export const getOrCreateDevUser = mutation({
-  args: { deviceFingerprint: v.string() },
-  handler: async (ctx, args) => {
-    const externalUid = `dev:${args.deviceFingerprint}`;
-    const existing = await ctx.db
-      .query("users")
-      .withIndex("by_externalUid", (q) => q.eq("externalUid", externalUid))
-      .unique();
-    if (existing) {
-      return existing._id;
-    }
-    return await ctx.db.insert("users", {
-      ecosystem: "SIDRA",
-      externalUid,
-      username: `dev-${args.deviceFingerprint.slice(0, 8)}`,
-      tier: 0,
-      fraudScore: 0,
-      deviceFingerprint: args.deviceFingerprint,
-      signupIp: "dev",
-      country: "dev",
-    });
+// Identity is via Convex Auth (email/password now; Google + Sidra KYC later).
+
+// The currently signed-in user, or null. The client reads this for its session.
+export const me = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    return await ctx.db.get(userId);
   },
 });
 

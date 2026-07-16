@@ -1,7 +1,13 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
+  // Convex Auth tables (authAccounts, authSessions, …). `users` is overridden
+  // below to add our app fields; the auth-standard optional fields come from
+  // extending the Convex Auth user shape.
+  ...authTables,
+
   // Daily check-in streak (plan §7.11b): one row per user.
   streaks: defineTable({
     userId: v.id("users"),
@@ -34,7 +40,18 @@ export default defineSchema({
     at: v.number(),
   }).index("by_user_action", ["userId", "action"]),
 
+  // Overrides Convex Auth's default users table: standard auth fields (all
+  // optional) + our app fields (filled on signup by the Password `profile`).
   users: defineTable({
+    // Convex Auth standard fields:
+    email: v.optional(v.string()),
+    emailVerificationTime: v.optional(v.number()),
+    name: v.optional(v.string()),
+    image: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    phoneVerificationTime: v.optional(v.number()),
+    isAnonymous: v.optional(v.boolean()),
+    // App fields:
     ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
     externalUid: v.string(),
     username: v.string(),
@@ -44,7 +61,8 @@ export default defineSchema({
     signupIp: v.string(),
     country: v.string(),
   }).index("by_ecosystem", ["ecosystem"])
-    .index("by_externalUid", ["externalUid"]),
+    .index("by_externalUid", ["externalUid"])
+    .index("email", ["email"]),
 
   linkedProfiles: defineTable({
     userId: v.id("users"),
@@ -185,14 +203,16 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
 
   // Academy progress (plan §7.11b): one row per level a user has passed.
-  // Web3 wallet sign-in nonces (plan §7.1). One pending nonce per address; the
-  // wallet signs `message`, the server verifies the signature over it.
-  walletNonces: defineTable({
-    address: v.string(), // lowercased 0x…
-    message: v.string(),
-    expiresAt: v.number(),
+  // "Sign in with Telegram" one-time nonces. Client creates one, opens the bot
+  // deep link; the bot webhook marks it verified with the Telegram user.
+  telegramNonces: defineTable({
+    nonce: v.string(),
+    verified: v.boolean(),
     used: v.boolean(),
-  }).index("by_address", ["address"]),
+    telegramUserId: v.optional(v.string()),
+    telegramName: v.optional(v.string()),
+    expiresAt: v.number(),
+  }).index("by_nonce", ["nonce"]),
 
   academyProgress: defineTable({
     userId: v.id("users"),

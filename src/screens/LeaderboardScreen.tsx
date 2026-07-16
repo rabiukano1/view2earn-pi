@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 import { colors, radius, shadow } from '../theme';
 
@@ -20,17 +20,11 @@ const MEDAL = ['🥇', '🥈', '🥉'];
 export default function LeaderboardScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const top = useQuery(api.leaderboard.topEarners, {});
   const myRank = useQuery(api.leaderboard.myRank, userId ? { userId } : 'skip');
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then((id) => setUserId(id))
-      .catch(() => {});
-  }, [getOrCreateDevUser]);
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>

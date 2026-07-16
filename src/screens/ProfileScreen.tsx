@@ -5,6 +5,7 @@ import {
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -13,23 +14,50 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction, useMutation, useQuery } from 'convex/react';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '../../convex/_generated/api';
-import type { Id } from '../../convex/_generated/dataModel';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
+import { biometricAvailable, isLockEnabled, setLockEnabled, promptBiometric } from '../auth/biometric';
 import { colors, radius, shadow } from '../theme';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import PageHeader from '../components/PageHeader';
+import PlatformIcon, { platformColor } from '../components/PlatformIcon';
+import Icon from '../components/Icon';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
 
 const PLATFORMS = ['facebook', 'tiktok', 'telegram', 'instagram', 'youtube', 'x'] as const;
 
+function MenuRow({
+  icon,
+  label,
+  tint,
+  dark,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  tint: string;
+  dark: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.menuRow} onPress={onPress} activeOpacity={0.7}>
+      <View style={[styles.menuIcon, { backgroundColor: tint + '22' }]}>
+        <Icon name={icon} iconStyle="solid" size={16} color={tint} />
+      </View>
+      <Text style={[styles.menuLabel, dark && styles.textLight]}>{label}</Text>
+      <Icon name="chevron-right" iconStyle="solid" size={14} color={colors.textFaint} />
+    </TouchableOpacity>
+  );
+}
+
 export default function ProfileScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
   const [linkModal, setLinkModal] = useState(false);
   const [step, setStep] = useState<'pick' | 'code' | 'verify'>('pick');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
@@ -38,19 +66,30 @@ export default function ProfileScreen() {
   const [username, setUsername] = useState('');
   const [verifying, setVerifying] = useState(false);
   const stackNav = useNavigation<StackNav>();
+  const { signOut } = useAuthActions();
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [lockOn, setLockOn] = useState(false);
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
+  useEffect(() => {
+    biometricAvailable().then(setBioAvailable);
+    isLockEnabled().then(setLockOn);
+  }, []);
+
+  const toggleLock = async (on: boolean) => {
+    if (on && !(await promptBiometric('Confirm to enable fingerprint lock'))) return;
+    await setLockEnabled(on);
+    setLockOn(on);
+  };
+
+  const me = useQuery(api.users.me);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const profiles = useQuery(api.linkedProfiles.listMyProfiles, userId ? { userId } : 'skip');
   const referral = useQuery(api.rewards.myReferral, userId ? { userId } : 'skip');
   const requestBioCode = useMutation(api.linkedProfiles.requestBioCode);
   const verifyBioCode = useAction(api.linkedProfiles.verifyBioCode);
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then((id) => setUserId(id))
-      .catch((e) => Alert.alert('Error', String(e)));
-  }, [getOrCreateDevUser]);
+  const displayName = me?.name || me?.username || 'View2Earn member';
+  const displayContact = me?.email ?? '';
 
   const openLinkFlow = () => {
     setLinkModal(true);
@@ -99,47 +138,63 @@ export default function ProfileScreen() {
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader title="Profile" />
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}>
-        <View style={[styles.balanceCard, dark && styles.balanceCardDark]}>
-          <Text style={styles.balanceLabel}>Points Balance</Text>
-          <Text style={styles.balanceValue}>
-            {balance === undefined ? '...' : balance}
-          </Text>
-          <TouchableOpacity
-            style={styles.historyBtn}
-            onPress={() => stackNav.navigate('PointsHistory')}>
-            <Text style={styles.historyBtnText}>View History →</Text>
-          </TouchableOpacity>
+        {/* Identity */}
+        <View style={styles.identity}>
+          <View style={styles.avatar}>
+            <Icon name="user" iconStyle="solid" size={30} color="#fff" />
+          </View>
+          <Text style={[styles.name, dark && styles.textLight]}>{displayName}</Text>
+          {displayContact ? <Text style={styles.contact}>{displayContact}</Text> : null}
         </View>
 
-        <TouchableOpacity
-          style={styles.linkButton}
-          onPress={() =>
-            stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined)
-          }>
-          <Text style={styles.linkButtonText}>📚 Learn Pi & Sidra</Text>
-        </TouchableOpacity>
+        {/* Balance */}
+        <View style={[styles.balanceCard, dark && styles.balanceCardDark]}>
+          <View style={styles.balanceTop}>
+            <Icon name="coins" iconStyle="solid" size={15} color="#DDD6FE" />
+            <Text style={styles.balanceLabel}>Points Balance</Text>
+          </View>
+          <Text style={styles.balanceValue}>{balance === undefined ? '…' : balance}</Text>
+        </View>
 
+        {/* Menu */}
+        <View style={[styles.menuCard, dark && styles.cardDark]}>
+          <MenuRow
+            icon="graduation-cap"
+            tint="#F59E0B"
+            label="Learn Pi & Sidra"
+            dark={dark}
+            onPress={() =>
+              stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined)
+            }
+          />
+          <View style={[styles.rowDivider, dark && styles.rowDividerDark]} />
+          <MenuRow
+            icon="clock-rotate-left"
+            tint={colors.primary}
+            label="Points history"
+            dark={dark}
+            onPress={() => stackNav.navigate('PointsHistory')}
+          />
+        </View>
+
+        {/* Linked profiles */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, dark && styles.textLight]}>Linked Profiles</Text>
           {!profiles ? (
-            <ActivityIndicator size="small" color="#7C3AED" />
+            <ActivityIndicator size="small" color={colors.primary} />
           ) : profiles.length === 0 ? (
             <View style={[styles.emptyCard, dark && styles.cardDark]}>
-              <Text style={[styles.emptyText, dark && styles.textMuted]}>
-                No profiles linked yet
-              </Text>
-              <Text style={styles.emptySubtext}>
-                Link your social profiles to start earning
-              </Text>
+              <Text style={[styles.emptyText, dark && styles.textLight]}>No profiles linked yet</Text>
+              <Text style={styles.emptySubtext}>Link your socials to start earning</Text>
             </View>
           ) : (
             profiles.map((p) => (
               <View key={p._id} style={[styles.profileCard, dark && styles.cardDark]}>
-                <View style={[styles.platformDot, { backgroundColor: platformColor(p.platform) }]} />
+                <View style={[styles.platformIconWrap, { backgroundColor: platformColor(p.platform) }]}>
+                  <PlatformIcon platform={p.platform} size={14} color="#fff" />
+                </View>
                 <View style={styles.profileInfo}>
-                  <Text style={[styles.profileName, dark && styles.textLight]}>
-                    {p.usernameSnapshot}
-                  </Text>
+                  <Text style={[styles.profileName, dark && styles.textLight]}>{p.usernameSnapshot}</Text>
                   <Text style={styles.profilePlatform}>{p.platform}</Text>
                 </View>
                 <Text style={styles.lockedBadge}>
@@ -149,16 +204,21 @@ export default function ProfileScreen() {
             ))
           )}
           <TouchableOpacity style={styles.linkButton} onPress={openLinkFlow}>
-            <Text style={styles.linkButtonText}>+ Link New Profile</Text>
+            <Icon name="plus" iconStyle="solid" size={13} color={colors.primaryDeep} />
+            <Text style={styles.linkButtonText}>Link new profile</Text>
           </TouchableOpacity>
         </View>
 
+        {/* Referral */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, dark && styles.textLight]}>Referral</Text>
           <View style={[styles.referralCard, dark && styles.cardDark]}>
-            <Text style={[styles.referralText, dark && styles.textMuted]}>
-              Share your referral code to earn bonus points when friends join!
-            </Text>
+            <View style={styles.referralHead}>
+              <Icon name="share-nodes" iconStyle="solid" size={14} color={colors.primary} />
+              <Text style={[styles.referralText, dark && styles.textMuted]}>
+                Share your code — earn bonus points when friends join
+              </Text>
+            </View>
             <View style={styles.referralCodeBox}>
               <Text style={styles.referralCode}>{referral?.code ?? '…'}</Text>
             </View>
@@ -167,6 +227,25 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Settings */}
+        {bioAvailable && (
+          <View style={[styles.lockRow, dark && styles.cardDark]}>
+            <View style={[styles.menuIcon, { backgroundColor: colors.primary + '22' }]}>
+              <Icon name="fingerprint" iconStyle="solid" size={16} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.lockTitle, dark && styles.textLight]}>Fingerprint lock</Text>
+              <Text style={styles.lockSub}>Require fingerprint to open the app</Text>
+            </View>
+            <Switch value={lockOn} onValueChange={toggleLock} trackColor={{ true: colors.primary }} />
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.signOutBtn} onPress={() => signOut()} activeOpacity={0.85}>
+          <Icon name="right-from-bracket" iconStyle="solid" size={15} color={colors.danger} />
+          <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <Modal visible={linkModal} transparent animationType="fade" onRequestClose={() => setLinkModal(false)}>
@@ -181,11 +260,15 @@ export default function ProfileScreen() {
                     key={p}
                     style={[styles.platformOption, selectedPlatform === p && styles.platformOptionSelected]}
                     onPress={() => setSelectedPlatform(p)}>
-                    <View style={[styles.platformDot, { backgroundColor: platformColor(p) }]} />
+                    <View style={[styles.platformIconWrap, { backgroundColor: platformColor(p) }]}>
+                      <PlatformIcon platform={p} size={14} color="#fff" />
+                    </View>
                     <Text style={[styles.platformOptionText, dark && styles.textLight]}>
                       {p.charAt(0).toUpperCase() + p.slice(1)}
                     </Text>
-                    {selectedPlatform === p && <Text style={styles.checkmark}>✓</Text>}
+                    {selectedPlatform === p && (
+                      <Icon name="check" iconStyle="solid" size={15} color={colors.primary} />
+                    )}
                   </TouchableOpacity>
                 ))}
                 <View style={styles.modalActions}>
@@ -234,13 +317,8 @@ export default function ProfileScreen() {
                   <TouchableOpacity style={styles.modalCancel} onPress={() => setLinkModal(false)}>
                     <Text style={styles.modalCancelText}>Cancel</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.modalConfirm}
-                    onPress={handleVerify}
-                    disabled={verifying}>
-                    <Text style={styles.modalConfirmText}>
-                      {verifying ? 'Verifying…' : 'Verify & Link'}
-                    </Text>
+                  <TouchableOpacity style={styles.modalConfirm} onPress={handleVerify} disabled={verifying}>
+                    <Text style={styles.modalConfirmText}>{verifying ? 'Verifying…' : 'Verify & Link'}</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -252,48 +330,58 @@ export default function ProfileScreen() {
   );
 }
 
-function platformColor(platform: string): string {
-  switch (platform) {
-    case 'facebook': return '#1877F2';
-    case 'tiktok': return '#010101';
-    case 'telegram': return '#229ED9';
-    case 'instagram': return '#E4405F';
-    case 'youtube': return '#FF0000';
-    case 'x': return '#000000';
-    default: return '#6B7280';
-  }
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   containerDark: { backgroundColor: colors.bgDark },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  headerTitle: { fontSize: 32, fontWeight: '800', letterSpacing: -0.5, color: colors.text },
   textLight: { color: colors.textDark },
   textMuted: { color: colors.textFaint },
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
-  balanceCard: { backgroundColor: colors.primary, borderRadius: radius.lg, padding: 26, alignItems: 'center', marginBottom: 24, ...shadow.raised },
+  scroll: { paddingHorizontal: 16, paddingTop: 4 },
+  identity: { alignItems: 'center', marginBottom: 20 },
+  avatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    ...shadow.raised,
+  },
+  name: { fontSize: 20, fontWeight: '800', color: colors.text },
+  contact: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  balanceCard: { backgroundColor: colors.primary, borderRadius: radius.lg, padding: 22, alignItems: 'center', marginBottom: 16, ...shadow.raised },
   balanceCardDark: { backgroundColor: colors.primaryDeep },
-  balanceLabel: { fontSize: 13, color: '#DDD6FE', fontWeight: '600', letterSpacing: 0.3, textTransform: 'uppercase' },
-  balanceValue: { fontSize: 46, fontWeight: '800', color: colors.white, marginTop: 6, letterSpacing: -1 },
-  historyBtn: { marginTop: 14, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' },
-  historyBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  balanceTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  balanceLabel: { fontSize: 12, color: '#DDD6FE', fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
+  balanceValue: { fontSize: 44, fontWeight: '800', color: colors.white, marginTop: 4, letterSpacing: -1 },
+  menuCard: { backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: 24, ...shadow.card },
+  cardDark: { backgroundColor: colors.surfaceDark, borderColor: colors.borderDark },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 15 },
+  menuIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  menuLabel: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.text },
+  rowDivider: { height: 1, backgroundColor: colors.border, marginLeft: 64 },
+  rowDividerDark: { backgroundColor: colors.borderDark },
   section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: 12 },
-  emptyCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: 12 },
+  emptyCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 22, alignItems: 'center', ...shadow.card },
   emptyText: { fontSize: 15, color: colors.text, fontWeight: '700' },
   emptySubtext: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
-  cardDark: { backgroundColor: colors.surfaceDark, borderColor: colors.borderDark },
-  profileCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 8, borderWidth: 1, borderColor: colors.border },
-  platformDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
+  profileCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 8, ...shadow.card },
+  platformIconWrap: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   profileInfo: { flex: 1 },
   profileName: { fontSize: 15, fontWeight: '700', color: colors.text },
   profilePlatform: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   lockedBadge: { fontSize: 12, color: colors.textFaint, fontWeight: '600' },
-  linkButton: { marginTop: 8, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingVertical: 13, alignItems: 'center' },
+  linkButton: { marginTop: 8, backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   linkButtonText: { color: colors.primaryDeep, fontWeight: '800', fontSize: 14 },
-  referralCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 20, borderWidth: 1, borderColor: colors.border, ...shadow.card },
-  referralText: { fontSize: 13, color: colors.textMuted, marginBottom: 14 },
+  signOutBtn: { marginTop: 8, borderRadius: radius.sm, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, borderWidth: 1.5, borderColor: colors.danger },
+  signOutText: { color: colors.danger, fontWeight: '800', fontSize: 15 },
+  lockRow: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.surface, borderRadius: radius.md, padding: 14, marginBottom: 12, ...shadow.card },
+  lockTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+  lockSub: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  referralCard: { backgroundColor: colors.surface, borderRadius: radius.md, padding: 18, ...shadow.card },
+  referralHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  referralText: { flex: 1, fontSize: 13, color: colors.textMuted },
   referralCodeBox: { backgroundColor: colors.primarySoft, borderRadius: radius.sm, paddingVertical: 14, alignItems: 'center' },
   referralCode: { fontSize: 20, fontWeight: '800', color: colors.primaryDeep, letterSpacing: 3 },
   referralCount: { fontSize: 12, color: colors.textMuted, marginTop: 10, textAlign: 'center' },
@@ -304,7 +392,6 @@ const styles = StyleSheet.create({
   platformOption: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: radius.sm, borderWidth: 2, borderColor: colors.border, marginBottom: 8 },
   platformOptionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   platformOptionText: { fontSize: 15, fontWeight: '700', color: colors.text, flex: 1 },
-  checkmark: { color: colors.primary, fontWeight: '800', fontSize: 16 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   modalCancel: { flex: 1, borderRadius: radius.sm, paddingVertical: 13, alignItems: 'center', backgroundColor: colors.surfaceAlt },
   modalCancelText: { color: colors.textMuted, fontWeight: '800', fontSize: 14 },

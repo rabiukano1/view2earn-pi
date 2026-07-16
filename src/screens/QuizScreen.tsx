@@ -16,7 +16,7 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList } from '../navigation/types';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 
 type Question = {
@@ -37,23 +37,11 @@ export default function QuizScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Props['route']>();
-  const [localUserId, setLocalUserId] = useState<Id<'users'> | null>(null);
-  const [localEcosystem, setLocalEcosystem] = useState<'PI' | 'SIDRA'>('SIDRA');
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
+  const { userId } = useAuth();
+  const [localEcosystem] = useState<'PI' | 'SIDRA'>('SIDRA');
 
   const params = route.params;
-  const userId = (params?.userId ?? localUserId) as Id<'users'> | null;
   const ecosystem: 'PI' | 'SIDRA' = params?.ecosystem ?? localEcosystem;
-
-  useEffect(() => {
-    if (!params?.userId) {
-      getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-        .then((id) => {
-          setLocalUserId(id);
-        })
-        .catch(() => {});
-    }
-  }, [params, getOrCreateDevUser]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>([]);

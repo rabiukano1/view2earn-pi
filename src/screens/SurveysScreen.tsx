@@ -14,23 +14,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { deviceFingerprint } from '../lib/device';
+import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 
 export default function SurveysScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [userId, setUserId] = useState<Id<'users'> | null>(null);
+  const { userId } = useAuth();
 
-  const getOrCreateDevUser = useMutation(api.users.getOrCreateDevUser);
   const surveys = useQuery(api.surveys.listAvailable, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
 
-  useEffect(() => {
-    getOrCreateDevUser({ deviceFingerprint: deviceFingerprint() })
-      .then((id) => setUserId(id))
-      .catch((e) => Alert.alert('Error', String(e)));
-  }, [getOrCreateDevUser]);
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
