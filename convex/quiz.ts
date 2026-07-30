@@ -3,6 +3,7 @@ import { mutation, query, internalAction, internalMutation, internalQuery } from
 import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
+import { getNum } from "./rewardsConfig";
 
 export const generateQuestions = internalAction({
   args: { ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")), count: v.number() },
@@ -131,7 +132,8 @@ export const submitQuiz = mutation({
     }
 
     const total = args.answers.length;
-    const pointsEarned = score * 3;
+    const ptsPerCorrect = await getNum(ctx, "quizCorrectPoints");
+    const pointsEarned = score * ptsPerCorrect;
 
     await ctx.db.insert("quizResults", {
       userId: args.userId,

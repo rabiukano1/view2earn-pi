@@ -19,6 +19,7 @@ const ICONS = {
   providers: "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z",
   redemptions: "M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4 M4 6v12c0 1.1.9 2 2 2h14v-4 M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z",
   fraud: "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01",
+  rewards: "M12 8c-3 0-5 2-5 5s2 5 5 5 5-2 5-5-2-5-5-5z M12 2v2 M12 20v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M2 12h2 M20 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42-1.42",
 };
 
 const links = [
@@ -27,6 +28,7 @@ const links = [
   { href: "/tasks", label: "Tasks", icon: ICONS.tasks },
   { href: "/review", label: "Review queue", icon: ICONS.review },
   { href: "/providers", label: "Providers", icon: ICONS.providers },
+  { href: "/rewards", label: "Rewards", icon: ICONS.rewards },
   { href: "/redemptions", label: "Redemptions", icon: ICONS.redemptions },
   { href: "/fraud", label: "Fraud", icon: ICONS.fraud },
 ];

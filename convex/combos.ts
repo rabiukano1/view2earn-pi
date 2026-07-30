@@ -1,10 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
-
-// Daily task combo (plan §7.11b): do a follow, a Telegram join, and a quiz in
-// the same day for a bonus. One claim per day.
-const COMBO_REWARD = 40;
+import { getNum } from "./rewardsConfig";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000);
@@ -45,12 +42,13 @@ export const getComboStatus = query({
       .unique();
     const legs = await legsToday(ctx, userId);
     const allDone = legs.social && legs.telegram && legs.quiz;
+    const reward = await getNum(ctx, "comboBonus");
     return {
       ...legs,
       allDone,
       claimedToday: combo?.lastDay === today,
       canClaim: allDone && combo?.lastDay !== today,
-      reward: COMBO_REWARD,
+      reward,
     };
   },
 });
@@ -73,6 +71,8 @@ export const claimCombo = mutation({
       throw new Error("Finish all three today to claim the combo.");
     }
 
+    const reward = await getNum(ctx, "comboBonus");
+
     if (combo) {
       await ctx.db.patch(combo._id, { lastDay: today });
     } else {
@@ -84,15 +84,15 @@ export const claimCombo = mutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .first();
-    const balanceAfter = (last?.balanceAfter ?? 0) + COMBO_REWARD;
+    const balanceAfter = (last?.balanceAfter ?? 0) + reward;
     await ctx.db.insert("pointsLedger", {
       userId,
-      delta: COMBO_REWARD,
+      delta: reward,
       reason: "COMBO_BONUS",
       refId: `combo-${today}`,
       balanceAfter,
     });
 
-    return { reward: COMBO_REWARD };
+    return { reward };
   },
 });

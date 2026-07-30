@@ -32,12 +32,16 @@ type Answer = {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Quiz'>;
 
+import RewardedAdModal from '../components/RewardedAdModal';
+
 export default function QuizScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Props['route']>();
   const { userId } = useAuth();
+  const [adVisible, setAdVisible] = useState(true);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
   const [localEcosystem] = useState<'PI' | 'SIDRA'>('SIDRA');
 
   const params = route.params;
@@ -78,7 +82,7 @@ export default function QuizScreen() {
     }
   };
 
-  const handleSubmit = async () => {
+  const executeSubmit = async () => {
     if (!userId || !questions || answers.length === 0) {
       Alert.alert('Answer at least one question to submit');
       return;
@@ -93,6 +97,22 @@ export default function QuizScreen() {
     }
   };
 
+  const handleSubmit = () => {
+    if (!userId || !questions || answers.length === 0) {
+      Alert.alert('Answer at least one question to submit');
+      return;
+    }
+    setPendingSubmit(true);
+    setAdVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
+    if (pendingSubmit) {
+      setPendingSubmit(false);
+      await executeSubmit();
+    }
+  };
+
   return (
     <View style={[styles.container, dark && styles.containerDark, { paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -104,18 +124,20 @@ export default function QuizScreen() {
       </View>
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#7C3AED" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : result ? (
         <View style={styles.center}>
-          <Text style={styles.resultIcon}>
-            {result.score === result.total ? '🎉' : '👏'}
+          <Text style={styles.resultIcon}>{result.score > 0 ? '🎉' : '📚'}</Text>
+          <Text style={[styles.resultTitle, dark && styles.textLight]}>
+            {result.score > 0 ? 'Quiz Complete!' : 'Keep Learning!'}
           </Text>
-          <Text style={styles.resultTitle}>Quiz Complete!</Text>
           <Text style={styles.resultScore}>
-            {result.score} of {result.total} correct
+            {result.score} / {result.total}
           </Text>
-          <Text style={styles.resultPoints}>+{result.pointsEarned} pts earned</Text>
+          {result.pointsEarned > 0 && (
+            <Text style={styles.resultPoints}>+{result.pointsEarned} Points Earned!</Text>
+          )}
           <TouchableOpacity
             style={styles.doneButton}
             onPress={() => navigation.goBack()}>
@@ -126,46 +148,46 @@ export default function QuizScreen() {
         <View style={styles.quizContent}>
           <View style={styles.counterRow}>
             <Text style={styles.counter}>
-              Question {currentIndex + 1} of {questions!.length}
-            </Text>
-            <Text style={styles.answeredCount}>
-              {answers.filter((a) => questions!.some((q) => q._id === a.questionId)).length} answered
+              Question {currentIndex + 1} of {questions.length}
             </Text>
           </View>
-          <ScrollView style={styles.scrollArea}>
-            <Text style={[styles.question, dark && styles.textLight]}>
-              {current.question}
-            </Text>
-            <View style={styles.optionsContainer}>
-              {current.options.map((option, idx) => {
-                const isSelected =
-                  answers.find((a) => a.questionId === current._id)?.selectedIndex === idx;
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[styles.option, isSelected && styles.optionSelected, dark && styles.optionDark]}
-                    onPress={() => handleSelect(idx)}>
-                    <Text
-                      style={[
-                        styles.optionText,
-                        isSelected && styles.optionTextSelected,
-                        dark && styles.textLight,
-                      ]}>
-                      {String.fromCharCode(65 + idx)}. {option}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
+          <Text style={[styles.question, dark && styles.textLight]}>
+            {current.question}
+          </Text>
+          <View style={styles.optionsContainer}>
+            {current.options.map((option, idx) => {
+              const selected =
+                answers.find((a) => a.questionId === current._id)?.selectedIndex === idx;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  style={[
+                    styles.option,
+                    selected && styles.optionSelected,
+                    dark && styles.optionDark,
+                  ]}
+                  onPress={() => handleSelect(idx)}>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      selected && styles.optionTextSelected,
+                      dark && styles.textLight,
+                    ]}>
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={[styles.navButton, currentIndex === 0 && styles.navButtonDisabled]}
-              disabled={currentIndex === 0}
-              onPress={() => setCurrentIndex((i) => i - 1)}>
-              <Text style={styles.navButtonText}>← Prev</Text>
-            </TouchableOpacity>
-            {currentIndex < questions!.length - 1 ? (
+            {currentIndex > 0 && (
+              <TouchableOpacity
+                style={styles.navButton}
+                onPress={() => setCurrentIndex((i) => i - 1)}>
+                <Text style={styles.navButtonText}>← Prev</Text>
+              </TouchableOpacity>
+            )}
+            {currentIndex < questions.length - 1 ? (
               <TouchableOpacity
                 style={styles.navButton}
                 onPress={() => setCurrentIndex((i) => i + 1)}>
@@ -173,12 +195,20 @@ export default function QuizScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                <Text style={styles.submitButtonText}>Submit</Text>
+                <Text style={styles.submitButtonText}>Watch Ad & Submit</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
       ) : null}
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => {
+          setAdVisible(false);
+          setPendingSubmit(false);
+        }}
+        onSuccess={handleAdSuccess}
+      />
     </View>
   );
 }

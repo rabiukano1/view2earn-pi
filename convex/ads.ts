@@ -1,7 +1,70 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
 
+/** Query active ad config including admin-configured reward points. */
+export const getAdRewardConfig = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
+
+    // 1. Fetch enabled ADS providers
+    const providers = await ctx.db
+      .query("providers")
+      .filter((q) => q.and(
+        q.eq(q.field("kind"), "ADS"),
+        q.eq(q.field("enabled"), true),
+      ))
+      .collect();
+
+    let rewardPoints: number | null = null;
+
+    // 1. Check global platformSettings first (single source of truth)
+    const setting = await ctx.db
+      .query("platformSettings")
+      .withIndex("by_key", (q) => q.eq("key", "adRewardPoints"))
+      .unique();
+    if (setting?.value) {
+      const num = Number(setting.value);
+      if (!isNaN(num) && num >= 0) {
+        rewardPoints = num;
+      }
+    }
+
+    // 2. Fall back to first enabled provider's configJson
+    if (rewardPoints === null) {
+      const activeProvider = providers[0];
+      if (activeProvider?.configJson) {
+        try {
+          const parsed = JSON.parse(activeProvider.configJson);
+          if (parsed.rewardPoints !== undefined && parsed.rewardPoints !== null) {
+            const num = Number(parsed.rewardPoints);
+            if (!isNaN(num) && num >= 0) {
+              rewardPoints = num;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Fallback default
+    if (rewardPoints === null) {
+      rewardPoints = 50;
+    }
+
+    return {
+      rewardPoints,
+      providers: providers.map((p) => ({
+        id: p._id,
+        name: p.name,
+        platform: p.platform,
+        configJson: p.configJson,
+      })),
+    };
+  },
+});
+
+/** Backward-compatible query alias */
 export const listEnabled = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
@@ -22,28 +85,94 @@ export const listEnabled = query({
   },
 });
 
+/** Reward user for watching an ad. Uses authoritative backend reward points. */
 export const rewardForAd = mutation({
   args: {
     userId: v.id("users"),
-    provider: v.string(),
-    adType: v.string(),
-    rewardAmount: v.number(),
+    provider: v.optional(v.string()),
+    adType: v.optional(v.string()),
+    rewardAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     await requireUser(ctx, args.userId);
+
+    let rewardPoints: number | null = null;
+
+    // 1. Check global platformSettings first (single source of truth)
+    const setting = await ctx.db
+      .query("platformSettings")
+      .withIndex("by_key", (q) => q.eq("key", "adRewardPoints"))
+      .unique();
+    if (setting?.value) {
+      const num = Number(setting.value);
+      if (!isNaN(num) && num >= 0) {
+        rewardPoints = num;
+      }
+    }
+
+    // 2. Fall back to first enabled provider's configJson
+    if (rewardPoints === null) {
+      const providers = await ctx.db
+        .query("providers")
+        .filter((q) => q.and(
+          q.eq(q.field("kind"), "ADS"),
+          q.eq(q.field("enabled"), true),
+        ))
+        .collect();
+
+      if (providers[0]?.configJson) {
+        try {
+          const parsed = JSON.parse(providers[0].configJson);
+          if (parsed.rewardPoints !== undefined && parsed.rewardPoints !== null) {
+            const num = Number(parsed.rewardPoints);
+            if (!isNaN(num) && num >= 0) {
+              rewardPoints = num;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Fall back to passed amount or 50
+    const finalReward = rewardPoints ?? (args.rewardAmount ?? 50);
+
     const last = await ctx.db
       .query("pointsLedger")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
       .first();
-    const balanceAfter = (last?.balanceAfter ?? 0) + args.rewardAmount;
+
+    const balanceAfter = (last?.balanceAfter ?? 0) + finalReward;
+
     await ctx.db.insert("pointsLedger", {
       userId: args.userId,
-      delta: args.rewardAmount,
-      reason: `AD_REWARD_${args.adType.toUpperCase()}`,
-      refId: args.provider,
+      delta: finalReward,
+      reason: `AD_REWARD_${(args.adType ?? "REWARDED_VIDEO").toUpperCase()}`,
+      refId: args.provider ?? "admob",
       balanceAfter,
     });
+
+    // Also update user's app wallet points balance
+    let wallet = await ctx.db
+      .query("wallets")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique();
+
+    if (wallet) {
+      const newPoints = wallet.pointsBalance + finalReward;
+      await ctx.db.patch(wallet._id, { pointsBalance: newPoints });
+
+      await ctx.db.insert("walletTransactions", {
+        userId: args.userId,
+        type: "earn_points",
+        pointsDelta: finalReward,
+        piproDelta: 0,
+        pointsBalanceAfter: newPoints,
+        piproBalanceAfter: wallet.piproBalance,
+        note: `Watched Ad Reward (+${finalReward} PTS)`,
+      });
+    }
+
     return balanceAfter;
   },
 });

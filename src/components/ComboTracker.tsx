@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
+import RewardedAdModal from './RewardedAdModal';
 
 const LEGS = [
   { key: 'social', icon: '🔗', label: 'Follow' },
@@ -14,18 +15,24 @@ const LEGS = [
 export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
+  const [adVisible, setAdVisible] = useState(false);
   const status = useQuery(api.combos.getComboStatus, { userId });
   const claimCombo = useMutation(api.combos.claimCombo);
 
   // Hidden until the user starts a leg (and after it's claimed) to avoid clutter.
   if (!status || status.claimedToday || legDoneCount(status) === 0) return null;
 
-  const onClaim = async () => {
+  const onClaimPress = () => {
     if (busy || !status.canClaim) return;
+    setAdVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
+    setAdVisible(false);
     setBusy(true);
     try {
       const res = await claimCombo({ userId });
-      Alert.alert('Combo bonus! ⚡', `+${res.reward} pts for the daily combo`);
+      Alert.alert('Combo Bonus! ⚡', `+${res.reward} pts earned for completing the daily combo!`);
     } catch (e) {
       Alert.alert('Combo', String(e).replace('[CONVEX] ', ''));
     } finally {
@@ -34,33 +41,41 @@ export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
   };
 
   return (
-    <View style={[styles.card, dark && styles.cardDark]}>
-      <View style={styles.head}>
-        <Text style={[styles.title, dark && styles.textLight]}>⚡ Daily combo</Text>
-        <Text style={styles.reward}>+{status.reward} pts</Text>
-      </View>
-      <View style={styles.legs}>
-        {LEGS.map((leg) => {
-          const done = status[leg.key];
-          return (
-            <View key={leg.key} style={styles.leg}>
-              <View style={[styles.legDot, done && styles.legDotDone]}>
-                <Text style={styles.legIcon}>{done ? '✓' : leg.icon}</Text>
+    <>
+      <View style={[styles.card, dark && styles.cardDark]}>
+        <View style={styles.head}>
+          <Text style={[styles.title, dark && styles.textLight]}>⚡ Daily Combo</Text>
+          <Text style={styles.reward}>+{status.reward} pts</Text>
+        </View>
+        <View style={styles.legs}>
+          {LEGS.map((leg) => {
+            const done = status[leg.key];
+            return (
+              <View key={leg.key} style={styles.leg}>
+                <View style={[styles.legDot, done && styles.legDotDone]}>
+                  <Text style={styles.legIcon}>{done ? '✓' : leg.icon}</Text>
+                </View>
+                <Text style={[styles.legLabel, done && styles.legLabelDone]}>{leg.label}</Text>
               </View>
-              <Text style={[styles.legLabel, done && styles.legLabelDone]}>{leg.label}</Text>
-            </View>
-          );
-        })}
-        <TouchableOpacity
-          style={[styles.claimBtn, !status.canClaim && styles.claimBtnOff]}
-          disabled={!status.canClaim || busy}
-          onPress={onClaim}>
-          <Text style={[styles.claimText, !status.canClaim && styles.claimTextOff]}>
-            {busy ? '…' : status.canClaim ? 'Claim' : `${legDoneCount(status)}/3`}
-          </Text>
-        </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity
+            style={[styles.claimBtn, !status.canClaim && styles.claimBtnOff]}
+            disabled={!status.canClaim || busy}
+            onPress={onClaimPress}>
+            <Text style={[styles.claimText, !status.canClaim && styles.claimTextOff]}>
+              {busy ? '…' : status.canClaim ? 'Claim' : `${legDoneCount(status)}/3`}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => setAdVisible(false)}
+        onSuccess={handleAdSuccess}
+      />
+    </>
   );
 }
 

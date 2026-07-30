@@ -30,6 +30,14 @@ export const recordCompletion = internalMutation({
     txId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Providers retry postbacks — credit each transaction exactly once.
+    const refId = `${args.provider}:${args.txId}`;
+    const existing = await ctx.db
+      .query("pointsLedger")
+      .withIndex("by_refId", (q) => q.eq("refId", refId))
+      .first();
+    if (existing) return; // already credited this txId
+
     const last = await ctx.db
       .query("pointsLedger")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -40,7 +48,7 @@ export const recordCompletion = internalMutation({
       userId: args.userId,
       delta: args.amount,
       reason: "SURVEY_COMPLETED",
-      refId: args.txId,
+      refId,
       balanceAfter,
     });
   },

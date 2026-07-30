@@ -28,7 +28,7 @@ export const TelegramProvider = ConvexCredentials({
     const created = await createAccount(ctx, {
       provider: "telegram",
       account,
-      profile: { name: consumed.telegramName },
+      profile: { name: consumed.telegramName, telegramId: consumed.telegramUserId },
     });
     return { userId: created.user._id as Id<"users"> };
   },

@@ -13,8 +13,13 @@ export default function UsersPage() {
   const updateUser = useAdminMutation(api.admin.updateUser);
   const deleteUser = useAdminMutation(api.admin.deleteUser);
 
+  const adjustPoints = useAdminMutation(api.admin.adjustPoints);
+
   const [editing, setEditing] = useState<Id<"users"> | null>(null);
   const [form, setForm] = useState<UserForm>({ tier: 0, fraudScore: 0, country: "" });
+  const [pointsModal, setPointsModal] = useState<{ userId: Id<"users">; username: string } | null>(null);
+  const [pointsDelta, setPointsDelta] = useState<number>(100);
+  const [pointsReason, setPointsReason] = useState<string>("ADMIN_BONUS");
 
   const openEdit = (u: NonNullable<typeof users>[number]) => {
     setEditing(u._id);
@@ -28,6 +33,21 @@ export default function UsersPage() {
     try {
       await updateUser({ userId: editing, ...form });
       setEditing(null);
+    } catch (e) {
+      alert(String(e));
+    }
+  };
+
+  const savePoints = async () => {
+    if (!pointsModal) return;
+    try {
+      await adjustPoints({
+        userId: pointsModal.userId,
+        delta: pointsDelta,
+        reason: pointsReason,
+      });
+      alert(`Successfully adjusted ${pointsDelta} points for ${pointsModal.username}`);
+      setPointsModal(null);
     } catch (e) {
       alert(String(e));
     }
@@ -68,6 +88,11 @@ export default function UsersPage() {
                 <td>{new Date(u._creationTime).toLocaleDateString()}</td>
                 <td>
                   <div className="row-actions">
+                    <button
+                      className="btn btn-accent btn-sm"
+                      onClick={() => setPointsModal({ userId: u._id, username: u.username })}>
+                      + Points
+                    </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>Edit</button>
                     <button
                       className="btn btn-danger btn-sm"
@@ -116,6 +141,32 @@ export default function UsersPage() {
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={() => setEditing(null)}>Cancel</button>
           <button className="btn btn-primary" onClick={save}>Save changes</button>
+        </div>
+      </Modal>
+
+      <Modal
+        title={`Adjust Points: ${pointsModal?.username ?? ""}`}
+        open={pointsModal !== null}
+        onClose={() => setPointsModal(null)}>
+        <div className="form-grid">
+          <Field label="Points Delta (e.g. 500 to add, -100 to deduct)">
+            <input
+              type="number"
+              value={pointsDelta}
+              onChange={(e) => setPointsDelta(Number(e.target.value))}
+            />
+          </Field>
+          <Field label="Reason / Reference">
+            <input
+              value={pointsReason}
+              onChange={(e) => setPointsReason(e.target.value)}
+              placeholder="e.g. ADMIN_BONUS, CONTEST_WINNER"
+            />
+          </Field>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={() => setPointsModal(null)}>Cancel</button>
+          <button className="btn btn-primary" onClick={savePoints}>Credit / Deduct Points</button>
         </div>
       </Modal>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { api } from "@convex/api";
 import { useAdminQuery } from "./useAdmin";
 import { PageHeader, timeAgo } from "@/components/ui";
@@ -50,23 +51,36 @@ export default function DashboardPage() {
       <PageHeader title="Dashboard" sub="Live overview of the View2Earn platform" />
 
       <div className="stats">
-        <div className="stat-card">
-          <div className="label">Total users</div>
-          <div className="value">{stats?.totalUsers ?? "—"}</div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Active tasks</div>
-          <div className="value">{stats?.activeTasks ?? "—"}</div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Pending review</div>
-          <div className="value">{stats?.pendingReview ?? "—"}</div>
-          <div className="hint">verifications waiting on an admin</div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Redemptions</div>
-          <div className="value">{stats?.redemptions ?? "—"}</div>
-        </div>
+        <Link href="/users" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="stat-card stat-card-link">
+            <div className="label">Total users</div>
+            <div className="value">{stats?.totalUsers ?? "—"}</div>
+            <div className="hint">View & adjust points →</div>
+          </div>
+        </Link>
+        <Link href="/tasks" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="stat-card stat-card-link">
+            <div className="label">Active tasks</div>
+            <div className="value">{stats?.activeTasks ?? "—"}</div>
+            <div className="hint">Create & edit tasks →</div>
+          </div>
+        </Link>
+        <Link href="/review" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="stat-card stat-card-link">
+            <div className="label">Pending review</div>
+            <div className="value" style={{ color: stats?.pendingReview ? "var(--warn)" : "inherit" }}>
+              {stats?.pendingReview ?? "—"}
+            </div>
+            <div className="hint">Review screenshot proofs →</div>
+          </div>
+        </Link>
+        <Link href="/redemptions" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="stat-card stat-card-link">
+            <div className="label">Redemptions</div>
+            <div className="value">{stats?.redemptions ?? "—"}</div>
+            <div className="hint">Manage airtime/data payouts →</div>
+          </div>
+        </Link>
       </div>
 
       <div style={twoCol}>
@@ -161,7 +175,9 @@ export default function DashboardPage() {
           <Meters
             rows={
               analytics
-                ? Object.entries(analytics.fraudByType).sort((a, b) => b[1] - a[1])
+                ? Object.entries(analytics.fraudByType)
+                    .map(([k, v]) => [k, Number(v)] as [string, number])
+                    .sort((a, b) => b[1] - a[1])
                 : []
             }
           />
@@ -179,7 +195,7 @@ export default function DashboardPage() {
                     (d) =>
                       [
                         new Date(d.ts).toLocaleDateString(undefined, { weekday: "short" }),
-                        d.count,
+                        Number(d.count),
                       ] as [string, number],
                   )
                 : []
@@ -193,7 +209,9 @@ export default function DashboardPage() {
           <Meters
             rows={
               analytics
-                ? Object.entries(analytics.redemptionsByStatus).sort((a, b) => b[1] - a[1])
+                ? Object.entries(analytics.redemptionsByStatus)
+                    .map(([k, v]) => [k, Number(v)] as [string, number])
+                    .sort((a, b) => b[1] - a[1])
                 : []
             }
           />

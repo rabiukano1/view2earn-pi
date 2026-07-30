@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SPIN_PRIZES } from '@view2earn/core';
 import { api } from '../../convex/_generated/api';
@@ -19,41 +19,73 @@ import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
+import RewardedAdModal from '../components/RewardedAdModal';
+import Icon from '../components/Icon';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList, 'Spin'>;
 
 const SCREEN_W = Dimensions.get('window').width;
 const TILE_INNER = 76;
 const TILE_MARGIN = 8;
-const TILE_W = TILE_INNER + TILE_MARGIN * 2; // full slot width
-const LOOPS = 8; // full cycles before landing, for the spin effect
+const TILE_W = TILE_INNER + TILE_MARGIN * 2;
+const LOOPS = 8;
 const LEN = SPIN_PRIZES.length;
-// Enough tiles to cover the resting point plus a buffer past it.
 const STRIP = Array.from({ length: (LOOPS + 2) * LEN }, (_, i) => SPIN_PRIZES[i % LEN]);
+
+function formatTimer(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 export default function SpinScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<StackNav>();
-  const route = useRoute();
   const { userId } = useAuth();
 
   const status = useQuery(api.spin.getSpinStatus, userId ? { userId } : 'skip');
   const doSpin = useMutation(api.spin.spin);
+  const earnBonusSpin = useMutation(api.spin.earnBonusSpin);
 
   const translateX = useRef(new Animated.Value(0)).current;
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<number | null>(null);
 
-  const spunToday = status?.spunToday ?? false;
+  // Rewarded Ad & Refill Timer states
+  const [adVisible, setAdVisible] = useState(false);
+  const [adMode, setAdMode] = useState<'spin_ad' | 'bonus_spin'>('spin_ad');
+  const [refillMs, setRefillMs] = useState(0);
 
-  const onSpin = async () => {
-    if (!userId || spinning || spunToday || result !== null) return;
+  // Live countdown timer for 3-hour window refill
+  useEffect(() => {
+    if (status?.nextRefillMs) {
+      setRefillMs(status.nextRefillMs);
+    }
+  }, [status?.nextRefillMs]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (refillMs > 0) {
+      interval = setInterval(() => {
+        setRefillMs((prev) => Math.max(0, prev - 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [refillMs > 0]);
+
+  const spinsRemaining = status?.spinsRemaining ?? 0;
+  const baseSpinsRemaining = status?.baseSpinsRemaining ?? 0;
+  const bonusSpins = status?.bonusSpins ?? 0;
+
+  const executeSpin = async () => {
+    if (!userId || spinning || spinsRemaining <= 0 || result !== null) return;
     setSpinning(true);
     setResult(null);
     try {
       const { index, pts } = await doSpin({ userId });
-      // Land the chosen segment under the fixed center pointer.
       const target = LOOPS * LEN + index;
       const dest = SCREEN_W / 2 - (target * TILE_W + TILE_W / 2);
       translateX.setValue(0);
@@ -68,26 +100,72 @@ export default function SpinScreen() {
       });
     } catch (e) {
       setSpinning(false);
-      // Already spun / not signed in — status query will reflect it.
     }
   };
 
-  const disabled = spinning || spunToday || result !== null || !userId;
+  const handleSpinPress = () => {
+    if (spinsRemaining <= 0) return;
+    setAdMode('spin_ad');
+    setAdVisible(true);
+  };
+
+  const handleGetBonusSpinPress = () => {
+    setAdMode('bonus_spin');
+    setAdVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
+    if (adMode === 'bonus_spin') {
+      if (userId) {
+        await earnBonusSpin({ userId, amount: 1 });
+      }
+    } else if (adMode === 'spin_ad') {
+      await executeSpin();
+    }
+  };
+
+  const disabled = spinning || spinsRemaining <= 0 || result !== null || !userId;
 
   return (
     <View style={[styles.container, dark && styles.containerDark, { paddingTop: insets.top }]}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, dark && styles.textLight]}>Spin Wheel</Text>
+        <Text style={[styles.headerTitle, dark && styles.textLight]}>Spin & Win</Text>
         <View style={styles.backButton} />
       </View>
 
+      {/* 3-Hour Refill & Spin Counter Status Bar */}
+      <View style={styles.statusSection}>
+        <View style={styles.refillBadge}>
+          <Icon name="clock" iconStyle="solid" size={12} color="#7C3AED" />
+          <Text style={styles.refillText}>Refill in {formatTimer(refillMs)}</Text>
+        </View>
+
+        <View style={styles.spinCounterRow}>
+          <View style={styles.counterPill}>
+            <Text style={styles.counterPillText}>
+              ⚡ {baseSpinsRemaining}/3 Base Spins
+            </Text>
+          </View>
+
+          {bonusSpins > 0 && (
+            <View style={[styles.counterPill, styles.bonusCounterPill]}>
+              <Text style={styles.bonusCounterPillText}>
+                🎁 +{bonusSpins} Extra Spin{bonusSpins > 1 ? 's' : ''}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Main Wheel Area */}
       <View style={styles.stage}>
         <Text style={styles.stageEmoji}>🎡</Text>
         <Text style={[styles.stageHint, dark && styles.textMuted]}>
-          One free spin every day
+          3 Base Spins every 3 hours · Win up to 250 PTS!
         </Text>
 
         {/* Reel */}
@@ -100,31 +178,54 @@ export default function SpinScreen() {
               </View>
             ))}
           </Animated.View>
-          {/* Fixed center pointer */}
           <View pointerEvents="none" style={styles.pointer} />
           <View pointerEvents="none" style={styles.pointerCap} />
         </View>
 
+        {/* Result Callout or Spin Button */}
         {result !== null ? (
           <View style={styles.resultBox}>
             <Text style={styles.resultIcon}>🎉</Text>
-            <Text style={[styles.resultTitle, dark && styles.textLight]}>You won</Text>
-            <Text style={styles.resultPts}>+{result} pts</Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.goBack()}>
-              <Text style={styles.primaryBtnText}>Done</Text>
+            <Text style={[styles.resultTitle, dark && styles.textLight]}>You Won!</Text>
+            <Text style={styles.resultPts}>+{result} PTS</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => setResult(null)}>
+              <Text style={styles.primaryBtnText}>
+                {spinsRemaining > 0 ? 'Spin Again' : 'Done'}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity
-            style={[styles.primaryBtn, disabled && styles.primaryBtnDisabled]}
-            onPress={onSpin}
-            disabled={disabled}>
-            <Text style={styles.primaryBtnText}>
-              {spinning ? 'Spinning…' : spunToday ? 'Come back tomorrow' : 'SPIN'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.actionColumn}>
+            <TouchableOpacity
+              style={[styles.primaryBtn, disabled && styles.primaryBtnDisabled]}
+              onPress={handleSpinPress}
+              disabled={disabled}>
+              <Text style={styles.primaryBtnText}>
+                {spinning
+                  ? 'Spinning…'
+                  : spinsRemaining > 0
+                  ? `SPIN (${spinsRemaining} Left)`
+                  : 'Out of Spins'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Watch Ad for +1 Bonus Spin Card */}
+            <TouchableOpacity
+              style={styles.bonusAdCard}
+              onPress={handleGetBonusSpinPress}
+              activeOpacity={0.85}>
+              <Icon name="circle-play" iconStyle="solid" size={18} color="#F59E0B" />
+              <Text style={styles.bonusAdText}>Watch Ad for +1 Extra Spin</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
+
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => setAdVisible(false)}
+        onSuccess={handleAdSuccess}
+      />
     </View>
   );
 }
@@ -145,15 +246,60 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
   textLight: { color: colors.textDark },
   textMuted: { color: colors.textMuted },
-  stage: { flex: 1, alignItems: 'center', paddingTop: 24, gap: 8 },
-  stageEmoji: { fontSize: 56 },
-  stageHint: { fontSize: 14, color: colors.textMuted, fontWeight: '600', marginBottom: 12 },
+  statusSection: {
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  refillBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+  },
+  refillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primaryDeep,
+  },
+  spinCounterRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  counterPill: {
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  counterPillText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  bonusCounterPill: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  bonusCounterPillText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  stage: { flex: 1, alignItems: 'center', paddingTop: 16, gap: 8 },
+  stageEmoji: { fontSize: 52 },
+  stageHint: { fontSize: 13, color: colors.textMuted, fontWeight: '600', marginBottom: 8 },
   reelWrap: {
     width: '100%',
     height: 108,
     justifyContent: 'center',
     overflow: 'hidden',
-    marginVertical: 20,
+    marginVertical: 14,
   },
   reel: { flexDirection: 'row' },
   tile: {
@@ -193,15 +339,35 @@ const styles = StyleSheet.create({
   resultIcon: { fontSize: 44 },
   resultTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
   resultPts: { fontSize: 34, fontWeight: '800', color: colors.success },
+  actionColumn: {
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
   primaryBtn: {
     backgroundColor: colors.primary,
     borderRadius: radius.pill,
-    paddingHorizontal: 56,
-    paddingVertical: 16,
+    paddingHorizontal: 48,
+    paddingVertical: 15,
     alignItems: 'center',
-    marginTop: 16,
     ...shadow.raised,
   },
   primaryBtnDisabled: { backgroundColor: colors.textFaint, shadowOpacity: 0, elevation: 0 },
-  primaryBtnText: { color: colors.white, fontWeight: '800', fontSize: 16, letterSpacing: 0.5 },
+  primaryBtnText: { color: colors.white, fontWeight: '800', fontSize: 15, letterSpacing: 0.5 },
+  bonusAdCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+  },
+  bonusAdText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#D97706',
+  },
 });

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
 
@@ -45,15 +46,28 @@ export const listMyRedemptions = query({
   },
 });
 
+import { checkIpReputation, recordIpFraudSignal } from "./ipReputation";
+
 export const redeem = mutation({
   args: {
     userId: v.id("users"),
     catalogId: v.id("catalog"),
     phoneNumber: v.string(),
+    clientIp: v.optional(v.string()),
   },
-  handler: async (ctx, { userId, catalogId, phoneNumber }) => {
+  handler: async (ctx, { userId, catalogId, phoneNumber, clientIp }) => {
     await requireUser(ctx, userId);
     await enforceRateLimit(ctx, userId, "redeem");
+
+    // IP Reputation & VPN Restriction Check (Fraud Layer 3)
+    if (clientIp) {
+      const ipInfo = await checkIpReputation(clientIp);
+      await recordIpFraudSignal(ctx, userId, ipInfo);
+      if (ipInfo.isVpn || ipInfo.isProxy || ipInfo.riskScore >= 75) {
+        throw new Error("VPN or Proxy connection detected. Please disconnect VPN to process airtime/data redemptions.");
+      }
+    }
+
     const item = await ctx.db.get(catalogId);
     if (!item || !item.enabled) throw new Error("Reward unavailable");
     const price = item.pointsPrice;
@@ -88,7 +102,45 @@ export const redeem = mutation({
       balanceAfter,
     });
 
+    // Schedule automated VAS Airtime & Data fulfillment
+    await ctx.scheduler.runAfter(0, internal.vas.fulfill, { redemptionId });
+
     return { redemptionId, balanceAfter };
+  },
+});
+
+export const refundRedemption = internalMutation({
+  args: {
+    redemptionId: v.id("redemptions"),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, { redemptionId, reason }) => {
+    const r = await ctx.db.get(redemptionId);
+    if (!r || r.status === "refunded") return;
+
+    await ctx.db.patch(redemptionId, { status: "refunded" });
+
+    await ctx.runMutation(internal.points.creditHelper, {
+      userId: r.userId,
+      delta: r.amount,
+      reason: reason ?? "REFUND_REDEMPTION_FAILED",
+      refId: `refund:${redemptionId}`,
+    });
+  },
+});
+
+export const markFulfilled = internalMutation({
+  args: {
+    redemptionId: v.id("redemptions"),
+    providerRef: v.optional(v.string()),
+  },
+  handler: async (ctx, { redemptionId, providerRef }) => {
+    const r = await ctx.db.get(redemptionId);
+    if (!r) return;
+    await ctx.db.patch(redemptionId, {
+      status: "fulfilled",
+      providerRef,
+    });
   },
 });
 
@@ -129,7 +181,7 @@ export const progressToNext = query({
   },
 });
 
-// Deterministic referral code + count, derived without a schema change.
+// Deterministic referral code + rich stats for the Profile referral card.
 export const myReferral = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
@@ -138,7 +190,24 @@ export const myReferral = query({
       .withIndex("by_referrer", (q) => q.eq("referrerId", userId))
       .collect();
     const code = `V2E-${userId.slice(-6).toUpperCase()}`;
-    return { code, count: referred.length };
+    const qualifiedCount = referred.filter((r) => !!r.qualifiedAt).length;
+    const totalEarned = qualifiedCount * 100; // REFERRAL_QUALIFIED constant
+
+    // Who referred this user?
+    const user = await ctx.db.get(userId);
+    let referrerName: string | null = null;
+    if (user?.referredBy) {
+      const referrer = await ctx.db.get(user.referredBy);
+      referrerName = referrer?.username ?? referrer?.name ?? null;
+    }
+
+    return {
+      code,
+      count: referred.length,
+      qualifiedCount,
+      totalEarned,
+      referredBy: referrerName,
+    };
   },
 });
 

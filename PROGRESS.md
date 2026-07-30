@@ -1,7 +1,7 @@
 # View2Earn — Progress & Roadmap
 
 Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.md`
-(plan sections referenced as §). Last updated: 2026-07-14.
+(plan sections referenced as §). Last updated: 2026-07-29.
 
 ---
 
@@ -12,8 +12,8 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 - Convex schema with all core tables + indexes
 - Append-only points ledger (`points.ts`): credit, balance, history
 - Ecosystem guard middleware (`lib/guards.ts`)
-- Dev identity — one user per device fingerprint (`lib/device.ts`, `users.ts`)
-- Stack-over-tabs navigation (5 tabs + pushed screens)
+- **Real auth via Convex Auth** — email/password, email OTP (Resend), Sign in with Telegram (device-fingerprint dev auth removed)
+- Stack-over-tabs navigation (Home + 4 tabs + pushed screens); floating pill tab bar with real icons
 
 ### Tasks & Verification (Plan Phase 2)
 - Task feed with target-URL dedup + hide-own-listings (`tasks.ts`)
@@ -39,6 +39,10 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 - **Progress bar to next redemption** ("X pts from a 1GB bundle")
 - **Daily mystery box** — unlocks after 3 tasks/day, weighted random prize (`bonus.ts`)
 - **Task combos** — follow + Telegram + quiz in a day = bonus (`combos.ts`)
+- **App Wallet & PIPRO Token System** — Non-custodial internal app wallet with Points and PIPRO balances, instant zero-sum swaps, Solana on-chain deposit verification (`/wallet/verify-deposit`), admin-configurable exchange rates, and full transaction history (`wallets.ts`, `schema.ts`, `http.ts`, `WalletScreen.tsx`, `WalletHistoryScreen.tsx`).
+- **Real-Time Admin Ad Reward Control** — Admin-configurable `adRewardPoints` via `platformSettings` and provider configs (`admin.ts`, `ads.ts`, `RewardedAdModal.tsx`), authoritatively awarding exact configured points to ledger and app wallet.
+- **On-Chain Solana Deposit Verification** — Verified PIPRO SPL token transfers (`7hU4hrLtr2dxGDBy56HQo6NF2u19FA1k4rM8nJQ5ceFk`) via Solana RPC with automatic balance crediting upon confirmation.
+- **App-Wide Points & Wallet Sync** — Points earned from spins, ads, tasks, academy, quizzes, and streaks automatically sync with the user's app wallet balance and ledger.
 
 ### Fraud & Safety (Plan Phase 6, partial)
 - **Trust-based verification sampling** (§4 Stage 4) — new users (< 10 tasks) 100% verified, trusted users sampled ~40% + auto-approved, fraud score ≥ 50 or recent fraud → 100% (`verifications.shouldVerify`)
@@ -48,6 +52,9 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 - Admin panel (Next.js): users, tasks, review queue, providers, redemptions, fraud, catalog
 - Admin analytics dashboard — points economy (issued/spent/outstanding + payout-ratio vs 50% rule), user risk-tier distribution, fraud signals by type, 7-day new users, redemptions by status (`admin.getAnalytics`, CSS meters — no chart lib)
 - Modern design system (`theme.ts`) — tokens, shadows; floating tab bar; branded hero headers; unified scroll
+- **Real icons app-wide** — FontAwesome6 via `react-native-vector-icons` (`components/Icon.tsx`, `PlatformIcon.tsx`): nav tabs, home shortcuts, social brand logos, login inputs. *Needs `fonts.gradle` line + native rebuild to render.*
+- **Modernized screens** — login (password / email-code / Telegram tabs, icon inputs, signup-on-failure prompt), profile (identity header, icon menu rows, fingerprint toggle, sign out), fingerprint unlock screen
+- **Fingerprint app-lock** — `react-native-biometrics` (`auth/biometric.ts` lazy/guarded), `BiometricGate` prompts on reopen when enabled (toggle in Profile)
 
 ---
 
@@ -59,7 +66,7 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 - [x] Admin panel sign-in gate (password via `ADMIN_PASSWORD` Convex env; `AuthGate` + `admin.checkPassword`)
   - [x] per-function admin auth on all `admin.*` functions — shared-secret `token` (the admin password) required on every call, checked server-side by `requireAdmin` (`admin.ts`); client injects it via `useAdminQuery`/`useAdminMutation` (`apps/admin-panel/src/app/useAdmin.ts`). Upgrade to real per-admin identity when a JWT provider exists.
 - [x] Count-delta fraud-signal cron (§4 Tier 3) — 12h cron reads each active campaign's public count vs claimed follows; large shortfall → campaign fraud signal in `fraudEvents` (`countDelta.ts`, logic in `@view2earn/core`, count source mocked pending a real per-platform fetch)
-- [ ] Qualified referral flow (§7.7) — *needs real auth to test (dev = one user/device)*
+- [x] Qualified referral flow (§7.7) — `referrals.ts`: code resolution (`resolveCode`), application at signup (`applyReferralCode`), qualification check on RELEASED (`checkQualification`, threshold = 5 tasks), device-cluster fraud guard, dual reward (100 pts referrer + 50 pts referee). Schema: `referredBy` on users, `by_referee` index on referrals. Client: referral code input at signup (LoginScreen), enhanced referral card with Share / stats / referred-by (ProfileScreen). Constants in `@view2earn/core`.
 - [x] Learn Pi / Learn Sidra academy (§7.11b) — 3 leveled guides per ecosystem with a quiz gate each; pass ≥70% to unlock the next level + earn points once (badge = completed level). Content + gate logic in `@view2earn/core` (`academy.ts`), progress in `academyProgress`, backend `academy.ts` (`getAcademy`/`submitLevel`), UI `AcademyScreen.tsx` (entry from Profile). *Screen still needs an on-device pass.*
 - [x] Spin wheel (variant of mystery box) — free once-a-day weighted spin; server picks the prize, UI reel animates to it. Prize table + `pickSpinIndex` in `@view2earn/core` (`spin.ts`), state in `dailySpins`, backend `spin.ts` (`getSpinStatus`/`spin`), UI `SpinScreen.tsx` (entry from Home). *Screen needs an on-device pass.*
 
@@ -70,21 +77,24 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 - [x] **Email OTP** — `resend-otp` provider (`convex/ResendOTP.ts`, generates 6-digit code, sends via Resend REST API — no SDK dep), `createOrUpdateUser` callback centralizes app-field defaults for all providers. Client: LoginScreen has Password | Email-code tabs (2-step: email → code). Needs `AUTH_RESEND_KEY` env (free Resend account). Backend deployed + typechecks; RN 0 errors.
 - [x] **Sign in with Telegram** (free, deep-link bot flow) — `telegramNonces` table, `telegramAuth.*` (start/status/markVerified/consumeNonce), `TelegramProvider` (ConvexCredentials), bot webhook at `/telegram/webhook` (http.ts). Client: "Continue with Telegram" button opens the bot, polls the nonce, signs in on verify. Needs `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_USERNAME` env + webhook registration. Backend deployed + typechecks; RN 0 errors.
 - [ ] Phone/WhatsApp OTP — WhatsApp needs Meta WhatsApp Cloud API (business account + approved auth template; free tier ~1k/mo). SMS is inherently paid. `otp-without-db` only generates codes, doesn't send.
-- [~] Google OAuth — **backend provider wired** (`convex/auth.ts`, reads `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`). Needs: (1) Google Cloud OAuth client + those env vars, (2) the RN OAuth redirect flow (browser + deep-link callback) + a "Continue with Google" button.
+- [x] Google OAuth — **backend provider wired** (`convex/auth.ts`, reads `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`). RN client: `GoogleAuthButton` component (Convex Auth `signIn('google')` flow), added to LoginScreen alongside Telegram. Android `build.gradle` has `appAuthRedirectScheme`. *Needs: Google Cloud OAuth client credentials set as Convex env vars (`AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`), `react-native-app-auth` dep, and a native rebuild.*
 - [ ] Sidra Chain KYC login — `convex/sidraAuth.ts` scaffolded; needs Sidra's login SDK/token on the client
-- [ ] Wallet payout (receive SDA + tokens) — connect-wallet-to-auto-fill address; non-Reown method TBD
+- [x] **Payout wallets (non-custodial)** — users set an EVM + Solana **address** in Profile to receive token rewards; no seed phrase / private key / custody. Server-side validation (`isEvmAddress`/`isSolanaAddress` in `@view2earn/core`, tested), stored on the user (`payoutEvm`/`payoutSolana`), `wallets.setPayoutWallet` mutation. *Treasury send-side (actually paying out SDA/tokens) is a later step.*
 
 ### Gated on third-party credentials
-- [ ] **AI screenshot vision** (§4 Tier 1) — currently mocked at 0.92; needs a vision API key
-- [ ] **Survey provider** postbacks — CPX / BitLabs, signed callbacks (§7.4)
-- [ ] **Ad network** — AdMob / Unity rewarded video on Claim (§7.6)
-- [ ] **VAS fulfillment** — Reloadly / DTone airtime & data, auto-refund on failure (§7.8b)
+- [x] **Telegram channel-join verification live** (§7.3 / Tier 4) — `telegram.check` un-mocked: real `getChatMember` using `TELEGRAM_BOT_TOKEN` + the user's `telegramUserId` (persisted at Telegram sign-in) + the task's channel. Fails closed. *Bot must be an admin of each target channel.*
+- [x] **Survey postback idempotency** — `pointsLedger.by_refId` index + dedup on `provider:txId` in `surveys.recordCompletion` (retries credit once). Verified live.
+- [x] **AI screenshot vision** (§4 Tier 1) — `verifications.ts`: real multimodal vision verification via free Gemini 2.0 Flash REST API (`GEMINI_API_KEY`), checking page/account follow state & handle match. On quota limit (HTTP 429) or API error, automatically falls back to `ADMIN_REVIEW` queue. AI-approved screenshots release points instantly (`RELEASED`), saving storage costs.
+- [~] **Survey provider — CPX Research** (§7.4) — offerwall URL (server-side md5 hash, `cpx.getOfferwallUrl`), S2S postback at `/survey/cpx` (GET, md5-verified, credits status=1 / debits reversal status=2, idempotent). Client: "Open survey wall" button in `SurveysScreen`. **Postback chain verified live** (valid hash → credit, bad hash → 403). *Needs a real CPX publisher account: set `CPX_APP_ID` + `CPX_SECRET` and configure the postback URL in CPX.*
+- [x] **Ad network** (§7.6) — `RewardedAdModal.tsx`: Rewarded video ads integration using official Google AdMob Test Ad Unit IDs (`ca-app-pub-3940256099942544/5224354917` Android / `ca-app-pub-3940256099942544/1712485313` iOS), ban prevention test mode, promo tile in `TasksScreen`, and `ads.rewardForAd` mutation crediting +50 PTS to balance.
+- [x] **VAS fulfillment** (§7.8b) — `vas.ts`: automated airtime & data bundle top-ups via Reloadly Topup REST API (`RELOADLY_CLIENT_ID` / `RELOADLY_CLIENT_SECRET`), dev sandbox mode, status callbacks in `http.ts`, and `refundRedemption` internal mutation that automatically refunds points back to the user's ledger on delivery failure.
 - [ ] **AI quiz generation** — LLM-generated question banks (§7.5)
 - [ ] Pi SDK login + payments (Pi web app) (§7.1)
 - [ ] Sidra auth + wallet (native) (§7.1) — `auth.sidraAuth` scaffolded
 
 ### Hardening & launch (Plan Phases 6–7)
-- [~] Fraud scoring end-to-end (§7.9) — `users.fraudScore` now computed from stored signals (recent `fraudEvents` + rejected/released/cancelled verification outcomes) via `computeFraudScore` in `@view2earn/core`; recomputed inline on each new signal (admin fraud event, admin reject, count-delta flag) and swept daily (`fraud.recomputeAll` cron). Closes the loop into `verifications.shouldVerify` (score ≥ 50 → 100% verify). *Remaining layers (device fingerprint, IP/VPN) still pending — those need client signals / a third-party API.*
+- [x] **Fraud scoring end-to-end** (§7.9) — `users.fraudScore` recomputed from stored signals (`fraudEvents` + verification outcomes).
+- [x] **IP Reputation & VPN / Proxy Detection (Layer 3)** — `ipReputation.ts`: evaluates IP threat level (VPN, Proxy, Tor, Data Center subnet patterns or live IPQualityScore API), logs `ip-vpn-detected` fraud events, recomputes user `fraudScore` immediately, and restricts high-risk VPN connections during airtime redemptions.
 - [x] Device fingerprinting — native composite (Layer 2): client `collectDeviceSignals` → server `deviceSignals.record` hashes ordered parts (`compositeFingerprint` in core), stores per (user, device), flags `device-cluster` when a fingerprint spans multiple users (clone-app catch). *canvas/WebGL web hashes come with the Pi web build.*
 - [x] Behavioral impossible-speed (Layer 4) — claim→proof < 4s flags `impossible-speed` (`isImpossibleSpeed` in core, wired into `submitProof`).
 - [x] Device-cluster is ecosystem-scoped — one Pi + one Sidra account on the same phone is legitimate (never flagged); only a 2nd account of the *same* platform is the clone/farm signal (`deviceSignals.record` filters by platform).
@@ -101,6 +111,6 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 ## ⚠️ Known dev shortcuts (swap before production)
 - Verification hold is **60s** in dev (plan: 48h) — `verifications.ts`, `telegram.ts`
 - AI vision is **mocked** (auto-approves at 0.92) — `verifications.aiCheck`
-- Telegram membership check **mock-approves** (needs bot token + user TG id) — `telegram.check`
-- Identity is **device-fingerprint** dev auth (plan: Pi/Sidra auth)
+- Count-delta public-count source is **mocked** (returns claims) — `countDelta.ts`
 - Admin auth is a **shared secret** (`ADMIN_PASSWORD`), not per-admin identity — upgrade to real auth (ctx.auth + roles) before scaling admins
+- Email OTP uses Resend's `onboarding@resend.dev` sender (test-only) — verify a domain for real delivery (`ResendOTP.ts`)

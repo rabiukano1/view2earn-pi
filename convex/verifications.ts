@@ -1,6 +1,7 @@
 import {
   internalAction,
   internalMutation,
+  internalQuery,
   mutation,
   query,
 } from "./_generated/server";
@@ -84,29 +85,43 @@ async function checkPlatformLimit(
 
   const limits = await ctx.db.query("platformLimits").collect();
   const cfg = (limits as any[]).find((l: any) => l.platform === platform);
-  const dailyLimit = cfg?.dailyTaskLimit ?? 15;
-  const cooldownMin = cfg?.cooldownMinutes ?? 3;
+  const dailyLimit = cfg?.dailyTaskLimit ?? 50;
+  const cooldownMin = cfg?.cooldownMinutes ?? 0;
 
   if (samePlatform.length >= dailyLimit) {
     throw new Error(`Daily ${platform} limit reached (${dailyLimit}). Try again tomorrow.`);
   }
 
-  if (samePlatform.length > 0) {
+  if (cooldownMin > 0 && samePlatform.length > 0) {
     const last = (samePlatform as any[]).sort((a: any, b: any) => b._creationTime - a._creationTime)[0];
     const elapsed = Date.now() - last._creationTime;
     const cooldownMs = cooldownMin * 60 * 1000;
     if (elapsed < cooldownMs) {
-      const wait = Math.ceil((cooldownMs - elapsed) / 1000 / 60);
-      throw new Error(`Please wait ${wait} min before next ${platform} task.`);
+      const waitSec = Math.ceil((cooldownMs - elapsed) / 1000);
+      const waitMin = Math.ceil(waitSec / 60);
+      if (waitSec > 60) {
+        throw new Error(`Please wait ${waitMin} min before your next ${platform} task.`);
+      } else if (waitSec > 0) {
+        throw new Error(`Please wait ${waitSec}s before your next ${platform} task.`);
+      }
     }
   }
 }
 
+import { checkIpReputation, recordIpFraudSignal } from "./ipReputation";
+
 export const claim = mutation({
-  args: { taskId: v.id("tasks"), userId: v.id("users") },
+  args: { taskId: v.id("tasks"), userId: v.id("users"), clientIp: v.optional(v.string()) },
   handler: async (ctx, args) => {
     await requireUser(ctx, args.userId);
     await enforceRateLimit(ctx, args.userId, "claim");
+
+    // IP Reputation & VPN Detection (Fraud Layer 3)
+    if (args.clientIp) {
+      const ipInfo = await checkIpReputation(args.clientIp);
+      await recordIpFraudSignal(ctx, args.userId, ipInfo);
+    }
+
     const task = await ctx.db.get(args.taskId);
     if (!task || task.status !== "active") {
       throw new Error("Task is not available");
@@ -216,16 +231,162 @@ export const submitProof = mutation({
   },
 });
 
-// Tier 1 screenshot check. TODO(prod): pHash dedup, then cheap-model-first
-// AI vision (plan §4 Tier 1). Mocked as approve until the vision key is set.
+export const getVerificationForAi = internalQuery({
+  args: { verificationId: v.id("verifications") },
+  handler: async (ctx, args) => {
+    const verification = await ctx.db.get(args.verificationId);
+    if (!verification) return null;
+    const task = await ctx.db.get(verification.taskId);
+    let screenshotUrl: string | null = null;
+    if (verification.screenshotStorageId) {
+      screenshotUrl = await ctx.storage.getUrl(verification.screenshotStorageId);
+    }
+    return { verification, task, screenshotUrl };
+  },
+});
+
+// Tier 1 screenshot check with free AI Vision models (Gemini 2.0 Flash REST API).
+// If free API quota is exceeded or an error occurs, falls back to ADMIN_REVIEW queue.
 export const aiCheck = internalAction({
   args: { verificationId: v.id("verifications") },
   handler: async (ctx, args) => {
-    const confidence = 0.92; // mock — replace with vision API result
-    await ctx.runMutation(internal.verifications.applyAiResult, {
+    const data = await ctx.runQuery(internal.verifications.getVerificationForAi, {
       verificationId: args.verificationId,
-      confidence,
     });
+
+    if (!data || !data.verification) {
+      return;
+    }
+
+    const { task, screenshotUrl } = data;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+
+    // Fallback if no API key configured in Convex env
+    if (!geminiKey && !openaiKey) {
+      console.log("[AI Vision] No GEMINI_API_KEY or OPENAI_API_KEY set. Falling back to dev mock auto-approval (0.92).");
+      await ctx.runMutation(internal.verifications.applyAiResult, {
+        verificationId: args.verificationId,
+        confidence: 0.92,
+      });
+      return;
+    }
+
+    if (!screenshotUrl) {
+      // Escalates to ADMIN_REVIEW if no image exists
+      await ctx.runMutation(internal.verifications.applyAiResult, {
+        verificationId: args.verificationId,
+        confidence: 0.60,
+      });
+      return;
+    }
+
+    try {
+      let confidence = 0.60;
+
+      if (geminiKey) {
+        // Fetch image content for free Gemini Vision REST API
+        const imgRes = await fetch(screenshotUrl);
+        const arrayBuf = await imgRes.arrayBuffer();
+        const base64Image = Buffer.from(arrayBuf).toString("base64");
+        const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+
+        const targetInfo = task
+          ? `Target: "${task.targetUrl}" on platform "${task.platform || "social media"}"`
+          : "Social task completion screenshot";
+        const promptText = `Analyze this task completion screenshot.\n${targetInfo}.\nDoes this screenshot clearly show that the user has followed, subscribed to, joined, or liked this page/account?\nRespond ONLY with a raw JSON object formatted as: {"isFollowing": boolean, "targetMatch": boolean, "confidence": number}`;
+
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
+        const apiRes = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: promptText },
+                  {
+                    inlineData: {
+                      mimeType: contentType,
+                      data: base64Image,
+                    },
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: "application/json",
+            },
+          }),
+        });
+
+        if (apiRes.status === 429) {
+          console.warn("[AI Vision] Free tier rate limit / quota exceeded (HTTP 429). Escalating to ADMIN_REVIEW.");
+          confidence = 0.60;
+        } else if (!apiRes.ok) {
+          console.error(`[AI Vision] Gemini API error (${apiRes.status})`);
+          confidence = 0.60;
+        } else {
+          const resJson = await apiRes.json();
+          const responseText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (responseText) {
+            const parsed = JSON.parse(responseText.trim());
+            if (parsed.isFollowing && parsed.targetMatch) {
+              confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.95;
+              if (confidence < 0.85) confidence = 0.92;
+            } else {
+              confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0.20;
+            }
+          }
+        }
+      } else if (openaiKey) {
+        const targetInfo = task ? `Target: "${task.targetUrl}" on ${task.platform}` : "Social task proof";
+        const promptText = `Analyze screenshot for social follow proof. ${targetInfo}. Output JSON only: {"isFollowing": boolean, "targetMatch": boolean, "confidence": number}`;
+
+        const apiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: promptText },
+                  { type: "image_url", image_url: { url: screenshotUrl } },
+                ],
+              },
+            ],
+          }),
+        });
+
+        if (!apiRes.ok) {
+          confidence = 0.60;
+        } else {
+          const resJson = await apiRes.json();
+          const responseText = resJson.choices?.[0]?.message?.content;
+          if (responseText) {
+            const parsed = JSON.parse(responseText.trim());
+            confidence = parsed.isFollowing && parsed.targetMatch ? parsed.confidence || 0.95 : 0.20;
+          }
+        }
+      }
+
+      await ctx.runMutation(internal.verifications.applyAiResult, {
+        verificationId: args.verificationId,
+        confidence,
+      });
+    } catch (err) {
+      console.error("[AI Vision] Vision action error, sending to admin review:", err);
+      await ctx.runMutation(internal.verifications.applyAiResult, {
+        verificationId: args.verificationId,
+        confidence: 0.60,
+      });
+    }
   },
 });
 
@@ -252,15 +413,70 @@ export const applyAiResult = internalMutation({
       });
       return;
     }
-    const holdUntil = Date.now() + HOLD_MS;
+    
+    // AI Verified (>= 0.85) -> INSTANT RELEASE! (Points credited immediately, no 48h hold)
+    await ctx.runMutation(internal.verifications.releaseImmediately, {
+      verificationId: args.verificationId,
+      confidence: args.confidence,
+    });
+  },
+});
+
+export const releaseImmediately = internalMutation({
+  args: { verificationId: v.id("verifications"), confidence: v.number() },
+  handler: async (ctx, args) => {
+    const verification = await ctx.db.get(args.verificationId);
+    if (!verification) return;
+    const task = await ctx.db.get(verification.taskId);
+    if (!task) return;
+
+    // Purge physical image file from storage upon approval to save database costs
+    if (verification.screenshotStorageId) {
+      try {
+        await ctx.storage.delete(verification.screenshotStorageId);
+      } catch (e) {
+        console.error("Storage purge error on releaseImmediately:", e);
+      }
+    }
+
     await ctx.db.patch(args.verificationId, {
-      state: "PENDING_HOLD",
+      state: "RELEASED",
       sampled: true,
       aiConfidence: args.confidence,
-      holdUntil,
+      screenshotStorageId: undefined,
     });
-    await ctx.scheduler.runAt(holdUntil, internal.verifications.release, {
-      verificationId: args.verificationId,
+
+    await ctx.runMutation(internal.points.creditHelper, {
+      userId: verification.userId,
+      delta: task.points,
+      reason: "TASK_COMPLETED",
+      refId: verification.taskId,
+    });
+
+    if (task.targetUrl) {
+      await ctx.db.insert("completedTargets", {
+        userId: verification.userId,
+        normalizedUrl: normalizeUrl(task.targetUrl),
+      });
+    }
+
+    const listing = await ctx.db
+      .query("marketplaceListings")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .filter((q) => q.eq(q.field("taskId"), verification.taskId))
+      .first();
+    if (listing) {
+      const updated = listing.completionsSoFar + 1;
+      await ctx.db.patch(listing._id, { completionsSoFar: updated });
+      if (updated >= listing.maxCompletions) {
+        await ctx.db.patch(listing._id, { status: "completed" });
+        await ctx.db.patch(task._id, { status: "expired" });
+      }
+    }
+
+    // Qualified referral check
+    await ctx.runMutation(internal.referrals.checkQualification, {
+      userId: verification.userId,
     });
   },
 });
@@ -276,7 +492,20 @@ export const release = internalMutation({
     if (!task) {
       return;
     }
-    await ctx.db.patch(args.verificationId, { state: "RELEASED" });
+
+    // Purge physical image file from storage upon release to save database costs
+    if (verification.screenshotStorageId) {
+      try {
+        await ctx.storage.delete(verification.screenshotStorageId);
+      } catch (e) {
+        console.error("Storage purge error on release:", e);
+      }
+    }
+
+    await ctx.db.patch(args.verificationId, {
+      state: "RELEASED",
+      screenshotStorageId: undefined,
+    });
     await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
       delta: task.points,
@@ -302,6 +531,12 @@ export const release = internalMutation({
         await ctx.db.patch(task._id, { status: "expired" });
       }
     }
+
+    // Qualified referral check: if this user was referred and just crossed
+    // the qualification threshold, reward both referrer and referee (§7.7).
+    await ctx.runMutation(internal.referrals.checkQualification, {
+      userId: verification.userId,
+    });
   },
 });
 

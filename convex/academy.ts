@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
-import { ACADEMY, getLesson, scoreGate, ACADEMY_LEVEL_POINTS } from "@view2earn/core";
+import { ACADEMY, getLesson, scoreGate } from "@view2earn/core";
+import { getNum } from "./rewardsConfig";
 
 const ecosystemArg = v.union(v.literal("PI"), v.literal("SIDRA"));
 
@@ -68,7 +69,7 @@ export const submitLevel = mutation({
         level,
         passedAt: Date.now(),
       });
-      pointsEarned = ACADEMY_LEVEL_POINTS;
+      pointsEarned = await getNum(ctx, "academyLevelPoints");
       const last = await ctx.db
         .query("pointsLedger")
         .withIndex("by_user", (q) => q.eq("userId", userId))

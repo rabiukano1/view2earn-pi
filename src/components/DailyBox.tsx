@@ -5,16 +5,24 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
 
+import RewardedAdModal from './RewardedAdModal';
+
 export default function DailyBox({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
   const [won, setWon] = useState<number | null>(null);
+  const [adVisible, setAdVisible] = useState(false);
   const status = useQuery(api.bonus.getBoxStatus, { userId });
   const openBox = useMutation(api.bonus.openBox);
 
   if (!status) return null;
 
-  const onOpen = async () => {
+  const handleOpenPress = () => {
+    if (busy || !status.eligible) return;
+    setAdVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
     if (busy || !status.eligible) return;
     setBusy(true);
     try {
@@ -55,34 +63,41 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
   const pct = status.tasksToday / status.needed;
 
   return (
-    <TouchableOpacity
-      activeOpacity={status.eligible ? 0.85 : 1}
-      onPress={onOpen}
-      style={[styles.card, status.eligible && styles.cardReady, dark && styles.cardDark]}>
-      <Text style={styles.emoji}>{status.eligible ? '🎁' : '📦'}</Text>
-      <View style={styles.info}>
-        <Text style={[styles.title, dark && styles.textLight]}>
-          {status.eligible ? 'Daily box ready!' : 'Daily mystery box'}
-        </Text>
-        {status.eligible ? (
-          <Text style={styles.subReady}>Tap to open · win up to 250 pts</Text>
-        ) : (
-          <>
-            <Text style={styles.sub}>
-              {status.tasksToday}/{status.needed} tasks today to unlock
-            </Text>
-            <View style={[styles.track, dark && styles.trackDark]}>
-              <View style={[styles.fill, { width: `${pct * 100}%` }]} />
-            </View>
-          </>
-        )}
-      </View>
-      {status.eligible && (
-        <View style={styles.openBtn}>
-          <Text style={styles.openBtnText}>{busy ? '…' : 'Open'}</Text>
+    <>
+      <TouchableOpacity
+        activeOpacity={status.eligible ? 0.85 : 1}
+        onPress={handleOpenPress}
+        style={[styles.card, status.eligible && styles.cardReady, dark && styles.cardDark]}>
+        <Text style={styles.emoji}>{status.eligible ? '🎁' : '📦'}</Text>
+        <View style={styles.info}>
+          <Text style={[styles.title, dark && styles.textLight]}>
+            {status.eligible ? 'Daily box ready!' : 'Daily mystery box'}
+          </Text>
+          {status.eligible ? (
+            <Text style={styles.subReady}>Tap to watch ad & open · win up to 250 pts</Text>
+          ) : (
+            <>
+              <Text style={styles.sub}>
+                {status.tasksToday}/{status.needed} tasks today to unlock
+              </Text>
+              <View style={[styles.track, dark && styles.trackDark]}>
+                <View style={[styles.fill, { width: `${pct * 100}%` }]} />
+              </View>
+            </>
+          )}
         </View>
-      )}
-    </TouchableOpacity>
+        {status.eligible && (
+          <View style={styles.openBtn}>
+            <Text style={styles.openBtnText}>{busy ? '…' : 'Open'}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => setAdVisible(false)}
+        onSuccess={handleAdSuccess}
+      />
+    </>
   );
 }
 

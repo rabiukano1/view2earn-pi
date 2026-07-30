@@ -1,18 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
-
-// Daily mystery box (plan §7.11b): unlocks after 3 tasks in a day, one open
-// per day, random bonus. Weighted toward smaller rewards.
-const TASKS_NEEDED = 3;
-const PRIZES: { pts: number; weight: number }[] = [
-  { pts: 10, weight: 30 },
-  { pts: 20, weight: 25 },
-  { pts: 30, weight: 20 },
-  { pts: 50, weight: 15 },
-  { pts: 100, weight: 8 },
-  { pts: 250, weight: 2 },
-];
+import { getJSON, getNum } from "./rewardsConfig";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000);
@@ -32,14 +21,14 @@ async function tasksToday(ctx: any, userId: string): Promise<number> {
   ).length;
 }
 
-function pickPrize(): number {
-  const total = PRIZES.reduce((s, p) => s + p.weight, 0);
+function pickPrize(prizes: { pts: number; weight: number }[]): number {
+  const total = prizes.reduce((s, p) => s + p.weight, 0);
   let r = Math.random() * total;
-  for (const p of PRIZES) {
+  for (const p of prizes) {
     if (r < p.weight) return p.pts;
     r -= p.weight;
   }
-  return PRIZES[0].pts;
+  return prizes[0].pts;
 }
 
 export const getBoxStatus = query({
@@ -52,11 +41,12 @@ export const getBoxStatus = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
     const done = await tasksToday(ctx, userId);
+    const needed = await getNum(ctx, "mysteryBoxTasksNeeded");
     return {
-      tasksToday: Math.min(done, TASKS_NEEDED),
-      needed: TASKS_NEEDED,
+      tasksToday: Math.min(done, needed),
+      needed,
       openedToday: box?.lastDay === today,
-      eligible: done >= TASKS_NEEDED && box?.lastDay !== today,
+      eligible: done >= needed && box?.lastDay !== today,
     };
   },
 });
@@ -71,14 +61,16 @@ export const openBox = mutation({
       .query("dailyBoxes")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
+    const needed = await getNum(ctx, "mysteryBoxTasksNeeded");
     if (box?.lastDay === today) {
       throw new Error("You've already opened today's box. Come back tomorrow!");
     }
-    if ((await tasksToday(ctx, userId)) < TASKS_NEEDED) {
-      throw new Error(`Complete ${TASKS_NEEDED} tasks today to unlock the box.`);
+    if ((await tasksToday(ctx, userId)) < needed) {
+      throw new Error(`Complete ${needed} tasks today to unlock the box.`);
     }
 
-    const reward = pickPrize();
+    const prizes = await getJSON<{ pts: number; weight: number }[]>(ctx, "mysteryBoxPrizes");
+    const reward = pickPrize(prizes);
     if (box) {
       await ctx.db.patch(box._id, { lastDay: today });
     } else {

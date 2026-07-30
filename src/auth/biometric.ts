@@ -6,11 +6,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Face ID before revealing the app when the user has turned the lock on.
 
 const LOCK_KEY = 'v2e_biometric_lock';
-const rnBiometrics = new ReactNativeBiometrics({ allowDeviceCredentials: true });
+
+// Lazy + guarded: never touch the native module at import time. If it isn't
+// linked (e.g. running an APK built before it was added), biometric features
+// just no-op instead of crashing the whole app on launch.
+let rnBiometrics: ReactNativeBiometrics | null = null;
+let triedInit = false;
+function getBiometrics(): ReactNativeBiometrics | null {
+  if (triedInit) return rnBiometrics;
+  triedInit = true;
+  try {
+    rnBiometrics = new ReactNativeBiometrics({ allowDeviceCredentials: true });
+  } catch {
+    rnBiometrics = null;
+  }
+  return rnBiometrics;
+}
 
 export async function biometricAvailable(): Promise<boolean> {
+  const rn = getBiometrics();
+  if (!rn) return false;
   try {
-    const { available } = await rnBiometrics.isSensorAvailable();
+    const { available } = await rn.isSensorAvailable();
     return available;
   } catch {
     return false;
@@ -18,8 +35,10 @@ export async function biometricAvailable(): Promise<boolean> {
 }
 
 export async function promptBiometric(message = 'Unlock View2Earn'): Promise<boolean> {
+  const rn = getBiometrics();
+  if (!rn) return false;
   try {
-    const { success } = await rnBiometrics.simplePrompt({ promptMessage: message });
+    const { success } = await rn.simplePrompt({ promptMessage: message });
     return success;
   } catch {
     return false;

@@ -89,13 +89,13 @@ export const dailyRemaining = query({
 
     const limits = await ctx.db.query("platformLimits").collect();
     const cfg = limits.find((l) => l.platform === platform);
-    const limit = cfg?.dailyTaskLimit ?? 15;
+    const limit = cfg?.dailyTaskLimit ?? 50;
 
     return {
       used: todayCount,
       remaining: Math.max(0, limit - todayCount),
       limit,
-      cooldownMinutes: cfg?.cooldownMinutes ?? 3,
+      cooldownMinutes: cfg?.cooldownMinutes ?? 0,
     };
   },
 });
@@ -123,14 +123,14 @@ export const myLimits = query({
     const limits = await ctx.db.query("platformLimits").collect();
     return SOCIAL_PLATFORMS.map((platform) => {
       const cfg = limits.find((l) => l.platform === platform);
-      const limit = cfg?.dailyTaskLimit ?? 15;
+      const limit = cfg?.dailyTaskLimit ?? 50;
       const used = active.filter((v) => v.platform === platform).length;
       return {
         platform,
         used,
         remaining: Math.max(0, limit - used),
         limit,
-        cooldownMinutes: cfg?.cooldownMinutes ?? 3,
+        cooldownMinutes: cfg?.cooldownMinutes ?? 0,
       };
     });
   },
@@ -142,9 +142,9 @@ export const seedLimits = internalMutation({
     const existing = await ctx.db.query("platformLimits").take(1);
     if (existing.length > 0) return "already seeded";
     const rows = [
-      { platform: "facebook", dailyTaskLimit: 15, cooldownMinutes: 3, newProfileFactor: 0.5 },
-      { platform: "tiktok", dailyTaskLimit: 15, cooldownMinutes: 3, newProfileFactor: 0.5 },
-      { platform: "telegram", dailyTaskLimit: 10, cooldownMinutes: 3, newProfileFactor: 0.5 },
+      { platform: "facebook", dailyTaskLimit: 50, cooldownMinutes: 0, newProfileFactor: 1.0 },
+      { platform: "tiktok", dailyTaskLimit: 50, cooldownMinutes: 0, newProfileFactor: 1.0 },
+      { platform: "telegram", dailyTaskLimit: 50, cooldownMinutes: 0, newProfileFactor: 1.0 },
     ];
     for (const r of rows) await ctx.db.insert("platformLimits", r);
     return `seeded ${rows.length} platform limits`;

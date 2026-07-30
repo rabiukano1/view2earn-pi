@@ -28,6 +28,8 @@ import DailyBox from '../components/DailyBox';
 import ComboTracker from '../components/ComboTracker';
 import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
+import RewardedAdModal from '../components/RewardedAdModal';
+import Icon from '../components/Icon';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
@@ -249,6 +251,12 @@ export default function TasksScreen() {
   const [uploading, setUploading] = useState(false);
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
+  const [adModalVisible, setAdModalVisible] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    kind: 'claim' | 'upload' | 'verify';
+    task?: Task;
+    verification?: Verification;
+  } | null>(null);
 
   const claim = useMutation(api.verifications.claim);
   const generateUploadUrl = useMutation(api.verifications.generateUploadUrl);
@@ -263,7 +271,6 @@ export default function TasksScreen() {
     userId ? { userId } : 'skip',
   );
 
-
   const verificationByTask = new Map<string, Verification>(
     (verifications ?? []).map((verification) => [
       verification.taskId,
@@ -271,50 +278,95 @@ export default function TasksScreen() {
     ]),
   );
 
-  const handleClaim = async (task: Task) => {
+  const executeClaim = async (task: Task) => {
     if (!userId) return;
     try {
       await claim({ taskId: task._id, userId });
+      await openTask(task, handleQuizNav);
     } catch (e) {
       Alert.alert('Could not claim', String(e));
     }
   };
 
-  const handleUpload = async (verification: Verification) => {
+  const executeUpload = async (verification: Verification) => {
     if (uploading) return;
-    const picked = await launchImageLibrary({
-      mediaType: 'photo',
-      maxWidth: 1280,
-      maxHeight: 2560,
-      quality: 0.7,
-      selectionLimit: 1,
-    });
-    const asset = picked.assets?.[0];
-    if (picked.didCancel || !asset?.uri) return;
-    setUploading(true);
     try {
+      const picked = await launchImageLibrary({
+        mediaType: 'photo',
+        maxWidth: 1280,
+        maxHeight: 2560,
+        quality: 0.7,
+        selectionLimit: 1,
+      });
+      const asset = picked.assets?.[0];
+      if (picked.didCancel || !asset?.uri) return;
+
+      setUploading(true);
       const uploadUrl = await generateUploadUrl();
-      const blob = await (await fetch(asset.uri)).blob();
+      const mimeType = asset.type ?? 'image/jpeg';
+
+      // React Native safe uriToBlob helper via XHR for content:// & file:// URIs
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => resolve(xhr.response);
+        xhr.onerror = () => reject(new Error('Could not read image file'));
+        xhr.responseType = 'blob';
+        xhr.open('GET', asset.uri!, true);
+        xhr.send(null);
+      });
+
       const result = await fetch(uploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': asset.type ?? 'image/jpeg' },
+        headers: { 'Content-Type': mimeType },
         body: blob,
       });
-      if (!result.ok) throw new Error(`Upload failed (${result.status})`);
-      const { storageId } = await result.json() as { storageId: Id<'_storage'> };
+
+      if (!result.ok) throw new Error(`Upload server error (${result.status})`);
+      const { storageId } = (await result.json()) as { storageId: Id<'_storage'> };
       await submitProof({ verificationId: verification._id, storageId });
+      Alert.alert('Screenshot Uploaded! 🎉', 'Your verification screenshot has been submitted successfully.');
     } catch (e) {
-      Alert.alert('Upload failed', String(e));
+      console.error('Upload failed:', e);
+      Alert.alert('Upload failed', String(e).replace('[CONVEX] ', ''));
     } finally {
       setUploading(false);
     }
   };
 
-  const handleVerify = async (verification: Verification) => {
+  const executeVerify = async (verification: Verification) => {
     try {
       await verifyTelegram({ verificationId: verification._id });
     } catch (e) {
       Alert.alert('Could not verify', String(e).replace('[CONVEX] ', ''));
+    }
+  };
+
+  const handleClaimWithAd = (task: Task) => {
+    setPendingAction({ kind: 'claim', task });
+    setAdModalVisible(true);
+  };
+
+  const handleUploadWithAd = (verification: Verification) => {
+    setPendingAction({ kind: 'upload', verification });
+    setAdModalVisible(true);
+  };
+
+  const handleVerifyWithAd = (verification: Verification) => {
+    setPendingAction({ kind: 'verify', verification });
+    setAdModalVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
+    if (!pendingAction) return;
+    const action = pendingAction;
+    setPendingAction(null);
+
+    if (action.kind === 'claim' && action.task) {
+      await executeClaim(action.task);
+    } else if (action.kind === 'upload' && action.verification) {
+      await executeUpload(action.verification);
+    } else if (action.kind === 'verify' && action.verification) {
+      await executeVerify(action.verification);
     }
   };
 
@@ -346,14 +398,18 @@ export default function TasksScreen() {
       <FlatList
         data={tasks ?? []}
         keyExtractor={(item) => item._id}
+        contentContainerStyle={[
+          styles.list,
+          { paddingBottom: insets.bottom + 100 },
+        ]}
         renderItem={({ item }) => (
           <TaskCard
             task={item}
             verification={verificationByTask.get(item._id)}
             dark={dark}
-            onClaim={handleClaim}
-            onUpload={handleUpload}
-            onVerify={handleVerify}
+            onClaim={handleClaimWithAd}
+            onUpload={handleUploadWithAd}
+            onVerify={handleVerifyWithAd}
             onQuizNav={handleQuizNav}
           />
         )}
@@ -387,6 +443,24 @@ export default function TasksScreen() {
                   userId={userId}
                   onPress={() => tabNav.navigate('Rewards')}
                 />
+                
+                {/* Google AdMob Rewarded Video Promo Banner */}
+                <TouchableOpacity
+                  style={[styles.rewardedAdBanner, dark && styles.cardDark]}
+                  onPress={() => setAdModalVisible(true)}
+                  activeOpacity={0.85}>
+                  <View style={styles.adBannerIconBg}>
+                    <Icon name="circle-play" iconStyle="solid" size={20} color="#F59E0B" />
+                  </View>
+                  <View style={styles.adBannerContent}>
+                    <Text style={[styles.adBannerTitle, dark && styles.textLight]}>Watch Video Ad (+50 PTS)</Text>
+                    <Text style={styles.adBannerSub}>Google AdMob Test Unit · Earn 50 pts in 5s</Text>
+                  </View>
+                  <View style={styles.adBannerBtn}>
+                    <Text style={styles.adBannerBtnText}>Watch Ad</Text>
+                  </View>
+                </TouchableOpacity>
+
                 <DailyBox userId={userId} />
                 <ComboTracker userId={userId} />
               </View>
@@ -410,11 +484,6 @@ export default function TasksScreen() {
             </View>
           )
         }
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + 96 },
-        ]}
-        showsVerticalScrollIndicator={false}
       />
       {uploading && (
         <View style={styles.uploadOverlay}>
@@ -422,6 +491,14 @@ export default function TasksScreen() {
           <Text style={styles.uploadText}>Uploading screenshot…</Text>
         </View>
       )}
+      <RewardedAdModal
+        visible={adModalVisible}
+        onClose={() => {
+          setAdModalVisible(false);
+          setPendingAction(null);
+        }}
+        onSuccess={handleAdSuccess}
+      />
     </View>
   );
 }
@@ -672,5 +749,49 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 15,
     fontWeight: '600',
+  },
+  rewardedAdBanner: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    ...shadow.card,
+  },
+  adBannerIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adBannerContent: {
+    flex: 1,
+  },
+  adBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  adBannerSub: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  adBannerBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
+  adBannerBtnText: {
+    color: colors.white,
+    fontWeight: '800',
+    fontSize: 12,
   },
 });

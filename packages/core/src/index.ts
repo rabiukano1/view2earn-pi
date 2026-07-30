@@ -9,3 +9,4 @@ export * from "./academy";
 export * from "./spin";
 export * from "./fraud";
 export * from "./device-signals";
+export * from "./wallet-address";

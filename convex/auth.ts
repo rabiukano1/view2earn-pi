@@ -17,19 +17,25 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const email = profile.email as string | undefined;
       const name = profile.name as string | undefined;
       const image = profile.image as string | undefined;
+      const telegramUserId = profile.telegramId as string | undefined;
       return await ctx.db.insert("users", {
         email,
         name,
         image,
         emailVerificationTime: profile.emailVerified ? Date.now() : undefined,
         ecosystem: "SIDRA",
-        externalUid: email ? `auth:${email}` : `auth:${crypto.randomUUID()}`,
+        externalUid: email
+          ? `auth:${email}`
+          : telegramUserId
+            ? `telegram:${telegramUserId}`
+            : `auth:${crypto.randomUUID()}`,
         username: name ?? email?.split("@")[0] ?? "user",
         tier: 0,
         fraudScore: 0,
         deviceFingerprint: "auth",
         signupIp: "unknown",
         country: "unknown",
+        telegramUserId,
       });
     },
   },

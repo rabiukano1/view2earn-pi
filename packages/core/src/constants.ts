@@ -14,7 +14,13 @@ export const POINTS = {
     DAY_7: 10,
   },
   COMBO_BONUS: 5,
+  REFERRAL_REFEREE_BONUS: 50,
 } as const;
+
+// Qualified referral: referee must complete this many RELEASED tasks before
+// the referrer is rewarded (plan §7.7). Keeps the threshold low enough to
+// encourage new users but high enough to filter drive-by signups.
+export const REFERRAL_QUALIFICATION_TASKS = 5;
 
 export const FRAUD_THRESHOLDS = {
   NEW_USER_VERIFICATION_RATE: 1.0,

@@ -30,9 +30,12 @@ type SubmitResult = {
   review: { correctIndex: number; explanation: string; selected: number }[];
 };
 
+import RewardedAdModal from '../components/RewardedAdModal';
+
 export default function AcademyScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
+  const [adVisible, setAdVisible] = useState(true);
   const navigation = useNavigation<StackNav>();
   const route = useRoute();
   const params = (route.params ?? {}) as { userId?: string; ecosystem?: Ecosystem };
@@ -206,6 +209,10 @@ export default function AcademyScreen() {
           ))}
         </ScrollView>
       )}
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => setAdVisible(false)}
+      />
     </View>
   );
 }

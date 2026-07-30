@@ -12,8 +12,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
+import { useConvexAuth } from '@convex-dev/auth/react';
 import { api } from '../../convex/_generated/api';
 import Icon from '../components/Icon';
+import GoogleAuthButton from '../components/GoogleAuthButton';
 import { colors, radius, shadow } from '../theme';
 
 type Method = 'password' | 'otp';
@@ -29,6 +31,21 @@ export default function LoginScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referralApplied, setReferralApplied] = useState(false);
+  const applyReferral = useMutation(api.referrals.applyReferralCode);
+  const { isAuthenticated } = useConvexAuth();
+
+  // After signup, if a referral code was entered, apply it.
+  useEffect(() => {
+    if (isAuthenticated && referralCode.trim() && !referralApplied) {
+      setReferralApplied(true);
+      applyReferral({ code: referralCode.trim() }).catch(() => {
+        // Best-effort — don't block the user from using the app.
+        if (__DEV__) console.log('referral apply failed');
+      });
+    }
+  }, [isAuthenticated, referralCode, referralApplied, applyReferral]);
   const [suggestSignup, setSuggestSignup] = useState(false);
 
   // "Sign in with Telegram": open the bot, poll the nonce, sign in when verified.
@@ -196,6 +213,22 @@ export default function LoginScreen() {
           </View>
         )}
 
+        {/* Referral code — only visible in sign-up flow */}
+        {method === 'password' && flow === 'signUp' && (
+          <View style={styles.inputRow}>
+            <Icon name="gift" iconStyle="solid" size={15} color={colors.textFaint} />
+            <TextInput
+              style={styles.input}
+              placeholder="Referral code (optional)"
+              placeholderTextColor={colors.textFaint}
+              autoCapitalize="characters"
+              value={referralCode}
+              onChangeText={setReferralCode}
+              maxLength={10}
+            />
+          </View>
+        )}
+
         {method === 'otp' && otpStep === 'code' && (
           <View style={styles.inputRow}>
             <Icon name="key" iconStyle="solid" size={15} color={colors.textFaint} />
@@ -274,7 +307,11 @@ export default function LoginScreen() {
         </Text>
       </TouchableOpacity>
 
-      <Text style={styles.soon}>Google & Sidra KYC sign-in coming soon</Text>
+      <View style={{ marginTop: 10 }}>
+        <GoogleAuthButton />
+      </View>
+
+      <Text style={styles.soon}>Sidra KYC sign-in coming soon</Text>
     </ScrollView>
   );
 }

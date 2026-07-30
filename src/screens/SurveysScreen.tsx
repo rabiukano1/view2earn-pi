@@ -17,14 +17,40 @@ import type { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 
+import RewardedAdModal from '../components/RewardedAdModal';
+
 export default function SurveysScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const [adVisible, setAdVisible] = useState(true);
+  const [pendingWall, setPendingWall] = useState(false);
 
   const surveys = useQuery(api.surveys.listAvailable, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
+  const getOfferwallUrl = useMutation(api.cpx.getOfferwallUrl);
 
+  const executeOpenWall = async () => {
+    if (!userId) return;
+    try {
+      const url = await getOfferwallUrl({ userId });
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert('Surveys unavailable', String((e as { message?: string })?.message ?? e).replace('[CONVEX] ', ''));
+    }
+  };
+
+  const handleOpenWall = () => {
+    setPendingWall(true);
+    setAdVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
+    if (pendingWall) {
+      setPendingWall(false);
+      await executeOpenWall();
+    }
+  };
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
@@ -39,14 +65,23 @@ export default function SurveysScreen() {
           </View>
         }
       />
+      <View style={styles.wallCard}>
+        <Text style={styles.wallTitle}>Earn with surveys</Text>
+        <Text style={styles.wallSub}>
+          Answer surveys from our partner wall and get points credited automatically when you finish.
+        </Text>
+        <TouchableOpacity style={styles.wallBtn} onPress={handleOpenWall} activeOpacity={0.85}>
+          <Text style={styles.wallBtnText}>Watch Ad & Open Survey Wall</Text>
+        </TouchableOpacity>
+      </View>
+
       {surveys === undefined ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#7C3AED" />
         </View>
       ) : surveys.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={[styles.emptyTitle, dark && styles.textLight]}>No surveys available</Text>
-          <Text style={styles.headerSubtitle}>Check back soon for new surveys.</Text>
+        <View style={{ paddingHorizontal: 16 }}>
+          <Text style={styles.headerSubtitle}>More survey partners coming soon.</Text>
         </View>
       ) : (
         <FlatList
@@ -72,6 +107,14 @@ export default function SurveysScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
         />
       )}
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => {
+          setAdVisible(false);
+          setPendingWall(false);
+        }}
+        onSuccess={handleAdSuccess}
+      />
     </View>
   );
 }
@@ -103,4 +146,9 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 13, color: '#71717A', marginTop: 2 },
   startButton: { backgroundColor: '#7C3AED', borderRadius: 10, paddingHorizontal: 18, paddingVertical: 10 },
   startButtonText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  wallCard: { backgroundColor: '#7C3AED', borderRadius: 18, padding: 20, marginHorizontal: 16, marginTop: 8, marginBottom: 16 },
+  wallTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '800' },
+  wallSub: { color: '#EDE9FE', fontSize: 13, lineHeight: 19, marginTop: 6, marginBottom: 16 },
+  wallBtn: { backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center' },
+  wallBtnText: { color: '#6D28D9', fontWeight: '800', fontSize: 15 },
 });

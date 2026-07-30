@@ -29,11 +29,14 @@ const PLATFORM_COLORS: Record<string, string> = {
   x: '#000000',
 };
 
+import RewardedAdModal from '../components/RewardedAdModal';
+
 export default function MarketplaceScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const navigation = useNavigation<Nav>();
+  const [adVisible, setAdVisible] = useState(true);
 
   const listings = useQuery(api.marketplace.listListings);
   const myListings = useQuery(api.marketplace.myListings, userId ? { userId } : 'skip');
@@ -163,6 +166,10 @@ export default function MarketplaceScreen() {
           />
         )}
       </View>
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => setAdVisible(false)}
+      />
     </View>
   );
 }

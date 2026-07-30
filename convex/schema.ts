@@ -24,7 +24,10 @@ export default defineSchema({
 
   dailySpins: defineTable({
     userId: v.id("users"),
-    lastDay: v.number(),        // UTC day number the wheel was last spun
+    windowStart: v.optional(v.number()),
+    spinsUsedInWindow: v.optional(v.number()),
+    bonusSpins: v.optional(v.number()),
+    lastDay: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   // Daily task combo (plan §7.11b): follow + telegram join + quiz in one day.
@@ -60,6 +63,10 @@ export default defineSchema({
     deviceFingerprint: v.string(),
     signupIp: v.string(),
     country: v.string(),
+    telegramUserId: v.optional(v.string()), // set at Telegram sign-in; used for channel-join checks
+    payoutEvm: v.optional(v.string()), // EVM payout address (public only, no keys held)
+    payoutSolana: v.optional(v.string()), // Solana payout address
+    referredBy: v.optional(v.id("users")), // set at signup if a referral code was applied
   }).index("by_ecosystem", ["ecosystem"])
     .index("by_externalUid", ["externalUid"])
     .index("email", ["email"]),
@@ -114,7 +121,51 @@ export default defineSchema({
     reason: v.string(),
     refId: v.optional(v.string()),
     balanceAfter: v.number(),
+  }).index("by_user", ["userId"]).index("by_refId", ["refId"]),
+
+  // App wallet: internal ledger for points and pipro balances (NOT a real blockchain wallet)
+  wallets: defineTable({
+    userId: v.id("users"),
+    pointsBalance: v.number(),
+    piproBalance: v.number(),
   }).index("by_user", ["userId"]),
+
+  // Exchange rates (global singleton) for swapping points ↔ pipro
+  exchangeRates: defineTable({
+    pointsPerPipro: v.number(), // how many points equal one pipro
+    updatedAt: v.number(),
+  }),
+
+  // Pipro deposit requests: user sends real PIPRO (SPL token) from their
+  // external Solana wallet to the platform's deposit address. Backend verifies
+  // the on-chain tx and credits the user's app wallet.
+  piproDeposits: defineTable({
+    userId: v.id("users"),
+    txSignature: v.string(),            // Solana transaction signature
+    amount: v.number(),                  // pipro tokens received
+    fromAddress: v.string(),             // sender's Solana address
+    status: v.string(),                  // "pending" | "confirmed" | "failed"
+    confirmedAt: v.optional(v.number()), // when the deposit was verified
+  }).index("by_user", ["userId"])
+    .index("by_txSignature", ["txSignature"]),
+
+  // Full transaction history for the app wallet (swaps, deposits, deductions)
+  walletTransactions: defineTable({
+    userId: v.id("users"),
+    type: v.string(),       // "swap_points_to_pipro" | "swap_pipro_to_points" | "deposit_pipro" | "deduct_points" | "earn_points"
+    pointsDelta: v.number(),
+    piproDelta: v.number(),
+    pointsBalanceAfter: v.number(),
+    piproBalanceAfter: v.number(),
+    note: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
+
+  // Admin-configurable platform settings (key-value store, changeable from dashboard)
+  platformSettings: defineTable({
+    key: v.string(),        // e.g. "platformSolanaAddress", "piproMintAddress"
+    value: v.string(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 
   providers: defineTable({
     kind: v.union(v.literal("ADS"), v.literal("SURVEY"), v.literal("VAS")),
@@ -151,7 +202,8 @@ export default defineSchema({
     refereeId: v.id("users"),
     qualifiedAt: v.optional(v.number()),
     rewarded: v.boolean(),
-  }).index("by_referrer", ["referrerId"]),
+  }).index("by_referrer", ["referrerId"])
+    .index("by_referee", ["refereeId"]),
 
   fraudEvents: defineTable({
     userId: v.id("users"),

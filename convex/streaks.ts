@@ -1,10 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
-
-// Growing rewards across a 7-day cycle (plan §7.11b). Day 7 is the big one;
-// the cycle repeats while the streak keeps climbing.
-const SCHEDULE = [10, 15, 20, 25, 30, 40, 75];
+import { getJSON, getNum } from "./rewardsConfig";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000); // UTC day. TODO(prod): user timezone.
@@ -31,16 +28,17 @@ export const getStreak = query({
     const lastDay = row?.lastDay ?? null;
     const checkedInToday = lastDay === today;
     const eff = effectiveStreak(current, lastDay, today);
-    const cycleDay = ((eff - 1) % 7) + 1; // 1..7 position in the reward cycle
+    const cycleDay = ((eff - 1) % 7) + 1;
+    const schedule = await getJSON<number[]>(ctx, "streakSchedule");
 
     return {
-      current: checkedInToday ? current : current, // display streak so far
+      current: checkedInToday ? current : current,
       longest: row?.longest ?? 0,
       checkedInToday,
       canCheckIn: !checkedInToday,
       cycleDay,
-      todayReward: SCHEDULE[cycleDay - 1],
-      schedule: SCHEDULE,
+      todayReward: schedule[cycleDay - 1],
+      schedule,
     };
   },
 });
@@ -61,7 +59,8 @@ export const checkIn = mutation({
 
     const streak = effectiveStreak(row?.current ?? 0, row?.lastDay ?? null, today);
     const longest = Math.max(row?.longest ?? 0, streak);
-    const reward = SCHEDULE[((streak - 1) % 7)];
+    const schedule = await getJSON<number[]>(ctx, "streakSchedule");
+    const reward = schedule[((streak - 1) % 7)];
 
     if (row) {
       await ctx.db.patch(row._id, { current: streak, longest, lastDay: today });
