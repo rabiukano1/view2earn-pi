@@ -22,7 +22,6 @@ import StreakCard from '../components/StreakCard';
 import DailyBox from '../components/DailyBox';
 import ProgressToReward from '../components/ProgressToReward';
 import Icon from '../components/Icon';
-import RewardedAdModal from '../components/RewardedAdModal';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Home'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
@@ -43,15 +42,6 @@ export default function HomeScreen() {
     if (!userId) return;
     recordSignals({ userId, ...collectDeviceSignals() }).catch(() => {});
   }, [userId, recordSignals]);
-
-  // Entry rewarded ad for HomeScreen
-  const [adVisible, setAdVisible] = useState(false);
-  const handleAdSuccess = () => {
-    setAdVisible(false);
-  };
-  useEffect(() => {
-    setAdVisible(true);
-  }, []);
 
   // Each shortcut carries its own navigation so tabs and pushed screens mix freely.
   const shortcuts: { icon: string; label: string; tint: string; go: () => void }[] = [

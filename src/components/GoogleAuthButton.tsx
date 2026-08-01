@@ -11,18 +11,25 @@ import { colors, radius, shadow } from '../theme';
 // Requires AUTH_GOOGLE_ID + AUTH_GOOGLE_SECRET set as Convex env vars, and the
 // redirect URI registered in the Google Cloud Console.
 
-export default function GoogleAuthButton() {
+export default function GoogleAuthButton({
+  disabled,
+  onDisabledPress,
+}: {
+  disabled?: boolean;
+  onDisabledPress?: () => void;
+}) {
   const { signIn } = useAuthActions();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const continueWithGoogle = async () => {
+    if (disabled) {
+      onDisabledPress?.();
+      return;
+    }
     setBusy(true);
     setError('');
     try {
-      // Convex Auth's signIn('google') triggers the OAuth redirect flow.
-      // On React Native, it opens the browser for the Google consent screen,
-      // then redirects back to the app via the Convex site URL callback.
       await signIn('google');
     } catch (e) {
       const msg = (e as { message?: string })?.message ?? String(e);
@@ -36,7 +43,7 @@ export default function GoogleAuthButton() {
   return (
     <>
       <TouchableOpacity
-        style={[styles.btn, busy && styles.btnDisabled]}
+        style={[styles.btn, (busy || disabled) && styles.btnDisabled]}
         onPress={continueWithGoogle}
         disabled={busy}
         activeOpacity={0.85}>

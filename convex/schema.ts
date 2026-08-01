@@ -27,6 +27,7 @@ export default defineSchema({
     windowStart: v.optional(v.number()),
     spinsUsedInWindow: v.optional(v.number()),
     bonusSpins: v.optional(v.number()),
+    adBonusEarned: v.optional(v.number()),
     lastDay: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
@@ -123,12 +124,26 @@ export default defineSchema({
     balanceAfter: v.number(),
   }).index("by_user", ["userId"]).index("by_refId", ["refId"]),
 
-  // App wallet: internal ledger for points and pipro balances (NOT a real blockchain wallet)
+  // App wallet: internal ledger for points, PIPRO, VINTA, and Sidra balances
   wallets: defineTable({
     userId: v.id("users"),
     pointsBalance: v.number(),
     piproBalance: v.number(),
+    vintaBalance: v.optional(v.number()),
+    sidraBalance: v.optional(v.number()),
   }).index("by_user", ["userId"]),
+
+  // User withdrawal requests (VINTA token, PIPRO token, Sidra coin)
+  withdrawals: defineTable({
+    userId: v.id("users"),
+    asset: v.string(), // "VINTA" | "PIPRO" | "SIDRA"
+    amount: v.number(),
+    destinationAddress: v.string(),
+    status: v.string(), // "pending" | "processing" | "completed" | "rejected"
+    txHash: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_status", ["status"]),
 
   // Exchange rates (global singleton) for swapping points ↔ pipro
   exchangeRates: defineTable({
@@ -295,4 +310,23 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
+
+  // Public website (apps/website) submissions: contact form + partner requests.
+  // Written by unauthenticated visitors via convex/inquiries.ts.
+  inquiries: defineTable({
+    kind: v.union(v.literal("contact"), v.literal("partner")),
+    name: v.string(),
+    email: v.string(),
+    company: v.optional(v.string()),
+    platform: v.optional(v.string()), // which ecosystem/ad they're interested in
+    message: v.string(),
+    status: v.union(
+      v.literal("new"),
+      v.literal("seen"),
+      v.literal("done"),
+      v.literal("archived"),
+    ),
+    ip: v.optional(v.string()), // for spam/abuse triage
+  }).index("by_status", ["status"])
+    .index("by_kind", ["kind"]),
 });

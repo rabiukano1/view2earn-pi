@@ -9,7 +9,7 @@ type Category = "all" | "ads" | "spins" | "streaks" | "quiz" | "referrals";
 
 const CATEGORIES: { key: Category; label: string; icon: string }[] = [
   { key: "all", label: "All Settings", icon: "⚙️" },
-  { key: "ads", label: "Ads & Exchange", icon: "📺" },
+  { key: "ads", label: "Ads", icon: "📺" },
   { key: "spins", label: "Spins & Mystery Box", icon: "🎰" },
   { key: "streaks", label: "Streaks & Combos", icon: "🔥" },
   { key: "quiz", label: "Quiz & Academy", icon: "🧠" },
@@ -143,16 +143,6 @@ export default function RewardsPage() {
 
         <div className="card" style={{ padding: "16px 20px" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-            Points / PIPRO Rate
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "var(--ok)", marginTop: 4 }}>
-            {form.pointsPerPipro || "1000"} <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>PTS / PIPRO</span>
-          </div>
-          <div style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 2 }}>Global swap exchange rate</div>
-        </div>
-
-        <div className="card" style={{ padding: "16px 20px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
             Day 7 Streak Reward
           </div>
           <div style={{ fontSize: 24, fontWeight: 900, color: "#d97706", marginTop: 4 }}>
@@ -180,22 +170,22 @@ export default function RewardsPage() {
             type="button"
             className={`btn btn-sm ${activeCategory === cat.key ? "btn-primary" : "btn-ghost"}`}
             onClick={() => setActiveCategory(cat.key)}
-            style={{ borderRadius: 20, paddingHorizontal: 16 }}>
+            style={{ borderRadius: 20, paddingLeft: 16, paddingRight: 16 }}>
             <span>{cat.icon}</span>
             <span>{cat.label}</span>
           </button>
         ))}
       </div>
 
-      {/* SECTION 1: Ads & Exchange */}
+      {/* SECTION 1: Ads */}
       {(activeCategory === "all" || activeCategory === "ads") && (
         <div className="card" style={{ marginBottom: 20, padding: 22 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>📺 Ad Watching & Token Exchange</div>
-              <div style={{ fontSize: 12, color: "var(--text-3)" }}>Configure ad view reward points and PIPRO token swap rate</div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>📺 Ad Watching</div>
+              <div style={{ fontSize: 12, color: "var(--text-3)" }}>Configure points awarded per ad view</div>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => { resetToDefault("adRewardPoints"); resetToDefault("pointsPerPipro"); }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => { resetToDefault("adRewardPoints"); }}>
               Reset Section
             </button>
           </div>
@@ -214,22 +204,6 @@ export default function RewardsPage() {
                   style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontWeight: 700 }}
                 />
                 <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>PTS</span>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>
-                Points per 1 PIPRO Token (Swap Rate)
-              </label>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.pointsPerPipro ?? "1000"}
-                  onChange={(e) => updateField("pointsPerPipro", e.target.value)}
-                  style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontWeight: 700 }}
-                />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>PTS/PIPRO</span>
               </div>
             </div>
           </div>
@@ -314,7 +288,7 @@ export default function RewardsPage() {
               <div style={{ fontSize: 16, fontWeight: 800 }}>🎰 Spin Wheel & Mystery Box</div>
               <div style={{ fontSize: 12, color: "var(--text-3)" }}>Configure spin cooldowns, daily box requirements, and prize pools</div>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={() => { resetToDefault("spinPrizes"); resetToDefault("mysteryBoxPrizes"); }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => { resetToDefault("spinPrizes"); resetToDefault("mysteryBoxPrizes"); resetToDefault("baseSpinsPerWindow"); resetToDefault("spinWindowHours"); resetToDefault("adBonusSpinsPerWindow"); resetToDefault("mysteryBoxTasksNeeded"); }}>
               Reset Section
             </button>
           </div>
@@ -342,6 +316,19 @@ export default function RewardsPage() {
                 min="1"
                 value={form.spinWindowHours ?? "3"}
                 onChange={(e) => updateField("spinWindowHours", e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontWeight: 700 }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>
+                Bonus Ad Spins per Window
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={form.adBonusSpinsPerWindow ?? "2"}
+                onChange={(e) => updateField("adBonusSpinsPerWindow", e.target.value)}
                 style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontWeight: 700 }}
               />
             </div>

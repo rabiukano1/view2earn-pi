@@ -18,5 +18,7 @@ export type RootStackParamList = {
   Academy: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
   Quiz: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
   Spin: { userId: string } | undefined;
+  PrivacyPolicy: undefined;
+  Terms: undefined;
 };
 

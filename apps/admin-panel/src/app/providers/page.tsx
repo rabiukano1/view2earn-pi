@@ -52,6 +52,7 @@ export default function ProvidersPage() {
     setRewardSaving(true);
     try {
       await setAdRewardPoints({ rewardPoints: globalReward });
+      alert('Reward updated successfully');
     } catch (e) {
       alert(String(e));
     } finally {

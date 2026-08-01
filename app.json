@@ -1,4 +1,9 @@
 {
   "name": "View2Earn",
-  "displayName": "View2Earn"
+  "displayName": "View2Earn",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-5278018921408798~9302302185",
+    "ios_app_id": "ca-app-pub-5278018921408798~9302302185",
+    "delay_app_measurement_init": true
+  }
 }

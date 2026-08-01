@@ -25,6 +25,7 @@ export const REWARD_KEYS = {
   ]),
   baseSpinsPerWindow: "3",
   spinWindowHours: "3",
+  adBonusSpinsPerWindow: "2",
   quizCorrectPoints: "3",
   referralQualifiedBonus: "100",
   referralRefereeBonus: "50",

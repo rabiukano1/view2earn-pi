@@ -17,14 +17,12 @@ import type { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 
-import RewardedAdModal from '../components/RewardedAdModal';
 
 export default function SurveysScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const [adVisible, setAdVisible] = useState(true);
-  const [pendingWall, setPendingWall] = useState(false);
+  const [adVisible, setAdVisible] = useState(false);
 
   const surveys = useQuery(api.surveys.listAvailable, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
@@ -41,15 +39,7 @@ export default function SurveysScreen() {
   };
 
   const handleOpenWall = () => {
-    setPendingWall(true);
-    setAdVisible(true);
-  };
-
-  const handleAdSuccess = async () => {
-    if (pendingWall) {
-      setPendingWall(false);
-      await executeOpenWall();
-    }
+    executeOpenWall();
   };
 
   return (
@@ -71,7 +61,7 @@ export default function SurveysScreen() {
           Answer surveys from our partner wall and get points credited automatically when you finish.
         </Text>
         <TouchableOpacity style={styles.wallBtn} onPress={handleOpenWall} activeOpacity={0.85}>
-          <Text style={styles.wallBtnText}>Watch Ad & Open Survey Wall</Text>
+          <Text style={styles.wallBtnText}>Open Survey Wall</Text>
         </TouchableOpacity>
       </View>
 
@@ -107,14 +97,6 @@ export default function SurveysScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
         />
       )}
-      <RewardedAdModal
-        visible={adVisible}
-        onClose={() => {
-          setAdVisible(false);
-          setPendingWall(false);
-        }}
-        onSuccess={handleAdSuccess}
-      />
     </View>
   );
 }

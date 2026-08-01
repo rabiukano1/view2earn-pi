@@ -667,6 +667,7 @@ export const getRewardSettings = query({
     requireAdmin(token);
     const all = await ctx.db.query("platformSettings").collect();
     const result: Record<string, { value: string; defaultValue: string }> = {};
+
     for (const key of Object.keys(REWARD_KEYS)) {
       const setting = all.find((s) => s.key === key);
       result[key] = {

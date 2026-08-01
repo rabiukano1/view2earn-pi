@@ -13,6 +13,7 @@ import BiometricGate from './src/auth/BiometricGate';
 import AppNavigator from './src/navigation/AppNavigator';
 import LoginScreen from './src/screens/LoginScreen';
 import { colors } from './src/theme';
+import { initializeAdMob } from './src/services/admobService';
 
 const convex = new ConvexReactClient(CONVEX_URL, {
   unsavedChangesWarning: false,
@@ -47,6 +48,10 @@ function Gate() {
 }
 
 function App() {
+  React.useEffect(() => {
+    initializeAdMob();
+  }, []);
+
   return (
     <ConvexAuthProvider client={convex} storage={tokenStorage}>
       <SafeAreaProvider>

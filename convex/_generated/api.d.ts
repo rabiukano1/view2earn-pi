@@ -22,6 +22,7 @@ import type * as crons from "../crons.js";
 import type * as deviceSignals from "../deviceSignals.js";
 import type * as fraud from "../fraud.js";
 import type * as http from "../http.js";
+import type * as inquiries from "../inquiries.js";
 import type * as ipReputation from "../ipReputation.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as lib_guards from "../lib/guards.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   deviceSignals: typeof deviceSignals;
   fraud: typeof fraud;
   http: typeof http;
+  inquiries: typeof inquiries;
   ipReputation: typeof ipReputation;
   leaderboard: typeof leaderboard;
   "lib/guards": typeof lib_guards;

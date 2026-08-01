@@ -28,7 +28,6 @@ import DailyBox from '../components/DailyBox';
 import ComboTracker from '../components/ComboTracker';
 import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
-import RewardedAdModal from '../components/RewardedAdModal';
 import Icon from '../components/Icon';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
@@ -251,19 +250,12 @@ export default function TasksScreen() {
   const [uploading, setUploading] = useState(false);
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
-  const [adModalVisible, setAdModalVisible] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{
-    kind: 'claim' | 'upload' | 'verify';
-    task?: Task;
-    verification?: Verification;
-  } | null>(null);
-
   const claim = useMutation(api.verifications.claim);
   const generateUploadUrl = useMutation(api.verifications.generateUploadUrl);
   const submitProof = useMutation(api.verifications.submitProof);
   const verifyTelegram = useMutation(api.verifications.verifyTelegram);
 
-  const tasks = useQuery(api.tasks.list, userId ? { userId } : "skip");
+  const tasks = useQuery(api.tasks.list, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const limits = useQuery(api.tasks.myLimits, userId ? { userId } : 'skip');
   const verifications = useQuery(
@@ -277,6 +269,11 @@ export default function TasksScreen() {
       verification,
     ]),
   );
+
+  const handleQuizNav = () => {
+    if (!userId) return;
+    stackNav.navigate('Quiz', { userId, ecosystem: 'SIDRA' });
+  };
 
   const executeClaim = async (task: Task) => {
     if (!userId) return;
@@ -305,7 +302,6 @@ export default function TasksScreen() {
       const uploadUrl = await generateUploadUrl();
       const mimeType = asset.type ?? 'image/jpeg';
 
-      // React Native safe uriToBlob helper via XHR for content:// & file:// URIs
       const blob = await new Promise<Blob>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.onload = () => resolve(xhr.response);
@@ -341,40 +337,6 @@ export default function TasksScreen() {
     }
   };
 
-  const handleClaimWithAd = (task: Task) => {
-    setPendingAction({ kind: 'claim', task });
-    setAdModalVisible(true);
-  };
-
-  const handleUploadWithAd = (verification: Verification) => {
-    setPendingAction({ kind: 'upload', verification });
-    setAdModalVisible(true);
-  };
-
-  const handleVerifyWithAd = (verification: Verification) => {
-    setPendingAction({ kind: 'verify', verification });
-    setAdModalVisible(true);
-  };
-
-  const handleAdSuccess = async () => {
-    if (!pendingAction) return;
-    const action = pendingAction;
-    setPendingAction(null);
-
-    if (action.kind === 'claim' && action.task) {
-      await executeClaim(action.task);
-    } else if (action.kind === 'upload' && action.verification) {
-      await executeUpload(action.verification);
-    } else if (action.kind === 'verify' && action.verification) {
-      await executeVerify(action.verification);
-    }
-  };
-
-  const handleQuizNav = () => {
-    if (!userId) return;
-    stackNav.navigate('Quiz', { userId, ecosystem: 'SIDRA' });
-  };
-
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader
@@ -407,9 +369,9 @@ export default function TasksScreen() {
             task={item}
             verification={verificationByTask.get(item._id)}
             dark={dark}
-            onClaim={handleClaimWithAd}
-            onUpload={handleUploadWithAd}
-            onVerify={handleVerifyWithAd}
+            onClaim={executeClaim}
+            onUpload={executeUpload}
+            onVerify={executeVerify}
             onQuizNav={handleQuizNav}
           />
         )}
@@ -443,24 +405,6 @@ export default function TasksScreen() {
                   userId={userId}
                   onPress={() => tabNav.navigate('Rewards')}
                 />
-                
-                {/* Google AdMob Rewarded Video Promo Banner */}
-                <TouchableOpacity
-                  style={[styles.rewardedAdBanner, dark && styles.cardDark]}
-                  onPress={() => setAdModalVisible(true)}
-                  activeOpacity={0.85}>
-                  <View style={styles.adBannerIconBg}>
-                    <Icon name="circle-play" iconStyle="solid" size={20} color="#F59E0B" />
-                  </View>
-                  <View style={styles.adBannerContent}>
-                    <Text style={[styles.adBannerTitle, dark && styles.textLight]}>Watch Video Ad (+50 PTS)</Text>
-                    <Text style={styles.adBannerSub}>Google AdMob Test Unit · Earn 50 pts in 5s</Text>
-                  </View>
-                  <View style={styles.adBannerBtn}>
-                    <Text style={styles.adBannerBtnText}>Watch Ad</Text>
-                  </View>
-                </TouchableOpacity>
-
                 <DailyBox userId={userId} />
                 <ComboTracker userId={userId} />
               </View>
@@ -491,14 +435,6 @@ export default function TasksScreen() {
           <Text style={styles.uploadText}>Uploading screenshot…</Text>
         </View>
       )}
-      <RewardedAdModal
-        visible={adModalVisible}
-        onClose={() => {
-          setAdModalVisible(false);
-          setPendingAction(null);
-        }}
-        onSuccess={handleAdSuccess}
-      />
     </View>
   );
 }

@@ -32,16 +32,12 @@ type Answer = {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Quiz'>;
 
-import RewardedAdModal from '../components/RewardedAdModal';
-
 export default function QuizScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Props['route']>();
   const { userId } = useAuth();
-  const [adVisible, setAdVisible] = useState(true);
-  const [pendingSubmit, setPendingSubmit] = useState(false);
   const [localEcosystem] = useState<'PI' | 'SIDRA'>('SIDRA');
 
   const params = route.params;
@@ -98,19 +94,7 @@ export default function QuizScreen() {
   };
 
   const handleSubmit = () => {
-    if (!userId || !questions || answers.length === 0) {
-      Alert.alert('Answer at least one question to submit');
-      return;
-    }
-    setPendingSubmit(true);
-    setAdVisible(true);
-  };
-
-  const handleAdSuccess = async () => {
-    if (pendingSubmit) {
-      setPendingSubmit(false);
-      await executeSubmit();
-    }
+    executeSubmit();
   };
 
   return (
@@ -195,20 +179,12 @@ export default function QuizScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                <Text style={styles.submitButtonText}>Watch Ad & Submit</Text>
+                <Text style={styles.submitButtonText}>Submit Answers</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
       ) : null}
-      <RewardedAdModal
-        visible={adVisible}
-        onClose={() => {
-          setAdVisible(false);
-          setPendingSubmit(false);
-        }}
-        onSuccess={handleAdSuccess}
-      />
     </View>
   );
 }

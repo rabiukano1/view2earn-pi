@@ -18,6 +18,10 @@ export const listCatalog = query({
       .collect();
     return items
       .filter((i) => i.enabled && i.pointsPrice !== undefined)
+      .map((i) => ({
+        ...i,
+        name: i.name.replace(/₦/g, ""),
+      }))
       .sort((a, b) => (a.pointsPrice ?? 0) - (b.pointsPrice ?? 0));
   },
 });
@@ -53,9 +57,10 @@ export const redeem = mutation({
     userId: v.id("users"),
     catalogId: v.id("catalog"),
     phoneNumber: v.string(),
+    paidWith: v.optional(v.union(v.literal("POINTS"), v.literal("PIPRO"))),
     clientIp: v.optional(v.string()),
   },
-  handler: async (ctx, { userId, catalogId, phoneNumber, clientIp }) => {
+  handler: async (ctx, { userId, catalogId, phoneNumber, paidWith = "POINTS", clientIp }) => {
     await requireUser(ctx, userId);
     await enforceRateLimit(ctx, userId, "redeem");
 
@@ -70,37 +75,90 @@ export const redeem = mutation({
 
     const item = await ctx.db.get(catalogId);
     if (!item || !item.enabled) throw new Error("Reward unavailable");
-    const price = item.pointsPrice;
-    if (price === undefined) throw new Error("Reward not redeemable with points");
     if (!/^[0-9+\s-]{6,20}$/.test(phoneNumber.trim())) {
       throw new Error("Enter a valid phone number");
     }
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const balance = last?.balanceAfter ?? 0;
-    if (balance < price) throw new Error("Insufficient points");
+    let redemptionId;
+    let balanceAfter = 0;
 
-    const redemptionId = await ctx.db.insert("redemptions", {
-      userId,
-      catalogId,
-      paidWith: "points",
-      amount: price,
-      phoneNumber: phoneNumber.trim(),
-      status: "processing",
-    });
+    if (paidWith === "PIPRO") {
+      // Fetch exchange rate or default to 1000
+      const rateDoc = await ctx.db.query("exchangeRates").order("desc").first();
+      const pointsPerPipro = rateDoc?.pointsPerPipro ?? 1000;
+      const coinPrice = item.coinPrice ?? ((item.pointsPrice ?? 500) / pointsPerPipro);
 
-    const balanceAfter = balance - price;
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: -price,
-      reason: "REDEEM",
-      refId: redemptionId,
-      balanceAfter,
-    });
+      const wallet = await ctx.db
+        .query("wallets")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .unique();
+      const piproBal = wallet?.piproBalance ?? 0;
+      if (piproBal < coinPrice) {
+        throw new Error(`Insufficient PIPRO balance. Required: ${coinPrice.toFixed(4)} PIPRO`);
+      }
+
+      redemptionId = await ctx.db.insert("redemptions", {
+        userId,
+        catalogId,
+        paidWith: "PIPRO",
+        amount: coinPrice,
+        phoneNumber: phoneNumber.trim(),
+        status: "processing",
+      });
+
+      const newPiproBal = piproBal - coinPrice;
+      if (wallet) {
+        await ctx.db.patch(wallet._id, { piproBalance: newPiproBal });
+      } else {
+        await ctx.db.insert("wallets", {
+          userId,
+          pointsBalance: 0,
+          piproBalance: newPiproBal,
+        });
+      }
+
+      await ctx.db.insert("walletTransactions", {
+        userId,
+        type: "buy_vas_pipro",
+        pointsDelta: 0,
+        piproDelta: -coinPrice,
+        pointsBalanceAfter: wallet?.pointsBalance ?? 0,
+        piproBalanceAfter: newPiproBal,
+        note: `Purchased ${item.name} with PIPRO`,
+      });
+
+      balanceAfter = newPiproBal;
+    } else {
+      // Paid with POINTS
+      const price = item.pointsPrice;
+      if (price === undefined) throw new Error("Reward not redeemable with points");
+
+      const last = await ctx.db
+        .query("pointsLedger")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .order("desc")
+        .first();
+      const balance = last?.balanceAfter ?? 0;
+      if (balance < price) throw new Error("Insufficient points");
+
+      redemptionId = await ctx.db.insert("redemptions", {
+        userId,
+        catalogId,
+        paidWith: "POINTS",
+        amount: price,
+        phoneNumber: phoneNumber.trim(),
+        status: "processing",
+      });
+
+      balanceAfter = balance - price;
+      await ctx.db.insert("pointsLedger", {
+        userId,
+        delta: -price,
+        reason: "REDEEM",
+        refId: redemptionId,
+        balanceAfter,
+      });
+    }
 
     // Schedule automated VAS Airtime & Data fulfillment
     await ctx.scheduler.runAfter(0, internal.vas.fulfill, { redemptionId });
@@ -120,12 +178,32 @@ export const refundRedemption = internalMutation({
 
     await ctx.db.patch(redemptionId, { status: "refunded" });
 
-    await ctx.runMutation(internal.points.creditHelper, {
-      userId: r.userId,
-      delta: r.amount,
-      reason: reason ?? "REFUND_REDEMPTION_FAILED",
-      refId: `refund:${redemptionId}`,
-    });
+    if (r.paidWith === "PIPRO") {
+      const wallet = await ctx.db
+        .query("wallets")
+        .withIndex("by_user", (q) => q.eq("userId", r.userId))
+        .unique();
+      if (wallet) {
+        const newBal = wallet.piproBalance + r.amount;
+        await ctx.db.patch(wallet._id, { piproBalance: newBal });
+        await ctx.db.insert("walletTransactions", {
+          userId: r.userId,
+          type: "refund_vas_pipro",
+          pointsDelta: 0,
+          piproDelta: r.amount,
+          pointsBalanceAfter: wallet.pointsBalance,
+          piproBalanceAfter: newBal,
+          note: `Refund for failed redemption: ${reason ?? "Failed"}`,
+        });
+      }
+    } else {
+      await ctx.runMutation(internal.points.creditHelper, {
+        userId: r.userId,
+        delta: r.amount,
+        reason: reason ?? "REFUND_REDEMPTION_FAILED",
+        refId: `refund:${redemptionId}`,
+      });
+    }
   },
 });
 
@@ -216,16 +294,26 @@ const CATALOG_SEED = [
   { itemType: "DATA", name: "1GB Data Bundle", pointsPrice: 500, providerSku: "data-1gb" },
   { itemType: "DATA", name: "2GB Data Bundle", pointsPrice: 900, providerSku: "data-2gb" },
   { itemType: "DATA", name: "5GB Data Bundle", pointsPrice: 2000, providerSku: "data-5gb" },
-  { itemType: "AIRTIME", name: "₦100 Airtime", pointsPrice: 300, providerSku: "air-100" },
-  { itemType: "AIRTIME", name: "₦200 Airtime", pointsPrice: 550, providerSku: "air-200" },
-  { itemType: "AIRTIME", name: "₦500 Airtime", pointsPrice: 1200, providerSku: "air-500" },
+  { itemType: "AIRTIME", name: "100 Airtime Top-Up", pointsPrice: 300, providerSku: "air-100" },
+  { itemType: "AIRTIME", name: "200 Airtime Top-Up", pointsPrice: 550, providerSku: "air-200" },
+  { itemType: "AIRTIME", name: "500 Airtime Top-Up", pointsPrice: 1200, providerSku: "air-500" },
 ] as const;
 
 export const seedCatalog = internalMutation({
   args: {},
   handler: async (ctx) => {
-    const existing = await ctx.db.query("catalog").take(1);
-    if (existing.length > 0) return "already seeded";
+    const existing = await ctx.db.query("catalog").collect();
+    if (existing.length > 0) {
+      // Update any existing seeded items that contain ₦ symbol
+      for (const item of existing) {
+        if (item.name.includes("₦")) {
+          await ctx.db.patch(item._id, {
+            name: item.name.replace("₦", ""),
+          });
+        }
+      }
+      return "updated existing catalog items";
+    }
     for (const eco of ["SIDRA", "PI"] as const) {
       for (const item of CATALOG_SEED) {
         await ctx.db.insert("catalog", {
@@ -234,7 +322,7 @@ export const seedCatalog = internalMutation({
           name: item.name,
           pointsPrice: item.pointsPrice,
           providerSku: item.providerSku,
-          countries: ["NG"],
+          countries: ["GLOBAL"],
           enabled: true,
         });
       }

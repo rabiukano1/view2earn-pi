@@ -6,7 +6,6 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootTabParamList, RootStackParamList } from './types';
 import Icon from '../components/Icon';
-import RewardedAdModal from '../components/RewardedAdModal';
 import { colors, radius, shadow } from '../theme';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -22,6 +21,8 @@ import AcademyScreen from '../screens/AcademyScreen';
 import SpinScreen from '../screens/SpinScreen';
 import WalletScreen from '../screens/WalletScreen';
 import WalletHistoryScreen from '../screens/WalletHistoryScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import TermsScreen from '../screens/TermsScreen';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,86 +41,62 @@ const TAB_META: Record<keyof RootTabParamList, { icon: string; label: string }> 
 function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [adVisible, setAdVisible] = useState(false);
-  const [pendingRoute, setPendingRoute] = useState<{ name: string; params?: any } | null>(null);
-
-  const handleAdSuccess = () => {
-    if (pendingRoute) {
-      navigation.navigate(pendingRoute.name as any, pendingRoute.params);
-      setPendingRoute(null);
-    }
-    setAdVisible(false);
-  };
 
   return (
-    <>
-      <View
-        style={[
-          styles.tabBar,
-          dark && styles.tabBarDark,
-          { bottom: Math.max(insets.bottom, 12) },
-        ]}>
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
-          const meta = TAB_META[route.name as keyof RootTabParamList];
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!focused && !event.defaultPrevented) {
-              if (route.name === 'Profile') {
-                navigation.navigate(route.name);
-              } else {
-                setPendingRoute({ name: route.name, params: undefined });
-                setAdVisible(true);
-              }
-            } else if (focused) {
-              navigation.navigate(route.name);
-            }
-          };
-          return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={focused ? { selected: true } : {}}
-              onPress={onPress}
-              activeOpacity={0.85}
-              style={styles.tabItem}>
-              <View
-                style={[
-                  styles.pill,
-                  focused && (dark ? styles.pillActiveDark : styles.pillActive),
-                ]}>
-                <Icon
-                  name={meta.icon}
-                  iconStyle="solid"
-                  size={20}
-                  color={
-                    focused
-                      ? dark
-                        ? '#C4B5FD'
-                        : colors.primaryDeep
-                      : colors.textFaint
-                  }
-                />
-                {focused && (
-                  <Text style={[styles.pillLabel, dark && styles.pillLabelDark]}>
-                    {meta.label}
-                  </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      <RewardedAdModal
-        visible={adVisible}
-        onClose={() => setAdVisible(false)}
-        onSuccess={handleAdSuccess}
-      />
-    </>
+    <View
+      style={[
+        styles.tabBar,
+        dark && styles.tabBarDark,
+        { bottom: Math.max(insets.bottom, 12) },
+      ]}>
+      {state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const meta = TAB_META[route.name as keyof RootTabParamList];
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+        return (
+          <TouchableOpacity
+            key={route.key}
+            accessibilityRole="button"
+            accessibilityState={focused ? { selected: true } : {}}
+            onPress={onPress}
+            activeOpacity={0.85}
+            style={styles.tabItem}>
+            <View
+              style={[
+                styles.pill,
+                focused && (dark ? styles.pillActiveDark : styles.pillActive),
+              ]}>
+              <Icon
+                name={meta.icon}
+                iconStyle="solid"
+                size={20}
+                color={
+                  focused
+                    ? dark
+                      ? '#C4B5FD'
+                      : colors.primaryDeep
+                    : colors.textFaint
+                }
+              />
+              {focused && (
+                <Text style={[styles.pillLabel, dark && styles.pillLabelDark]}>
+                  {meta.label}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 }
 
@@ -153,6 +130,8 @@ export default function AppNavigator() {
       <Stack.Screen name="Academy" component={AcademyScreen} />
       <Stack.Screen name="Quiz" component={QuizScreen} />
       <Stack.Screen name="Spin" component={SpinScreen} />
+      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <Stack.Screen name="Terms" component={TermsScreen} />
     </Stack.Navigator>
   );
 }

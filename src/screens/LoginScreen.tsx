@@ -18,9 +18,15 @@ import Icon from '../components/Icon';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 import { colors, radius, shadow } from '../theme';
 
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
+
 type Method = 'password' | 'otp';
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function LoginScreen() {
+  const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { signIn } = useAuthActions();
   const [method, setMethod] = useState<Method>('password');
@@ -30,11 +36,16 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [referralApplied, setReferralApplied] = useState(false);
   const applyReferral = useMutation(api.referrals.applyReferralCode);
   const { isAuthenticated } = useConvexAuth();
+
+  const handleTermsUnchecked = () => {
+    setError('You must accept the Terms & Conditions and Privacy Policy to continue.');
+  };
 
   // After signup, if a referral code was entered, apply it.
   useEffect(() => {
@@ -62,6 +73,7 @@ export default function LoginScreen() {
   }, [tgStatus, tgNonce, signIn]);
 
   const continueWithTelegram = async () => {
+    if (!acceptedTerms) return handleTermsUnchecked();
     setError('');
     try {
       const { nonce, url } = await startTelegram({});
@@ -74,6 +86,7 @@ export default function LoginScreen() {
   };
 
   const run = async (fn: () => Promise<unknown>, onErr: string) => {
+    if (!acceptedTerms) return handleTermsUnchecked();
     setBusy(true);
     setError('');
     try {
@@ -244,6 +257,33 @@ export default function LoginScreen() {
           </View>
         )}
 
+        {/* Terms & Privacy Agreement Checkbox */}
+        <View style={styles.termsRow}>
+          <TouchableOpacity
+            style={[styles.checkbox, acceptedTerms && styles.checkboxActive]}
+            onPress={() => {
+              setAcceptedTerms(!acceptedTerms);
+              if (error.includes('Terms')) setError('');
+            }}
+            activeOpacity={0.8}>
+            {acceptedTerms && <Icon name="check" iconStyle="solid" size={12} color="#FFFFFF" />}
+          </TouchableOpacity>
+          <Text style={styles.termsText}>
+            I agree to the{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate('Terms')}>
+              Terms &amp; Conditions
+            </Text>{' '}
+            and{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate('PrivacyPolicy')}>
+              Privacy Policy
+            </Text>
+          </Text>
+        </View>
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {suggestSignup && method === 'password' && (
@@ -253,7 +293,7 @@ export default function LoginScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.btn, busy && styles.btnDisabled]}
+          style={[styles.btn, (busy || !acceptedTerms) && styles.btnDisabled]}
           onPress={onPrimary}
           disabled={busy}
           activeOpacity={0.85}>
@@ -297,7 +337,7 @@ export default function LoginScreen() {
       </View>
 
       <TouchableOpacity
-        style={[styles.social, styles.tgBtn, tgNonce && styles.btnDisabled]}
+        style={[styles.social, styles.tgBtn, (!acceptedTerms || tgNonce) && styles.btnDisabled]}
         onPress={continueWithTelegram}
         disabled={!!tgNonce}
         activeOpacity={0.85}>
@@ -308,7 +348,7 @@ export default function LoginScreen() {
       </TouchableOpacity>
 
       <View style={{ marginTop: 10 }}>
-        <GoogleAuthButton />
+        <GoogleAuthButton disabled={!acceptedTerms} onDisabledPress={handleTermsUnchecked} />
       </View>
 
       <Text style={styles.soon}>Sidra KYC sign-in coming soon</Text>
@@ -355,6 +395,40 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   input: { flex: 1, paddingVertical: 13, fontSize: 15, color: colors.text },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 14,
+    paddingHorizontal: 2,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  checkboxActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: colors.textMuted,
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  termsLink: {
+    color: colors.primary,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
   error: { color: colors.danger, fontSize: 13, marginBottom: 12, fontWeight: '600' },
   suggestBtn: {
     borderWidth: 1.5,

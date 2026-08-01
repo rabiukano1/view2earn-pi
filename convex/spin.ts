@@ -32,11 +32,14 @@ export const getSpinStatus = query({
 
     let spinsUsedInWindow = 0;
     let bonusSpins = spinRecord?.bonusSpins ?? 0;
+    let adBonusEarned = 0;
 
     if (spinRecord && spinRecord.windowStart === currentWindowStart) {
       spinsUsedInWindow = spinRecord.spinsUsedInWindow ?? 0;
+      adBonusEarned = spinRecord.adBonusEarned ?? 0;
     }
 
+    const adBonusLimit = await getNum(ctx, "adBonusSpinsPerWindow");
     const baseSpinsRemaining = Math.max(0, baseSpins - spinsUsedInWindow);
     const spinsRemaining = baseSpinsRemaining + bonusSpins;
 
@@ -44,8 +47,12 @@ export const getSpinStatus = query({
       spinsRemaining,
       baseSpinsRemaining,
       bonusSpins,
+      adBonusEarned,
+      adBonusLimit,
+      adBonusRemaining: Math.max(0, adBonusLimit - adBonusEarned),
       nextRefillMs,
       nextRefillAt,
+      windowTotalMs: windowMs,
     };
   },
 });
@@ -68,7 +75,8 @@ export const spin = mutation({
     let spinsUsedInWindow = 0;
     let bonusSpins = spinRecord?.bonusSpins ?? 0;
 
-    if (spinRecord && spinRecord.windowStart === currentWindowStart) {
+    const sameWindow = spinRecord?.windowStart === currentWindowStart;
+    if (sameWindow) {
       spinsUsedInWindow = spinRecord.spinsUsedInWindow ?? 0;
     }
 
@@ -89,11 +97,16 @@ export const spin = mutation({
       newSpinsUsed = spinsUsedInWindow + 1;
     }
 
+    // adBonusEarned only counts within the current window — reset when the
+    // window rolls over so the ad-earn quota refreshes each window.
+    const newAdBonusEarned = sameWindow ? (spinRecord?.adBonusEarned ?? 0) : 0;
+
     if (spinRecord) {
       await ctx.db.patch(spinRecord._id, {
         windowStart: currentWindowStart,
         spinsUsedInWindow: newSpinsUsed,
         bonusSpins: newBonusSpins,
+        adBonusEarned: newAdBonusEarned,
       });
     } else {
       await ctx.db.insert("dailySpins", {
@@ -101,6 +114,7 @@ export const spin = mutation({
         windowStart: currentWindowStart,
         spinsUsedInWindow: newSpinsUsed,
         bonusSpins: newBonusSpins,
+        adBonusEarned: 0,
       });
     }
 
@@ -157,17 +171,30 @@ export const earnBonusSpin = mutation({
     const spinWindowHours = await getNum(ctx, "spinWindowHours");
     const windowMs = spinWindowHours * 60 * 60 * 1000;
     const currentWindowStart = Math.floor(now / windowMs) * windowMs;
-    const addCount = amount ?? 1;
+    const addCount = Math.max(1, amount ?? 1);
+    const adBonusLimit = await getNum(ctx, "adBonusSpinsPerWindow");
 
     const spinRecord = await ctx.db
       .query("dailySpins")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
 
+    const sameWindow = spinRecord?.windowStart === currentWindowStart;
+    const earnedInWindow = sameWindow ? (spinRecord?.adBonusEarned ?? 0) : 0;
+
+    // Cap bonus spins earned from ads to adBonusSpinsPerWindow per window.
+    if (earnedInWindow + addCount > adBonusLimit) {
+      throw new Error(
+        `Bonus spin limit reached — ${adBonusLimit} per ${spinWindowHours}-hour window. Try again after refill!`,
+      );
+    }
+
     if (spinRecord) {
       const currentBonus = spinRecord.bonusSpins ?? 0;
       await ctx.db.patch(spinRecord._id, {
+        windowStart: currentWindowStart,
         bonusSpins: currentBonus + addCount,
+        adBonusEarned: earnedInWindow + addCount,
       });
     } else {
       await ctx.db.insert("dailySpins", {
@@ -175,9 +202,15 @@ export const earnBonusSpin = mutation({
         windowStart: currentWindowStart,
         spinsUsedInWindow: 0,
         bonusSpins: addCount,
+        adBonusEarned: addCount,
       });
     }
 
-    return { success: true, added: addCount };
+    return {
+      success: true,
+      added: addCount,
+      adBonusEarned: earnedInWindow + addCount,
+      adBonusRemaining: Math.max(0, adBonusLimit - (earnedInWindow + addCount)),
+    };
   },
 });

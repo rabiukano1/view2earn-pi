@@ -448,6 +448,20 @@ export default function ProfileScreen() {
             </View>
           )}
 
+          <TouchableOpacity
+            style={[styles.settingRowCard, dark && styles.cardDark, { marginTop: 10 }]}
+            onPress={() => stackNav.navigate('PrivacyPolicy')}
+            activeOpacity={0.85}>
+            <View style={[styles.settingIconBg, { backgroundColor: colors.success + '1F' }]}>
+              <Icon name="shield-check" iconStyle="solid" size={18} color={colors.success} />
+            </View>
+            <View style={styles.settingTextGroup}>
+              <Text style={[styles.settingTitle, dark && styles.textLight]}>Privacy Policy &amp; Terms</Text>
+              <Text style={styles.settingSubtitle}>GDPR, CCPA &amp; Data Security Disclosures</Text>
+            </View>
+            <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.signOutBtn} onPress={() => signOut()} activeOpacity={0.85}>
             <Icon name="right-from-bracket" iconStyle="solid" size={15} color={colors.danger} />
             <Text style={styles.signOutText}>Sign Out of Account</Text>

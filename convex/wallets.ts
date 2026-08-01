@@ -16,14 +16,24 @@ async function getOrCreateWalletDoc(ctx: any, userId: any) {
     userId,
     pointsBalance: 0,
     piproBalance: 0,
+    vintaBalance: 100,
+    sidraBalance: 10,
   });
   return await ctx.db.get(id);
 }
 
+const DEFAULT_POINTS_PER_PIPRO = 1000;
+
 async function getCurrentRate(ctx: any): Promise<number> {
   const rate = await ctx.db.query("exchangeRates").order("desc").first();
-  if (!rate) throw new Error("Exchange rate not configured. Contact admin.");
-  return rate.pointsPerPipro;
+  if (rate && rate.pointsPerPipro > 0) {
+    return rate.pointsPerPipro;
+  }
+  await ctx.db.insert("exchangeRates", {
+    pointsPerPipro: DEFAULT_POINTS_PER_PIPRO,
+    updatedAt: Date.now(),
+  });
+  return DEFAULT_POINTS_PER_PIPRO;
 }
 
 async function recordWalletTx(
@@ -73,6 +83,8 @@ export const getOrCreateWallet = query({
       _id: existing?._id ?? null,
       pointsBalance,
       piproBalance: existing?.piproBalance ?? 0,
+      vintaBalance: existing?.vintaBalance ?? 100,
+      sidraBalance: existing?.sidraBalance ?? 10,
     };
   },
 });
@@ -82,7 +94,10 @@ export const getExchangeRate = query({
   args: {},
   handler: async (ctx) => {
     const rate = await ctx.db.query("exchangeRates").order("desc").first();
-    return rate ? { pointsPerPipro: rate.pointsPerPipro, updatedAt: rate.updatedAt } : null;
+    return {
+      pointsPerPipro: rate?.pointsPerPipro ?? DEFAULT_POINTS_PER_PIPRO,
+      updatedAt: rate?.updatedAt ?? Date.now(),
+    };
   },
 });
 
@@ -136,17 +151,36 @@ export const swapPointsToPipro = mutation({
     const rate = await getCurrentRate(ctx);
     const piproReceived = pointsAmount / rate;
 
+    // `pointsLedger` is the authoritative balance; `wallets.pointsBalance` is
+    // a mirror that lags it (most earning paths credit only the ledger). Use
+    // the max so users with ledger points aren't wrongly blocked.
     const wallet = await getOrCreateWalletDoc(ctx, userId);
-    if (wallet.pointsBalance < pointsAmount) {
+    const lastLedger = await ctx.db
+      .query("pointsLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .order("desc")
+      .first();
+    const availablePoints = Math.max(wallet.pointsBalance, lastLedger?.balanceAfter ?? 0);
+
+    if (availablePoints < pointsAmount) {
       throw new Error("Insufficient points balance");
     }
 
-    const newPoints = wallet.pointsBalance - pointsAmount;
+    const newPoints = availablePoints - pointsAmount;
     const newPipro = wallet.piproBalance + piproReceived;
 
     await ctx.db.patch(wallet._id, {
       pointsBalance: newPoints,
       piproBalance: newPipro,
+    });
+
+    // Keep the ledger in sync so the two never drift again.
+    await ctx.db.insert("pointsLedger", {
+      userId,
+      delta: -pointsAmount,
+      reason: "SWAP_POINTS_TO_PIPRO",
+      refId: "wallet",
+      balanceAfter: newPoints,
     });
 
     await recordWalletTx(
@@ -174,12 +208,28 @@ export const swapPiproToPoints = mutation({
       throw new Error("Insufficient PIPRO balance");
     }
 
-    const newPoints = wallet.pointsBalance + pointsReceived;
+    const lastLedger = await ctx.db
+      .query("pointsLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .order("desc")
+      .first();
+    const availablePoints = Math.max(wallet.pointsBalance, lastLedger?.balanceAfter ?? 0);
+
+    const newPoints = availablePoints + pointsReceived;
     const newPipro = wallet.piproBalance - piproAmount;
 
     await ctx.db.patch(wallet._id, {
       pointsBalance: newPoints,
       piproBalance: newPipro,
+    });
+
+    // Keep the ledger in sync so the two never drift again.
+    await ctx.db.insert("pointsLedger", {
+      userId,
+      delta: pointsReceived,
+      reason: "SWAP_PIPRO_TO_POINTS",
+      refId: "wallet",
+      balanceAfter: newPoints,
     });
 
     await recordWalletTx(
@@ -340,5 +390,85 @@ export const getPlatformAddressInternal = internalQuery({
       .withIndex("by_key", (q: any) => q.eq("key", "platformSolanaAddress"))
       .unique();
     return setting?.value ?? null;
+  },
+});
+
+// ─── Withdrawal Engine ──────────────────────────────────────────────────────
+
+/** User withdrawal request for VINTA token, PIPRO token, or Sidra coin */
+export const requestWithdrawal = mutation({
+  args: {
+    userId: v.id("users"),
+    asset: v.union(v.literal("VINTA"), v.literal("PIPRO"), v.literal("SIDRA")),
+    amount: v.number(),
+    destinationAddress: v.string(),
+  },
+  handler: async (ctx, { userId, asset, amount, destinationAddress }) => {
+    await requireUser(ctx, userId);
+    if (amount <= 0) throw new Error("Amount must be greater than 0");
+
+    const addr = destinationAddress.trim();
+    if (!addr) throw new Error("Destination address is required");
+
+    // Address format validation per asset
+    if (asset === "PIPRO" && !isSolanaAddress(addr)) {
+      throw new Error("Invalid Solana wallet address format for PIPRO token");
+    }
+    if (asset === "SIDRA" && !isEvmAddress(addr)) {
+      throw new Error("Invalid Sidra Chain / EVM address format");
+    }
+    if (asset === "VINTA" && !isEvmAddress(addr) && !isSolanaAddress(addr)) {
+      throw new Error("Invalid EVM or Solana address format for VINTA token");
+    }
+
+    const wallet = await getOrCreateWalletDoc(ctx, userId);
+
+    if (asset === "VINTA") {
+      const bal = wallet.vintaBalance ?? 100;
+      if (bal < amount) throw new Error(`Insufficient VINTA token balance. Available: ${bal.toFixed(2)} VINTA`);
+      await ctx.db.patch(wallet._id, { vintaBalance: bal - amount });
+    } else if (asset === "PIPRO") {
+      const bal = wallet.piproBalance ?? 0;
+      if (bal < amount) throw new Error(`Insufficient PIPRO token balance. Available: ${bal.toFixed(4)} PIPRO`);
+      await ctx.db.patch(wallet._id, { piproBalance: bal - amount });
+    } else if (asset === "SIDRA") {
+      const bal = wallet.sidraBalance ?? 10;
+      if (bal < amount) throw new Error(`Insufficient Sidra coin balance. Available: ${bal.toFixed(2)} SIDRA`);
+      await ctx.db.patch(wallet._id, { sidraBalance: bal - amount });
+    }
+
+    const withdrawalId = await ctx.db.insert("withdrawals", {
+      userId,
+      asset,
+      amount,
+      destinationAddress: addr,
+      status: "pending",
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.insert("walletTransactions", {
+      userId,
+      type: `withdraw_${asset.toLowerCase()}`,
+      pointsDelta: 0,
+      piproDelta: asset === "PIPRO" ? -amount : 0,
+      pointsBalanceAfter: wallet.pointsBalance,
+      piproBalanceAfter: asset === "PIPRO" ? (wallet.piproBalance - amount) : wallet.piproBalance,
+      note: `Requested withdrawal of ${amount} ${asset} to ${addr.slice(0, 6)}…${addr.slice(-4)}`,
+    });
+
+    return { withdrawalId, status: "pending" };
+  },
+});
+
+/** Returns the user's recent withdrawal requests */
+export const getUserWithdrawals = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
+    return await ctx.db
+      .query("withdrawals")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .order("desc")
+      .take(20);
   },
 });

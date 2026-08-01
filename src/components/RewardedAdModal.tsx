@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -9,16 +9,12 @@ import {
   View,
 } from 'react-native';
 import { useMutation, useQuery } from 'convex/react';
+import { useRewardedAd } from 'react-native-google-mobile-ads';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import Icon from './Icon';
-
-// Fallback Default Google AdMob Rewarded Video Test Ad Unit IDs
-export const ADMOB_TEST_UNIT_IDS = {
-  android: 'ca-app-pub-3940256099942544/5224354917',
-  ios: 'ca-app-pub-3940256099942544/1712485313',
-} as const;
+import { ADMOB_AD_UNITS } from '../services/admobService';
 
 interface RewardedAdModalProps {
   visible: boolean;
@@ -26,13 +22,16 @@ interface RewardedAdModalProps {
   onSuccess?: (newBalance: number) => void;
 }
 
+type AdPhase = 'loading' | 'ready' | 'error';
+
 export default function RewardedAdModal({ visible, onClose, onSuccess }: RewardedAdModalProps) {
   const { userId } = useAuth();
-  const [countdown, setCountdown] = useState(5);
-  const [isCompleted, setIsCompleted] = useState(false);
+  const [phase, setPhase] = useState<AdPhase>('loading');
+  const [adError, setAdError] = useState('');
   const [claiming, setClaiming] = useState(false);
+  const claimedRef = useRef(false);
 
-  const adConfig = useQuery(api.ads.getAdRewardConfig, userId ? { userId } : 'skip');
+  const adConfig = useQuery(api.ads.getAdRewardConfig, visible && userId ? { userId } : 'skip');
   const rewardForAd = useMutation(api.ads.rewardForAd);
 
   // Parse active ad network config from Convex backend if configured by Admin Panel
@@ -49,32 +48,47 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
   const rewardPoints = adConfig?.rewardPoints ?? 50;
   const adUnitId =
     Platform.OS === 'ios'
-      ? (parsedConfig.adMobIosUnitId || ADMOB_TEST_UNIT_IDS.ios)
-      : (parsedConfig.adMobAndroidUnitId || parsedConfig.unityPlacementId || ADMOB_TEST_UNIT_IDS.android);
+      ? (parsedConfig.adMobIosUnitId || ADMOB_AD_UNITS.ios)
+      : (parsedConfig.adMobAndroidUnitId || parsedConfig.unityPlacementId || ADMOB_AD_UNITS.android);
 
+  const { isLoaded, isClosed, isEarnedReward, error, load, show } = useRewardedAd(
+    visible ? adUnitId : null,
+  );
+
+  // Load the ad fresh each time the modal opens.
   useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    if (visible) {
-      setCountdown(5);
-      setIsCompleted(false);
-      setClaiming(false);
-
-      timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            setIsCompleted(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (visible && adUnitId) {
+      claimedRef.current = false;
+      setPhase('loading');
+      setAdError('');
+      try {
+        load();
+      } catch (err: any) {
+        setAdError(err?.message || 'Failed to load ad');
+        setPhase('error');
+      }
     }
-    return () => clearInterval(timer);
-  }, [visible]);
+  }, [visible, adUnitId, load]);
 
-  const handleClaimReward = async () => {
-    if (!userId || claiming) return;
+  // Surface load/show failures so the user can retry.
+  useEffect(() => {
+    if (error) {
+      setAdError(error.message);
+      setPhase('error');
+    }
+  }, [error]);
+
+  // Ad became ready → flip to the "Watch Ad" CTA.
+  useEffect(() => {
+    if (isLoaded) {
+      setPhase('ready');
+    }
+  }, [isLoaded]);
+
+  // Reward earned → award points exactly once, then close.
+  const handleRewardEarned = useCallback(async () => {
+    if (!userId || claimedRef.current) return;
+    claimedRef.current = true;
     setClaiming(true);
     try {
       const newBalance = await rewardForAd({
@@ -83,23 +97,40 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
         adType: 'rewarded_video',
         rewardAmount: rewardPoints,
       });
-
       if (onSuccess) {
         onSuccess(newBalance);
       }
-      onClose();
     } catch (err) {
       console.error('Ad reward failed:', err);
     } finally {
       setClaiming(false);
     }
+  }, [userId, rewardForAd, adUnitId, rewardPoints, onSuccess]);
+
+  useEffect(() => {
+    if (isEarnedReward) {
+      handleRewardEarned();
+    }
+  }, [isEarnedReward, handleRewardEarned]);
+
+  // Ad dismissed (completed or skipped) → close the modal overlay.
+  useEffect(() => {
+    if (isClosed && visible) {
+      onClose();
+    }
+  }, [isClosed, visible, onClose]);
+
+  const retry = () => {
+    setPhase('loading');
+    setAdError('');
+    load();
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.adCard}>
-          {/* Test Ad Header Badge */}
+          {/* Ad Network Header Badge */}
           <View style={styles.testBadgeHeader}>
             <Icon name="shield-halved" iconStyle="solid" size={12} color="#F59E0B" />
             <Text style={styles.testBadgeText}>
@@ -107,61 +138,85 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
             </Text>
           </View>
 
-          {/* Ad Screen Simulation Player */}
+          {/* Ad Status Area */}
           <View style={styles.videoPlayerArea}>
-            <View style={styles.playIconContainer}>
-              <Icon name="circle-play" iconStyle="solid" size={48} color={colors.primary} />
-            </View>
+            {phase === 'loading' && (
+              <>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.adTitle}>Loading ad…</Text>
+                <Text style={styles.adSubtitle}>Fetching a test ad for your device</Text>
+              </>
+            )}
 
-            <Text style={styles.adTitle}>{networkName} Partner Video</Text>
-            <Text style={styles.adSubtitle}>
-              Active Placement: {adUnitId.length > 24 ? adUnitId.substring(0, 24) + '...' : adUnitId}
-            </Text>
+            {phase === 'ready' && (
+              <>
+                <View style={styles.playIconContainer}>
+                  <Icon name="circle-play" iconStyle="solid" size={48} color={colors.primary} />
+                </View>
+                <Text style={styles.adTitle}>Ready to watch</Text>
+                <Text style={styles.adSubtitle}>
+                  Earn +{rewardPoints} PTS by watching a short rewarded video
+                </Text>
+              </>
+            )}
 
-            {/* Countdown / Completion Indicator */}
+            {phase === 'error' && (
+              <>
+                <View style={styles.playIconContainer}>
+                  <Icon name="circle-exclamation" iconStyle="solid" size={48} color="#F43F5E" />
+                </View>
+                <Text style={styles.adTitle}>Could not load ad</Text>
+                <Text style={styles.adSubtitle} numberOfLines={3}>
+                  {adError || 'No fill for this ad unit on your device'}
+                </Text>
+              </>
+            )}
+
+            {/* Active placement label */}
             <View style={styles.timerBadge}>
-              {!isCompleted ? (
-                <>
-                  <Icon name="clock" iconStyle="solid" size={12} color={colors.white} />
-                  <Text style={styles.timerText}>Reward in {countdown}s</Text>
-                </>
-              ) : (
-                <>
-                  <Icon name="circle-check" iconStyle="solid" size={12} color={colors.success} />
-                  <Text style={[styles.timerText, { color: colors.success }]}>Ad Complete!</Text>
-                </>
-              )}
-            </View>
-
-            {/* Progress Bar */}
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${((5 - countdown) / 5) * 100}%` }]} />
+              <Icon name="tag" iconStyle="solid" size={12} color="#F59E0B" />
+              <Text style={styles.timerText}>
+                {adUnitId.length > 32 ? adUnitId.substring(0, 32) + '…' : adUnitId}
+              </Text>
             </View>
           </View>
 
           {/* Action Footer */}
           <View style={styles.footerRow}>
-            {!isCompleted ? (
+            {phase === 'ready' ? (
+              <TouchableOpacity
+                style={styles.claimBtn}
+                onPress={() => show()}
+                activeOpacity={0.85}>
+                <Icon name="gift" iconStyle="solid" size={14} color={colors.white} />
+                <Text style={styles.claimText}>Watch Ad (+{rewardPoints} PTS)</Text>
+              </TouchableOpacity>
+            ) : (
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
                 <Text style={styles.cancelText}>Close</Text>
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.claimBtn}
-                onPress={handleClaimReward}
-                disabled={claiming}
-                activeOpacity={0.85}>
-                {claiming ? (
-                  <ActivityIndicator size="small" color={colors.white} />
-                ) : (
-                  <>
-                    <Icon name="gift" iconStyle="solid" size={14} color={colors.white} />
-                    <Text style={styles.claimText}>Claim +{rewardPoints} Points</Text>
-                  </>
-                )}
+            )}
+
+            {phase === 'error' && (
+              <TouchableOpacity style={styles.claimBtn} onPress={retry} activeOpacity={0.85}>
+                <Icon name="rotate-right" iconStyle="solid" size={14} color={colors.white} />
+                <Text style={styles.claimText}>Retry</Text>
+              </TouchableOpacity>
+            )}
+
+            {phase === 'ready' && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
             )}
           </View>
+
+          {claiming && (
+            <View style={styles.claimingOverlay}>
+              <ActivityIndicator size="small" color={colors.white} />
+              <Text style={styles.claimingText}>Crediting points…</Text>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -207,6 +262,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 190,
     borderWidth: 1,
     borderColor: '#222234',
     marginBottom: 16,
@@ -219,12 +276,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.white,
     marginBottom: 4,
+    textAlign: 'center',
   },
   adSubtitle: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#8A8A9E',
     marginBottom: 14,
     textAlign: 'center',
+    paddingHorizontal: 10,
   },
   timerBadge: {
     flexDirection: 'row',
@@ -234,23 +293,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.pill,
-    marginBottom: 12,
   },
   timerText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: colors.white,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 4,
-    backgroundColor: '#222234',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#F59E0B',
+    maxWidth: '92%',
   },
   footerRow: {
     flexDirection: 'row',
@@ -283,5 +331,22 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '800',
     fontSize: 14,
+  },
+  claimingOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    top: 0,
+    borderRadius: radius.xl,
+    backgroundColor: 'rgba(10, 10, 18, 0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  claimingText: {
+    color: colors.white,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
