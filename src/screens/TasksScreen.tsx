@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   FlatList,
   Linking,
   Share,
@@ -28,7 +29,8 @@ import DailyBox from '../components/DailyBox';
 import ComboTracker from '../components/ComboTracker';
 import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
-import Icon from '../components/Icon';
+import RewardedAdModal from '../components/RewardedAdModal';
+import UploadScreenshotModal from '../components/UploadScreenshotModal';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
@@ -54,6 +56,7 @@ type Task = {
   type: string;
   platform: string;
   targetUrl: string;
+  name?: string;
   pageId?: string;
   points: number;
   verifier: string;
@@ -127,7 +130,7 @@ function actionFor(
 ): ActionState {
   const telegram = verifier === 'telegram-bot';
   if (!verification) {
-    return { label: 'I did it — Claim', disabled: false, kind: 'claim' };
+    return { label: 'Follow / Join', disabled: false, kind: 'claim' };
   }
   switch (verification.state) {
     case 'USER_CLAIMED_DONE':
@@ -196,7 +199,7 @@ function TaskCard({
         <View style={styles.cardBody}>
           <Text style={[styles.cardTitle, dark && styles.textLight]}>
             {TYPE_LABELS[task.type] ?? task.type}
-            {task.targetUrl ? ` · ${targetName(task.targetUrl)}` : ''}
+            {task.name || (task.targetUrl ? ` · ${targetName(task.targetUrl)}` : '')}
           </Text>
           <Text style={styles.cardSubtitle}>{meta.label}</Text>
         </View>
@@ -248,6 +251,9 @@ export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const [uploading, setUploading] = useState(false);
+  const [selectedTaskForAd, setSelectedTaskForAd] = useState<Task | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<Verification | null>(null);
+  const [adAfterUpload, setAdAfterUpload] = useState(false);
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
   const claim = useMutation(api.verifications.claim);
@@ -279,9 +285,31 @@ export default function TasksScreen() {
     if (!userId) return;
     try {
       await claim({ taskId: task._id, userId });
-      await openTask(task, handleQuizNav);
+      
+      if (task.type === 'QUIZ') {
+        await openTask(task, handleQuizNav);
+        return;
+      }
+      
+      Alert.alert(
+        'Support Us',
+        'Would you like to watch a short ad before completing this task?',
+        [
+          {
+            text: 'No, thanks',
+            style: 'cancel',
+            onPress: () => openTask(task, handleQuizNav),
+          },
+          {
+            text: 'Yes, watch ad',
+            onPress: () => setSelectedTaskForAd(task),
+          },
+        ]
+      );
     } catch (e) {
-      Alert.alert('Could not claim', String(e));
+      let msg = String(e).replace('[CONVEX] ', '');
+      msg = msg.replace(/Uncaught Error:\s*/, '');
+      Alert.alert('Could not claim', msg);
     }
   };
 
@@ -320,7 +348,8 @@ export default function TasksScreen() {
       if (!result.ok) throw new Error(`Upload server error (${result.status})`);
       const { storageId } = (await result.json()) as { storageId: Id<'_storage'> };
       await submitProof({ verificationId: verification._id, storageId });
-      Alert.alert('Screenshot Uploaded! 🎉', 'Your verification screenshot has been submitted successfully.');
+      setUploadTarget(null);
+      setAdAfterUpload(true);
     } catch (e) {
       console.error('Upload failed:', e);
       Alert.alert('Upload failed', String(e).replace('[CONVEX] ', ''));
@@ -336,6 +365,38 @@ export default function TasksScreen() {
       Alert.alert('Could not verify', String(e).replace('[CONVEX] ', ''));
     }
   };
+
+  // When the user comes back from the target link (follow/join), nudge them to
+  // upload a screenshot of the completed task instead of waiting to find the
+  // card in the feed. Only fires once per pending verification.
+  const verificationsRef = useRef(verifications);
+  verificationsRef.current = verifications;
+  const taskByIdRef = useRef<Map<string, Task>>(new Map());
+  taskByIdRef.current = new Map((tasks ?? []).map((t) => [t._id, t]));
+  const promptedVerificationRef = useRef<string | null>(null);
+
+  const openUploadModal = (verification: Verification) => {
+    promptedVerificationRef.current = verification._id;
+    setUploadTarget(verification);
+  };
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      const pending = (verificationsRef.current ?? []).find(
+        (v) =>
+          (v.state === 'USER_CLAIMED_DONE' || v.state === 'REJECTED') &&
+          taskByIdRef.current.get(v.taskId)?.verifier !== 'telegram-bot',
+      );
+      if (!pending) {
+        promptedVerificationRef.current = null;
+        return;
+      }
+      if (promptedVerificationRef.current === pending._id) return;
+      openUploadModal(pending);
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
@@ -370,7 +431,7 @@ export default function TasksScreen() {
             verification={verificationByTask.get(item._id)}
             dark={dark}
             onClaim={executeClaim}
-            onUpload={executeUpload}
+            onUpload={openUploadModal}
             onVerify={executeVerify}
             onQuizNav={handleQuizNav}
           />
@@ -429,12 +490,32 @@ export default function TasksScreen() {
           )
         }
       />
-      {uploading && (
-        <View style={styles.uploadOverlay}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.uploadText}>Uploading screenshot…</Text>
-        </View>
-      )}
+      <UploadScreenshotModal
+        visible={!!uploadTarget}
+        uploading={uploading}
+        onUpload={() => {
+          if (uploadTarget) executeUpload(uploadTarget);
+        }}
+        onClose={() => {
+          if (!uploading) setUploadTarget(null);
+        }}
+      />
+      <RewardedAdModal
+        visible={!!selectedTaskForAd || adAfterUpload}
+        onClose={() => {
+          if (selectedTaskForAd) {
+            const t = selectedTaskForAd;
+            setSelectedTaskForAd(null);
+            openTask(t, handleQuizNav);
+          } else if (adAfterUpload) {
+            setAdAfterUpload(false);
+            Alert.alert(
+              'Screenshot uploaded 🎉',
+              'Your proof is in review — points are credited once approved.',
+            );
+          }
+        }}
+      />
     </View>
   );
 }
@@ -669,22 +750,6 @@ const styles = StyleSheet.create({
   },
   actionTextDone: {
     color: '#15803D',
-  },
-  uploadOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(10,10,18,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  uploadText: {
-    color: colors.white,
-    fontSize: 15,
-    fontWeight: '600',
   },
   rewardedAdBanner: {
     backgroundColor: colors.surface,

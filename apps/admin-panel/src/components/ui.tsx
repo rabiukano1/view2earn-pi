@@ -37,15 +37,18 @@ export function Modal({
 
 export function Field({
   label,
+  hint,
   children,
 }: {
   label: string;
+  hint?: string;
   children: ReactNode;
 }) {
   return (
     <div className="field">
       <label>{label}</label>
       {children}
+      {hint && <div className="field-hint">{hint}</div>}
     </div>
   );
 }

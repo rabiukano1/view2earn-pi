@@ -87,6 +87,7 @@ export default defineSchema({
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
+    name: v.optional(v.string()),        // page/channel handle, e.g. "pinetwork"
     pageId: v.optional(v.string()),      // numeric FB page ID (plan §7.9d)
     points: v.number(),
     verifier: v.string(),

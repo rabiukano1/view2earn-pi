@@ -404,6 +404,34 @@ h1, h2, h3 { letter-spacing: -0.03em; line-height: 1.1; }
 .feature-card h3 { font-size: 18.5px; font-weight: 700; margin-bottom: 9px; }
 .feature-card p { color: var(--text-2); font-size: 14.5px; }
 
+/* ---------- Roadmap ---------- */
+.roadmap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.roadmap-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 26px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.roadmap-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: var(--accent); }
+.roadmap-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.roadmap-icon {
+  width: 46px; height: 46px; border-radius: 13px;
+  background: var(--grad-soft); color: var(--accent);
+  display: grid; place-items: center;
+}
+.roadmap-icon svg { width: 21px; height: 21px; }
+.roadmap-tag {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 999px;
+  white-space: nowrap;
+}
+.roadmap-tag.ship { background: var(--accent-weak); color: var(--accent); }
+.roadmap-tag.plan { background: var(--bg-2); color: var(--text-3); }
+.roadmap-card h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.roadmap-card p { color: var(--text-2); font-size: 14px; }
+
 /* ---------- Steps ---------- */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; counter-reset: step; }
 .step {
@@ -591,12 +619,13 @@ h1, h2, h3 { letter-spacing: -0.03em; line-height: 1.1; }
   .hero-actions { justify-content: center; }
   .hero-visual { margin-top: 10px; }
   .grid-3, .steps { grid-template-columns: 1fr 1fr; }
+  .roadmap-grid { grid-template-columns: 1fr 1fr; }
   .stats-band { grid-template-columns: 1fr 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .section { padding: 72px 0; }
 }
 @media (max-width: 640px) {
-  .grid-3, .grid-2, .steps { grid-template-columns: 1fr; }
+  .grid-3, .grid-2, .steps, .roadmap-grid { grid-template-columns: 1fr; }
   .stats-band { grid-template-columns: 1fr 1fr; gap: 12px; }
   .stat-card .v { font-size: 24px; }
   .site-nav { display: none; }

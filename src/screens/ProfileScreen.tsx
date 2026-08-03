@@ -3,6 +3,7 @@ import { POINTS, REFERRAL_QUALIFICATION_TASKS } from '@view2earn/core';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   ScrollView,
   Share,
@@ -103,6 +104,46 @@ export default function ProfileScreen() {
   const requestBioCode = useMutation(api.linkedProfiles.requestBioCode);
   const verifyBioCode = useAction(api.linkedProfiles.verifyBioCode);
   const setPayoutWallet = useMutation(api.wallets.setPayoutWallet);
+  const linkStart = useMutation(api.telegramAuth.linkStart);
+  const linkComplete = useMutation(api.telegramAuth.linkComplete);
+  const [tgNonce, setTgNonce] = useState<string | null>(null);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgMsg, setTgMsg] = useState('');
+  const tgStatus = useQuery(api.telegramAuth.status, tgNonce ? { nonce: tgNonce } : 'skip');
+
+  useEffect(() => {
+    if (tgNonce && tgStatus?.verified) {
+      const nonce = tgNonce;
+      setTgNonce(null);
+      setTgBusy(true);
+      linkComplete({ userId: userId!, nonce })
+        .then(() => setTgMsg('Telegram linked! Channel-join tasks now verify instantly via the bot.'))
+        .catch((e: unknown) =>
+          setTgMsg(
+            'Could not link Telegram: ' +
+              String((e as Error)?.message ?? e).replace('[CONVEX] ', ''),
+          ),
+        )
+        .finally(() => setTgBusy(false));
+    }
+  }, [tgNonce, tgStatus, linkComplete, userId]);
+
+  const handleLinkTelegram = async () => {
+    if (tgBusy || !userId) return;
+    setTgMsg('');
+    setTgBusy(true);
+    try {
+      const { nonce, url } = await linkStart({ userId });
+      setTgNonce(nonce);
+      await Linking.openURL(url);
+      setTgMsg('Tap Start in the Telegram bot, then come back — it verifies automatically.');
+    } catch {
+      setTgNonce(null);
+      setTgMsg('Could not open Telegram. Try again.');
+    } finally {
+      setTgBusy(false);
+    }
+  };
 
   const displayName = me?.name || me?.username || 'View2Earn Member';
   const displayContact = me?.email ?? (me?.telegramUserId ? `@${me.telegramUserId}` : '');
@@ -357,6 +398,59 @@ export default function ProfileScreen() {
               </View>
             ))
           )}
+        </View>
+
+        {/* Telegram Verification */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeader}>
+            <Icon name="telegram" iconStyle="brand" size={15} color="#229ED9" />
+            <Text style={[styles.sectionTitle, dark && styles.textLight]}>
+              Telegram Verification
+            </Text>
+          </View>
+          <View style={[styles.card, dark && styles.cardDark]}>
+            {me?.telegramUserId ? (
+              <View style={styles.socialProfileItem}>
+                <View style={[styles.socialIconCircle, { backgroundColor: '#229ED9' }]}>
+                  <PlatformIcon platform="telegram" size={15} color="#fff" />
+                </View>
+                <View style={styles.socialInfo}>
+                  <Text style={[styles.socialUsername, dark && styles.textLight]}>
+                    Telegram user {me.telegramUserId}
+                  </Text>
+                  <Text style={styles.socialPlatform}>LINKED · INSTANT JOIN VERIFY</Text>
+                </View>
+                <View style={[styles.lockStatusBadge, { backgroundColor: colors.successSoft }]}>
+                  <Icon name="check" iconStyle="solid" size={10} color={colors.success} />
+                  <Text style={[styles.lockStatusText, { color: '#15803D' }]}>Linked</Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.emptySubtitle}>
+                Link your Telegram to verify channel-join tasks instantly via the bot —
+                no screenshot needed.
+              </Text>
+            )}
+            <TouchableOpacity
+              style={[styles.tgLinkBtn, tgBusy && styles.tgLinkBtnBusy]}
+              onPress={handleLinkTelegram}
+              disabled={tgBusy}
+              activeOpacity={0.85}>
+              <Icon name="telegram" iconStyle="brand" size={14} color={colors.white} />
+              <Text style={styles.tgLinkBtnText}>
+                {tgBusy
+                  ? 'Waiting for Telegram…'
+                  : me?.telegramUserId
+                    ? 'Relink Telegram'
+                    : 'Link Telegram'}
+              </Text>
+            </TouchableOpacity>
+            {tgMsg ? (
+              <Text style={[styles.tgMsg, tgMsg.includes('linked!') && styles.tgMsgOk]}>
+                {tgMsg}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         {/* Referral Card */}
@@ -713,6 +807,23 @@ const styles = StyleSheet.create({
   msgText: { fontSize: 12, fontWeight: '700' },
   msgTextOk: { color: colors.success },
   msgTextErr: { color: colors.danger },
+
+  // Telegram Verification
+  tgLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#229ED9',
+    borderRadius: radius.pill,
+    paddingVertical: 13,
+    marginTop: 12,
+    ...shadow.raised,
+  },
+  tgLinkBtnBusy: { opacity: 0.6 },
+  tgLinkBtnText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  tgMsg: { fontSize: 11.5, color: colors.danger, marginTop: 10, textAlign: 'center', lineHeight: 16 },
+  tgMsgOk: { color: colors.success },
 
   // Social Links
   addLinkBtn: {

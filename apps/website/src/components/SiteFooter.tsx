@@ -11,13 +11,15 @@ export function SiteFooter() {
               <span>View2Earn</span>
             </div>
             <p className="footer-desc">
-              A task-and-reward platform on Pi Network and Sidra Chain. Earn
-              points for your attention and redeem them for real rewards.
+              A social-engagement and rewards platform on Pi Network and Sidra
+              Chain. Earn points for following, liking and joining — then redeem
+              them for real rewards.
             </p>
           </div>
           <div className="footer-col">
             <h4>Product</h4>
             <Link href="/#features">Features</Link>
+            <Link href="/#roadmap">What&apos;s next</Link>
             <Link href="/#how-it-works">How it works</Link>
             <Link href="/#faq">FAQ</Link>
             <Link href="/#download">Download</Link>
@@ -25,7 +27,7 @@ export function SiteFooter() {
           <div className="footer-col">
             <h4>Company</h4>
             <Link href="/contact">Contact us</Link>
-            <Link href="/partner">Advertise / partner</Link>
+            <Link href="/partner">Partner with us</Link>
             <Link href="/privacy">Privacy policy</Link>
             <Link href="/terms">Terms of service</Link>
           </div>
@@ -41,7 +43,7 @@ export function SiteFooter() {
         </div>
         <div className="footer-bottom">
           <span>© {new Date().getFullYear()} View2Earn. All rights reserved.</span>
-          <span>Pi Network · Sidra Chain · Rewards for your attention</span>
+          <span>Pi Network · Sidra Chain · Rewards for your engagement</span>
         </div>
       </div>
     </footer>

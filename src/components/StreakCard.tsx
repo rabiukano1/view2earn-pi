@@ -11,16 +11,23 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
+import RewardedAdModal from './RewardedAdModal';
 
 export default function StreakCard({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
+  const [adVisible, setAdVisible] = useState(false);
   const streak = useQuery(api.streaks.getStreak, { userId });
   const checkIn = useMutation(api.streaks.checkIn);
 
   if (!streak) return null;
 
-  const onCheckIn = async () => {
+  const onCheckInPress = () => {
+    if (busy || !streak.canCheckIn) return;
+    setAdVisible(true);
+  };
+
+  const handleAdSuccess = async () => {
     if (busy || !streak.canCheckIn) return;
     setBusy(true);
     try {
@@ -52,7 +59,7 @@ export default function StreakCard({ userId }: { userId: Id<'users'> }) {
         <TouchableOpacity
           style={[styles.btn, (!streak.canCheckIn || busy) && styles.btnOff]}
           disabled={!streak.canCheckIn || busy}
-          onPress={onCheckIn}>
+          onPress={onCheckInPress}>
           <Text style={[styles.btnText, (!streak.canCheckIn || busy) && styles.btnTextOff]}>
             {streak.checkedInToday ? '✓ Done' : busy ? '…' : 'Check in'}
           </Text>
@@ -85,6 +92,11 @@ export default function StreakCard({ userId }: { userId: Id<'users'> }) {
           );
         })}
       </View>
+      <RewardedAdModal
+        visible={adVisible}
+        onClose={() => setAdVisible(false)}
+        onSuccess={handleAdSuccess}
+      />
     </View>
   );
 }

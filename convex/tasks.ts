@@ -31,13 +31,17 @@ export const list = query({
       .collect();
     const doneUrls = new Set(completed.map((c) => c.normalizedUrl));
 
-    const inProgress = await ctx.db
+    const mine = await ctx.db
       .query("verifications")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
-    const inProgressTaskIds = new Set(
-      inProgress
-        .filter((v) => v.state !== "REJECTED" && v.state !== "CANCELLED" && v.state !== "RELEASED")
+    // Only hide tasks the user has finished (RELEASED/CANCELLED). In-progress
+    // verifications (USER_CLAIMED_DONE, PROOF_SUBMITTED, ADMIN_REVIEW, …) must
+    // stay in the feed so the "Upload screenshot" / "Verify join" action remains
+    // reachable after the user comes back from the target link.
+    const excludedTaskIds = new Set(
+      mine
+        .filter((v) => v.state === "RELEASED" || v.state === "CANCELLED")
         .map((v) => v.taskId),
     );
 
@@ -53,7 +57,7 @@ export const list = query({
         if (t.creatorUserId === userId) return false;
         const url = normalizeUrl(t.targetUrl);
         if (doneUrls.has(url)) return false;
-        if (inProgressTaskIds.has(t._id)) return false;
+        if (excludedTaskIds.has(t._id)) return false;
         return true;
       })
       .map((t) => ({
@@ -61,6 +65,7 @@ export const list = query({
         type: t.type,
         platform: t.platform,
         targetUrl: t.targetUrl,
+        name: t.name,
         pageId: t.pageId,
         points: t.points,
         verifier: t.verifier,
@@ -163,12 +168,12 @@ export const seed = internalMutation({
     }
     const in30d = Date.now() + 30 * 24 * 60 * 60 * 1000;
     const samples = [
-      { type: "FOLLOW_PAGE", platform: "facebook", targetUrl: "https://facebook.com/pinetwork", points: 50, verifier: "screenshot-ai" },
-      { type: "FOLLOW_PAGE", platform: "tiktok", targetUrl: "https://tiktok.com/@pinetwork", points: 50, verifier: "screenshot-ai" },
-      { type: "JOIN_CHANNEL", platform: "telegram", targetUrl: "https://t.me/pinetwork", points: 75, verifier: "telegram-bot" },
-      { type: "FOLLOW_PAGE", platform: "facebook", targetUrl: "https://facebook.com/sidrachain", points: 50, verifier: "screenshot-ai" },
-      { type: "QUIZ", platform: "app", targetUrl: "", points: 20, verifier: "quiz" },
-      { type: "JOIN_CHANNEL", platform: "telegram", targetUrl: "https://t.me/sidrachain", points: 75, verifier: "telegram-bot" },
+      { type: "FOLLOW_PAGE", platform: "facebook", name: "pinetwork", targetUrl: "https://facebook.com/pinetwork", points: 50, verifier: "screenshot-ai" },
+      { type: "FOLLOW_PAGE", platform: "tiktok", name: "pinetwork", targetUrl: "https://tiktok.com/@pinetwork", points: 50, verifier: "screenshot-ai" },
+      { type: "JOIN_CHANNEL", platform: "telegram", name: "pinetwork", targetUrl: "https://t.me/pinetwork", points: 75, verifier: "telegram-bot" },
+      { type: "FOLLOW_PAGE", platform: "facebook", name: "sidrachain", targetUrl: "https://facebook.com/sidrachain", points: 50, verifier: "screenshot-ai" },
+      { type: "QUIZ", platform: "app", name: "Pi Quiz", targetUrl: "", points: 20, verifier: "quiz" },
+      { type: "JOIN_CHANNEL", platform: "telegram", name: "sidrachain", targetUrl: "https://t.me/sidrachain", points: 75, verifier: "telegram-bot" },
     ];
     for (const s of samples) {
       await ctx.db.insert("tasks", {
@@ -188,6 +193,7 @@ export const create = mutation({
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
+    name: v.optional(v.string()),
     pageId: v.optional(v.string()),
     points: v.number(),
     verifier: v.string(),
@@ -200,6 +206,7 @@ export const create = mutation({
       type: args.type,
       platform: args.platform,
       targetUrl: args.targetUrl,
+      name: args.name,
       pageId: args.pageId,
       points: args.points,
       verifier: args.verifier,

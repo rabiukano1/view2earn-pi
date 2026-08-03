@@ -93,3 +93,4 @@ skills-lock.json
 .convex-configure-*
 .next/
 apps/*/node_modules/
+apps/website/out/

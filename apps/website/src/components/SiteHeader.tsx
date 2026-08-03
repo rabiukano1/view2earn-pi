@@ -11,6 +11,7 @@ export function SiteHeader() {
         <nav className="site-nav">
           <Link href="/#live">Live</Link>
           <Link href="/#features">Features</Link>
+          <Link href="/#roadmap">What&apos;s next</Link>
           <Link href="/#how-it-works">How it works</Link>
           <Link href="/#faq">FAQ</Link>
           <Link href="/contact">Contact</Link>

@@ -78,7 +78,10 @@ export default function ReviewPage() {
                 </td>
                 <td style={{ fontWeight: 600 }}>{r.username}</td>
                 <td><RiskBadge score={r.fraudScore} tier={r.fraudTier} /></td>
-                <td>{r.taskLabel}</td>
+                <td>
+                  <div className="task-name">{r.taskName || r.taskLabel}</div>
+                  <div className="task-url">{r.taskLabel}</div>
+                </td>
                 <td className="num">+{r.points}</td>
                 <td className="num">
                   {r.aiConfidence != null ? `${(r.aiConfidence * 100).toFixed(0)}%` : "—"}

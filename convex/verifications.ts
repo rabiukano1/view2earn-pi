@@ -161,6 +161,15 @@ export const verifyTelegram = mutation({
     ) {
       throw new Error(`Cannot verify from state ${verification.state}`);
     }
+    // Real membership checks need the user's numeric Telegram id (from
+    // Telegram sign-in or "Link Telegram" in Profile). Fail with a clear,
+    // actionable message instead of letting the bot check fail closed.
+    const user = await ctx.db.get(verification.userId);
+    if (!user?.telegramUserId) {
+      throw new Error(
+        "Link your Telegram account first (Profile → Link Telegram) to verify channel joins.",
+      );
+    }
     await ctx.db.patch(verificationId, { state: "PROOF_SUBMITTED" });
     await ctx.scheduler.runAfter(0, internal.telegram.check, { verificationId });
   },

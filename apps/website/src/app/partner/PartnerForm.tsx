@@ -36,8 +36,8 @@ export function PartnerForm() {
         <div className="form-card">
           <h1>Partner with View2Earn</h1>
           <p className="form-sub">
-            Want to list your page or channel as a task, or run rewarded ads to
-            an active audience? Tell us about yourself and we&apos;ll be in touch.
+            Want to grow your page or channel with real, reward-driven
+            engagement? Tell us about yourself and we&apos;ll be in touch.
           </p>
           <form
             onSubmit={(e) => {
@@ -94,7 +94,7 @@ export function PartnerForm() {
                   <option value="pi">Pi Network audience</option>
                   <option value="sidra">Sidra Chain audience</option>
                   <option value="both">Both ecosystems</option>
-                  <option value="ads">Running rewarded ads</option>
+                  <option value="engagement">List my page / channel for engagement</option>
                 </select>
               </div>
             </div>

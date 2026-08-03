@@ -53,15 +53,15 @@ export default function TermsPage() {
           <li>Exploit, reverse-engineer or interfere with the Service.</li>
           <li>Attempt to defraud other users, advertisers or the platform.</li>
           <li>
-            Use the Service in violation of ad network, survey provider or
-            social platform terms of service.
+            Use the Service in violation of social platform, survey provider or
+            reward provider terms of service.
           </li>
         </ul>
 
         <h2>4. Third-party services</h2>
         <p>
-          The Service integrates third-party providers for ads, surveys and
-          reward fulfilment. We are not responsible for those providers'
+          The Service integrates third-party providers for surveys, rewards and
+          fulfilment. We are not responsible for those providers'
           products, content or policies, and the Pi and Sidra economies remain
           fully separate.
         </p>

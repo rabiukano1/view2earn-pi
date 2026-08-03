@@ -38,6 +38,11 @@ export const check = internalAction({
     const data = await ctx.runQuery(internal.telegram.getCheckData, { verificationId });
 
     if (!token || !data?.telegramUserId || !data?.channelUsername) {
+      console.log("[Telegram check] skipped — missing config", {
+        hasToken: !!token,
+        telegramUserId: data?.telegramUserId ?? null,
+        channelUsername: data?.channelUsername ?? null,
+      });
       await ctx.runMutation(internal.telegram.applyResult, { verificationId, isMember: false });
       return;
     }
@@ -47,11 +52,22 @@ export const check = internalAction({
       const res = await fetch(
         `https://api.telegram.org/bot${token}/getChatMember?chat_id=@${data.channelUsername}&user_id=${data.telegramUserId}`,
       );
-      const json = (await res.json()) as { ok: boolean; result?: { status: string } };
+      const json = (await res.json()) as {
+        ok: boolean;
+        result?: { status: string };
+        description?: string;
+      };
+      if (!json.ok) {
+        // Bot not admin / channel private / invalid handle — log for setup.
+        console.log(
+          `[Telegram check] API error for @${data.channelUsername}: ${json.description ?? "unknown"}`,
+        );
+      }
       isMember =
         json.ok &&
         ["member", "administrator", "creator"].includes(json.result?.status ?? "");
-    } catch {
+    } catch (err) {
+      console.error("[Telegram check] getChatMember error:", err);
       isMember = false;
     }
 

@@ -15,6 +15,19 @@ function requireAdmin(token: string) {
   if (token !== expected) throw new Error("Unauthorized");
 }
 
+// Derive a short display name (page/channel handle) from a target URL when the
+// task has no explicit `name`, e.g. "https://t.me/pinetwork" -> "pinetwork".
+function targetNameFromUrl(url: string): string {
+  const clean = url
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/^t\.me\//, "")
+    .replace(/^facebook\.com\//, "")
+    .replace(/^tiktok\.com\/@?/, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "");
+  return clean.replace(/^@/, "");
+}
+
 // Admin panel sign-in. Verifies against the ADMIN_PASSWORD Convex env var
 // (set with: npx convex env set ADMIN_PASSWORD <password>). Defaults to
 // "admin" until set — change it before exposing the panel.
@@ -217,6 +230,7 @@ export const createTask = mutation({
     type: v.string(),
     platform: v.string(),
     targetUrl: v.string(),
+    name: v.optional(v.string()),
     pageId: v.optional(v.string()),
     points: v.number(),
     verifier: v.string(),
@@ -236,6 +250,7 @@ export const updateTask = mutation({
     type: v.optional(v.string()),
     platform: v.optional(v.string()),
     targetUrl: v.optional(v.string()),
+    name: v.optional(v.string()),
     pageId: v.optional(v.string()),
     points: v.optional(v.number()),
     verifier: v.optional(v.string()),
@@ -292,6 +307,7 @@ export const listVerifications = query({
           fraudScore: user?.fraudScore ?? 0,
           fraudTier: fraudTier(user?.fraudScore ?? 0),
           taskLabel: task ? `${task.type} · ${task.platform}` : "deleted task",
+          taskName: task?.name || targetNameFromUrl(task?.targetUrl ?? "") || task?.targetUrl || "",
           points: task?.points ?? 0,
           screenshotUrl,
         };

@@ -9,6 +9,7 @@ import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui
 type TaskForm = {
   type: string;
   platform: string;
+  name: string;
   targetUrl: string;
   pageId: string;
   points: number;
@@ -20,12 +21,42 @@ type TaskForm = {
 const EMPTY: TaskForm = {
   type: "FOLLOW_PAGE",
   platform: "facebook",
+  name: "",
   targetUrl: "",
   pageId: "",
   points: 50,
   verifier: "screenshot-ai",
   maxCompletions: 1000,
   expiresDays: 30,
+};
+
+function buildTargetUrl(platform: string, name: string): string {
+  const n = name.trim().replace(/^@/, "");
+  if (!n) return "";
+  if (platform === "facebook") return `https://facebook.com/${n}`;
+  if (platform === "tiktok") return `https://tiktok.com/@${n}`;
+  if (platform === "telegram") return `https://t.me/${n}`;
+  if (platform === "instagram") return `https://instagram.com/${n}`;
+  return "";
+}
+
+function nameFromUrl(url: string): string {
+  return url
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/^t\.me\//, "")
+    .replace(/^facebook\.com\//, "")
+    .replace(/^tiktok\.com\/@?/, "")
+    .replace(/^instagram\.com\//, "")
+    .replace(/[?#].*$/, "")
+    .replace(/\/+$/, "")
+    .replace(/^@/, "");
+}
+
+const PLACEHOLDERS: Record<string, string> = {
+  facebook: "pinetwork",
+  tiktok: "@pinetwork",
+  telegram: "pinetwork",
+  app: "Quiz / campaign name",
 };
 
 export default function TasksPage() {
@@ -50,6 +81,7 @@ export default function TasksPage() {
     setForm({
       type: t.type,
       platform: t.platform,
+      name: t.name ?? (t.targetUrl ? nameFromUrl(t.targetUrl) : ""),
       targetUrl: t.targetUrl,
       pageId: t.pageId ?? "",
       points: t.points,
@@ -60,10 +92,24 @@ export default function TasksPage() {
     setOpen(true);
   };
 
+  const onNameChange = (value: string) => {
+    set({ name: value, targetUrl: buildTargetUrl(form.platform, value) });
+  };
+
+  const onPlatformChange = (value: string) => {
+    set({ platform: value, targetUrl: buildTargetUrl(value, form.name) });
+  };
+
   const save = async () => {
-    const { expiresDays, pageId, ...rest } = form;
+    const { expiresDays, pageId, name, targetUrl, ...rest } = form;
+    const trimmedName = name.trim();
     const expiresAt = Date.now() + expiresDays * 86400000;
-    const fields = { ...rest, pageId: pageId.trim() || undefined };
+    const fields = {
+      ...rest,
+      name: trimmedName || undefined,
+      targetUrl: trimmedName ? buildTargetUrl(form.platform, trimmedName) : targetUrl,
+      pageId: pageId.trim() || undefined,
+    };
     try {
       if (editing) {
         await updateTask({ taskId: editing, ...fields, expiresAt });
@@ -102,7 +148,10 @@ export default function TasksPage() {
               <tr key={t._id}>
                 <td>{t.type}</td>
                 <td>{t.platform}</td>
-                <td className="truncate">{t.targetUrl || "—"}</td>
+                <td className="truncate">
+                  <div className="task-name">{t.name || "—"}</div>
+                  {t.targetUrl && <div className="task-url">{t.targetUrl}</div>}
+                </td>
                 <td className="num">{t.points}</td>
                 <td><span className="badge badge-gray">{t.verifier}</span></td>
                 <td>
@@ -150,7 +199,7 @@ export default function TasksPage() {
             </select>
           </Field>
           <Field label="Platform">
-            <select value={form.platform} onChange={(e) => set({ platform: e.target.value })}>
+            <select value={form.platform} onChange={(e) => onPlatformChange(e.target.value)}>
               <option value="facebook">facebook</option>
               <option value="tiktok">tiktok</option>
               <option value="telegram">telegram</option>
@@ -158,15 +207,30 @@ export default function TasksPage() {
             </select>
           </Field>
         </div>
-        <Field label="Target URL">
+        <Field
+          label={
+            form.platform === "app" ? "Name" : "Page / Channel name"
+          }
+          hint={
+            form.platform === "app"
+              ? "Shown to users and in the review queue"
+              : "Type the page or channel handle — the link is built from it automatically"
+          }>
           <input
-            value={form.targetUrl}
-            onChange={(e) => set({ targetUrl: e.target.value })}
-            placeholder="https://facebook.com/yourpage"
+            value={form.name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder={PLACEHOLDERS[form.platform] ?? "name"}
+            autoFocus
           />
         </Field>
+        {form.name.trim() && form.platform !== "app" && (
+          <div className="url-preview">
+            <span>Link</span>
+            <code>{form.targetUrl}</code>
+          </div>
+        )}
         {form.platform === "facebook" && (
-          <Field label="Facebook Page ID (numeric — reliable deep links on FB Lite)">
+          <Field label="Facebook Page ID (optional — reliable deep links on FB Lite)">
             <input
               value={form.pageId}
               onChange={(e) => set({ pageId: e.target.value })}
