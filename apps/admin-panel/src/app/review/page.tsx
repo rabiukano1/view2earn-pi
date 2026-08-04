@@ -65,7 +65,6 @@ export default function ReviewPage() {
               <tr key={r._id}>
                 <td>
                   {r.screenshotUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={r.screenshotUrl}
                       alt="proof screenshot"
@@ -128,7 +127,6 @@ export default function ReviewPage() {
 
       <Modal title="Proof screenshot" open={preview !== null} onClose={() => setPreview(null)}>
         {preview && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt="proof screenshot full size" className="shot-full" />
         )}
         <div className="modal-actions">
