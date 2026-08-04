@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as PiProvider from "../PiProvider.js";
 import type * as ResendOTP from "../ResendOTP.js";
 import type * as TelegramProvider from "../TelegramProvider.js";
 import type * as academy from "../academy.js";
@@ -29,10 +30,13 @@ import type * as lib_guards from "../lib/guards.js";
 import type * as lib_ratelimit from "../lib/ratelimit.js";
 import type * as linkedProfiles from "../linkedProfiles.js";
 import type * as marketplace from "../marketplace.js";
+import type * as piAuth from "../piAuth.js";
+import type * as piPayments from "../piPayments.js";
 import type * as points from "../points.js";
 import type * as quiz from "../quiz.js";
 import type * as quizSeed from "../quizSeed.js";
 import type * as referrals from "../referrals.js";
+import type * as reports from "../reports.js";
 import type * as rewards from "../rewards.js";
 import type * as rewardsConfig from "../rewardsConfig.js";
 import type * as sidraAuth from "../sidraAuth.js";
@@ -54,6 +58,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  PiProvider: typeof PiProvider;
   ResendOTP: typeof ResendOTP;
   TelegramProvider: typeof TelegramProvider;
   academy: typeof academy;
@@ -75,10 +80,13 @@ declare const fullApi: ApiFromModules<{
   "lib/ratelimit": typeof lib_ratelimit;
   linkedProfiles: typeof linkedProfiles;
   marketplace: typeof marketplace;
+  piAuth: typeof piAuth;
+  piPayments: typeof piPayments;
   points: typeof points;
   quiz: typeof quiz;
   quizSeed: typeof quizSeed;
   referrals: typeof referrals;
+  reports: typeof reports;
   rewards: typeof rewards;
   rewardsConfig: typeof rewardsConfig;
   sidraAuth: typeof sidraAuth;

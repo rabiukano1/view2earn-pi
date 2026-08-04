@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@convex/api";
-import { useAdminMutation, useAdminQuery } from "../useAdmin";
+import { useAdminAction, useAdminMutation, useAdminQuery } from "../useAdmin";
 import type { Id } from "@convex/dataModel";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
 
@@ -14,6 +14,8 @@ export default function UsersPage() {
   const deleteUser = useAdminMutation(api.admin.deleteUser);
 
   const adjustPoints = useAdminMutation(api.admin.adjustPoints);
+  const generatePdf = useAdminAction(api.reports.generatePdf);
+  const [generatingPdf, setGeneratingPdf] = useState<Id<"users"> | null>(null);
 
   const [editing, setEditing] = useState<Id<"users"> | null>(null);
   const [form, setForm] = useState<UserForm>({ tier: 0, fraudScore: 0, country: "" });
@@ -50,6 +52,20 @@ export default function UsersPage() {
       setPointsModal(null);
     } catch (e) {
       alert(String(e));
+    }
+  };
+
+  const handleDownloadPdf = async (userId: Id<"users">) => {
+    setGeneratingPdf(userId);
+    try {
+      const result = await generatePdf({ userId });
+      if (result?.url) {
+        window.open(result.url, "_blank");
+      }
+    } catch (e) {
+      alert("Failed to generate PDF: " + String(e));
+    } finally {
+      setGeneratingPdf(null);
     }
   };
 
@@ -92,6 +108,12 @@ export default function UsersPage() {
                       className="btn btn-accent btn-sm"
                       onClick={() => setPointsModal({ userId: u._id, username: u.username })}>
                       + Points
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      disabled={generatingPdf === u._id}
+                      onClick={() => handleDownloadPdf(u._id)}>
+                      {generatingPdf === u._id ? "Generating…" : "PDF"}
                     </button>
                     <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>Edit</button>
                     <button

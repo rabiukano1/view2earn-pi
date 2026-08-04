@@ -11,7 +11,7 @@
       --text-main: #f8fafc;
       --text-sub: #94a3b8;
       --accent: #7c3aed;
-      --success: #10b981;
+      --accent-light: #c4b5fd;
       --border: #334155;
     }
     body {
@@ -23,24 +23,24 @@
       line-height: 1.6;
     }
     .container {
-      max-width: 860px;
+      max-width: 900px;
       margin: 0 auto;
       padding: 40px 20px;
     }
     .header {
       text-align: center;
       margin-bottom: 40px;
-      padding-bottom: 20px;
+      padding-bottom: 24px;
       border-bottom: 1px solid var(--border);
     }
     .badge {
       display: inline-block;
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--success);
+      background: rgba(124, 58, 237, 0.15);
+      color: var(--accent-light);
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 1px;
-      padding: 4px 12px;
+      padding: 4px 14px;
       border-radius: 999px;
       margin-bottom: 12px;
       text-transform: uppercase;
@@ -66,9 +66,11 @@
     h2 {
       font-size: 20px;
       font-weight: 800;
-      color: #c4b5fd;
+      color: var(--accent-light);
       margin-top: 0;
       margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 8px;
     }
     h3 {
       font-size: 16px;
@@ -89,12 +91,32 @@
       margin-bottom: 6px;
     }
     a {
-      color: var(--accent);
+      color: var(--accent-light);
       text-decoration: none;
       font-weight: 600;
     }
     a:hover {
       text-decoration: underline;
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .contact-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .contact-card h4 {
+      margin: 0 0 4px 0;
+      font-size: 14px;
+      color: var(--text-main);
+    }
+    .contact-card a {
+      font-size: 13.5px;
     }
     .footer {
       text-align: center;
@@ -107,74 +129,153 @@
 <body>
   <div class="container">
     <div class="header">
-      <div class="badge">GDPR & CCPA Compliant</div>
-      <h1>Privacy Policy for View2Earn</h1>
-      <div class="meta">Effective Date: August 1, 2026 | Last Updated: August 1, 2026</div>
+      <span class="badge">Security &amp; Transparency</span>
+      <h1>Privacy Policy</h1>
+      <div class="meta">Last Updated: August 2026</div>
     </div>
 
     <div class="card">
-      <h2>1. Introduction & Overview</h2>
-      <p>Welcome to View2Earn ("Company," "we," "us," or "our"). We operate the View2Earn mobile application, web applications, and associated backend infrastructure (https://view2aern.org).</p>
-      <p>This Privacy Policy explains how we collect, use, and safeguard your personal information. We adhere strictly to Google AdMob Rewarded Inventory Policies, Google Play Developer Program Policies, Apple iOS Privacy Guidelines (NSPrivacy), GDPR, CCPA/CPRA, and survey partner network terms (CPX Research, BitLabs, Pollfish, InBrain).</p>
+      <h2>Introduction &amp; Overview</h2>
+      <p>Welcome to View2Earn ("View2Earn," "we," "our," or "us"). View2Earn is committed to protecting your privacy and safeguarding your personal information. We believe that privacy is a fundamental part of building a secure, transparent, and trustworthy platform.</p>
+      <p>This Privacy Policy explains how we collect, use, store, protect, disclose, and process your personal information when you access or use the View2Earn website, mobile applications, and related services (collectively, the "Service").</p>
+      <p>Our goal is to collect only the information necessary to provide and improve the Service, maintain platform security, prevent fraud, comply with legal obligations, and deliver a reliable experience for all users.</p>
     </div>
 
     <div class="card">
       <h2>2. Information We Collect</h2>
-      <h3>A. Information You Provide Directly</h3>
+      <p>View2Earn collects only the information necessary to provide, secure, improve, and operate the Service. The information we collect depends on how you interact with the Service and may include the following categories.</p>
+
+      <h3>2.1 Account Information</h3>
       <ul>
-        <li><strong>Account Data:</strong> Email address, display name, and unique User ID (via Google OAuth or email sign-in).</li>
-        <li><strong>Public Payout Addresses:</strong> Voluntary public EVM or Solana blockchain wallet addresses for token distribution. <em>We NEVER collect or store private keys or seed phrases.</em></li>
-        <li><strong>Support Submissions:</strong> Optional verification proof screenshots voluntarily uploaded for support requests.</li>
+        <li>Your username or display name.</li>
+        <li>Your registered email address, where applicable.</li>
+        <li>Your selected blockchain ecosystem (such as Pi Network or Sidra Chain).</li>
+        <li>Your external user identifier or account identifier.</li>
+        <li>Your country or region.</li>
+        <li>Your account creation date and account status.</li>
       </ul>
 
-      <h3>B. Automated & Anti-Fraud Signals</h3>
+      <h3>2.2 Activity Information</h3>
       <ul>
-        <li><strong>Mobile Advertising Identifiers:</strong> Google Advertising ID (GAID/AAID) and Apple IDFA (subject to user ATT permission).</li>
-        <li><strong>Device Attributes:</strong> Model, OS version, locale, screen resolution, and connection type.</li>
-        <li><strong>Security Signals:</strong> Anonymized device signal hashes (system boot time and time zone offsets) used strictly to verify human traffic and prevent bot abuse.</li>
+        <li>Tasks completed, points earned, adjusted, redeemed, or forfeited.</li>
+        <li>Referral relationships and referral activity.</li>
+        <li>Survey participation, quiz results, and reward redemption history.</li>
+        <li>Transaction records relating to eligible in-app rewards or supported wallet interactions.</li>
+        <li>Fraud prevention and verification records.</li>
+      </ul>
+
+      <h3>2.3 Device and Technical Information</h3>
+      <ul>
+        <li>Device type, operating system, and browser type/version.</li>
+        <li>Device identifiers and IP address (including general location).</li>
+        <li>Language, time zone settings, and network information.</li>
+        <li>Limited device fingerprinting signals, used solely for fraud detection and platform security.</li>
+      </ul>
+
+      <h3>2.4 Information We Do Not Collect</h3>
+      <p>To protect your privacy and security, View2Earn does not collect or store:</p>
+      <ul>
+        <li>Your Pi Network or Sidra Chain passphrase, seed phrase, or private keys.</li>
+        <li>Your wallet recovery phrases.</li>
+        <li>Personal messages exchanged on external platforms.</li>
+        <li>Your social media follower or friend counts for public display.</li>
       </ul>
     </div>
 
     <div class="card">
-      <h2>3. How We Use Your Information & Legal Basis</h2>
-      <p>We process your data strictly for legitimate operational and compliance purposes under GDPR Art. 6:</p>
+      <h2>3. How We Use Your Information</h2>
+      <p>We use your personal information only for legitimate business purposes:</p>
       <ul>
-        <li>Maintaining user point ledgers, daily streak rewards, and instant PIPRO token swaps.</li>
-        <li>Serving voluntary AdMob rewarded video ads upon your explicit request.</li>
-        <li>Routing survey offerwalls and auto-crediting reward webhooks.</li>
-        <li>Detecting and blocking invalid traffic, bot farms, and proxy/VPN fraud.</li>
+        <li><strong>To Provide the Service:</strong> Create and manage accounts, authentication, calculating reward points, and processing redemptions.</li>
+        <li><strong>To Maintain Security and Prevent Fraud:</strong> Detecting bot traffic, automated activity, multiple accounts, and investigating violations of our Terms.</li>
+        <li><strong>To Improve the Service:</strong> Analyzing platform performance, fixing bugs, and developing new features.</li>
+        <li><strong>To Communicate:</strong> Responding to inquiries and sending critical security or service updates.</li>
+        <li><strong>Legal Compliance:</strong> Complying with applicable laws, court orders, and enforcing legal agreements.</li>
       </ul>
     </div>
 
     <div class="card">
-      <h2>4. Third-Party Network Disclosures</h2>
-      <p>We do not sell your personal data. Data is shared only with authorized partners:</p>
+      <h2>4. Legal Basis for Processing</h2>
+      <p>We process personal information under the following valid legal bases:</p>
       <ul>
-        <li><strong>Google AdMob (Google LLC):</strong> Ad serving and Google UMP consent framework.</li>
-        <li><strong>Survey Networks:</strong> CPX Research, BitLabs, Pollfish, InBrain.</li>
-        <li><strong>Cloud Providers:</strong> Convex Cloud, Cloudflare, Vercel.</li>
-        <li><strong>Public Blockchains:</strong> Public Solana and EVM ledgers for token payouts.</li>
+        <li><strong>Performance of a Contract:</strong> Fulfilling our obligations under our Terms of Service.</li>
+        <li><strong>Legitimate Interests:</strong> Protecting the Service from fraud, maintaining system integrity, and improving performance.</li>
+        <li><strong>Compliance with Legal Obligations:</strong> Responding to lawful government requests or regulatory audits.</li>
+        <li><strong>Consent:</strong> When you provide explicit consent for specific features or marketing communications.</li>
       </ul>
     </div>
 
     <div class="card">
-      <h2>5. User Rights & Account Deletion</h2>
-      <p>Under GDPR and CCPA, you have the right to access, rectify, export, or permanently delete your account and personal data.</p>
-      <p>To request account deletion, click <strong>Profile → Settings → Account Security → Delete Account</strong> inside the app, or email <a href="mailto:privacy@view2aern.org">privacy@view2aern.org</a>.</p>
+      <h2>5. How We Share Your Information</h2>
+      <p>We do not sell, rent, or trade your personal information. We share it only in limited circumstances:</p>
+      <ul>
+        <li><strong>Service Providers:</strong> Cloud hosting, authentication, communication services, and fraud prevention providers acting on our behalf.</li>
+        <li><strong>Advertising and Reward Partners:</strong> Survey networks and ad partners to verify participation, prevent fraud, and credit rewards.</li>
+        <li><strong>Legal Requirements:</strong> Disclosing details to satisfy legal subpoenas, law enforcement requests, or protect platform safety.</li>
+      </ul>
     </div>
 
     <div class="card">
-      <h2>6. Contact & Legal DPO</h2>
-      <p>For any privacy inquiries or Data Protection Officer communications:</p>
+      <h2>6. Cookies &amp; Data Retention</h2>
+      <h3>Cookies &amp; Similar Tech</h3>
+      <p>We use essential cookies to maintain secure sessions and prevent fraud. We may use performance cookies to understand app metrics and improve functional settings. You can manage cookies via your browser or device settings.</p>
+
+      <h3>Data Retention Policy</h3>
+      <p>We retain personal information only as long as necessary to fulfill business purposes, resolve disputes, prevent fraud, or satisfy legal/financial obligations. Upon account deletion requests, we take reasonable steps to securely delete, anonymize, or destroy your data, except where we are legally required to retain it.</p>
+    </div>
+
+    <div class="card">
+      <h2>7. Security &amp; International Transfers</h2>
+      <h3>Data Security</h3>
+      <p>We apply industry-standard security measures (including encryption, secure access controls, system monitoring, and backup procedures) to prevent unauthorized access. You are responsible for keeping your login credentials confidential.</p>
+
+      <h3>International Data Transfers</h3>
+      <p>We operate globally, and your information may be processed in countries other than your residence. We ensure appropriate safeguards are implemented with all trusted cloud providers and partners.</p>
+    </div>
+
+    <div class="card">
+      <h2>8. Children's Privacy</h2>
+      <p>View2Earn is not directed to children under 18. We do not knowingly collect personal information from children. If we discover a child under 18 has created an account, we will take immediate steps to delete their data.</p>
+    </div>
+
+    <div class="card">
+      <h2>9. Your Privacy Rights</h2>
+      <p>Depending on your jurisdiction (such as GDPR or CCPA), you may exercise the following rights:</p>
       <ul>
-        <li><strong>Official Domain:</strong> <a href="https://view2aern.org">https://view2aern.org</a></li>
-        <li><strong>Privacy Email:</strong> <a href="mailto:privacy@view2aern.org">privacy@view2aern.org</a></li>
-        <li><strong>Support Email:</strong> <a href="mailto:support@view2aern.org">support@view2aern.org</a></li>
+        <li>Right to access, correct, or request the deletion of your personal data.</li>
+        <li>Right to withdraw consent at any time (where processing is based on consent).</li>
+        <li>Right to object to or restrict specific processing operations.</li>
+        <li>Right to obtain a portable copy of your data in a structured, machine-readable format.</li>
       </ul>
+      <p>To exercise these rights, please email us directly at <a href="mailto:privacy@view2earn.org">privacy@view2earn.org</a>.</p>
+    </div>
+
+    <div class="card">
+      <h2>10. Contact Information</h2>
+      <p>If you have any questions, feedback, or data requests regarding this Privacy Policy, please reach out via our official communication channels:</p>
+
+      <div class="contact-grid">
+        <div class="contact-card">
+          <h4>Privacy Team</h4>
+          <a href="mailto:privacy@view2earn.org">privacy@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>General Support</h4>
+          <a href="mailto:support@view2earn.org">support@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>Security Vulnerabilities</h4>
+          <a href="mailto:security@view2earn.org">security@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>Legal Notices</h4>
+          <a href="mailto:legal@view2earn.org">legal@view2earn.org</a>
+        </div>
+      </div>
     </div>
 
     <div class="footer">
-      &copy; 2026 View2Earn Platform. All rights reserved.
+      &copy; 2026 View2Earn. All rights reserved. | <a href="terms.html">Terms &amp; Conditions</a>
     </div>
   </div>
 </body>

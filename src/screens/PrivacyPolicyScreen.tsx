@@ -40,7 +40,7 @@ export default function PrivacyPolicyScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: textMain }]}>PRIVACY POLICY</Text>
-          <Text style={styles.headerSub}>Effective Date: August 1, 2026</Text>
+          <Text style={styles.headerSub}>Last Updated: August 2026</Text>
         </View>
         <View style={[styles.iconBtn, styles.iconBtnGhost]} />
       </View>
@@ -53,58 +53,83 @@ export default function PrivacyPolicyScreen() {
           <Text style={styles.sectionBadge}>GDPR &amp; CCPA COMPLIANT</Text>
           <Text style={[styles.heading, { color: textMain }]}>1. Introduction &amp; Overview</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            Welcome to View2Earn (&quot;Company,&quot; &quot;we,&quot; or &quot;us&quot;). We operate the View2Earn mobile application, website (https://view2aern.org), and associated backend services.
+            Welcome to View2Earn ("View2Earn," "we," "our," or "us"). We are committed to protecting your privacy and safeguarding your personal information. We believe that privacy is a fundamental part of building a secure, transparent, and trustworthy platform.
           </Text>
-          <Text style={[styles.paragraph, { color: textSub }]}>
-            This Privacy Policy explains how we collect, use, and protect your information when using our app. We comply strictly with Google AdMob policies, Google Play Developer terms, Apple iOS privacy guidelines (NSPrivacy), GDPR, CCPA, and partner survey terms.
+          <Text style={[styles.paragraph, { color: textSub }, { marginTop: 8 }]}>
+            This Privacy Policy explains how we collect, use, store, protect, disclose, and process your personal information when you access or use the View2Earn website, mobile applications, and related services (collectively, the "Service").
           </Text>
         </View>
 
         <View style={[styles.card, dark && styles.cardDark]}>
           <Text style={[styles.heading, { color: textMain }]}>2. Information We Collect</Text>
-          <Text style={[styles.subheading, { color: textMain }]}>A. Information You Provide</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            • Account Profile (Email address, OAuth display name, User ID){'\n'}
-            • Public Payout Addresses (Voluntary EVM or Solana public wallet addresses). We NEVER ask for private keys or seed phrases.{'\n'}
-            • Support &amp; Verification Submissions (Proof screenshots voluntarily uploaded).
+            We collect only the minimum personal information reasonably necessary to operate, secure, and improve the platform.
+          </Text>
+          
+          <Text style={[styles.subheading, { color: textMain }]}>A. Account Information</Text>
+          <Text style={[styles.paragraph, { color: textSub }]}>
+            • Username and display name.{'\n'}
+            • Registered email address, where applicable.{'\n'}
+            • Selected blockchain ecosystem (Pi Network / Sidra Chain) and external user identifiers.{'\n'}
+            • Account creation date and status.
           </Text>
 
-          <Text style={[styles.subheading, { color: textMain }]}>B. Automated &amp; Anti-Fraud Signals</Text>
+          <Text style={[styles.subheading, { color: textMain }]}>B. Activity Information</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            • Advertising Identifiers (Google GAID/AAID &amp; Apple IDFA){'\n'}
-            • Device Attributes (Model, OS version, locale, network type){'\n'}
-            • Anonymized Device Fingerprints (Boot time and time zone offsets used strictly to prevent bot traffic and click farming).
+            • Completed tasks, reward points (earned, redeemed, forfeited).{'\n'}
+            • Referral code relationships, survey participation, quiz results.{'\n'}
+            • Wallet transactions and fraud prevention history.
+          </Text>
+
+          <Text style={[styles.subheading, { color: textMain }]}>C. Device &amp; Technical Signals</Text>
+          <Text style={[styles.paragraph, { color: textSub }]}>
+            • Device model, OS, browser type, and version.{'\n'}
+            • IP address, approximate geolocation, locale, and timezone.{'\n'}
+            • Secure device/hardware fingerprints used strictly to detect clones, emulators, and bots.
+          </Text>
+
+          <Text style={[styles.subheading, { color: textMain }]}>D. Information We Do NOT Collect</Text>
+          <Text style={[styles.paragraph, { color: textSub }]}>
+            • We NEVER collect or store your Pi Network or Sidra Chain passphrase, seed phrases, or private keys.
           </Text>
         </View>
 
         <View style={[styles.card, dark && styles.cardDark]}>
           <Text style={[styles.heading, { color: textMain }]}>3. How We Use Your Information</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            • Maintaining your points ledger, streaks, and PIPRO swaps{'\n'}
-            • Serving voluntary AdMob rewarded video ads upon your request{'\n'}
-            • Routing survey offerwalls (CPX Research, BitLabs, etc.) and auto-crediting completed rewards{'\n'}
-            • Protecting our advertising partners against automated bots or multi-account abuse.
+            • **To Provide the Service**: Managing your profile, point balances, streaks, and PIPRO swaps.{'\n'}
+            • **To Maintain Security**: Detecting fraud, multiple account farms, automated scripts, and bots.{'\n'}
+            • **To Communicate**: Providing support responses and sending security notifications.{'\n'}
+            • **Legal Obligations**: Complying with regulatory requirements or lawful legal subpoenas.
           </Text>
         </View>
 
         <View style={[styles.card, dark && styles.cardDark]}>
-          <Text style={[styles.heading, { color: textMain }]}>4. Third-Party Disclosures</Text>
+          <Text style={[styles.heading, { color: textMain }]}>4. Legal Basis &amp; Data Sharing</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            • Google AdMob (Ad serving and UMP consent framework){'\n'}
-            • Survey Networks (CPX Research, BitLabs, Pollfish){'\n'}
-            • Cloud Infrastructure (Convex Cloud, Cloudflare, Vercel){'\n'}
-            • Public Blockchains (Solana &amp; EVM public ledgers for payouts).
+            • **Legal Basis**: We process data under the performance of a contract (Terms of Service), legitimate business interests (anti-fraud), compliance with legal rules, or user consent.{'\n'}
+            • **No Selling**: We do not sell or trade your personal information. We share it only with cloud hosts, authentication platforms, survey providers (CPX, BitLabs), ad partners, and public blockchains solely to fulfill functions.
           </Text>
         </View>
 
         <View style={[styles.card, dark && styles.cardDark]}>
-          <Text style={[styles.heading, { color: textMain }]}>5. User Rights &amp; Account Deletion</Text>
+          <Text style={[styles.heading, { color: textMain }]}>5. Cookies &amp; Data Retention</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            Under GDPR &amp; CCPA, you have the right to access, rectify, port, or request permanent deletion of your data at any time.
+            • We use essential identifiers to secure sessions.{'\n'}
+            • We retain personal information only as long as necessary to fulfill purposes, prevent fraud, or satisfy audits.{'\n'}
+            • Upon deletion request, we securely delete or anonymize your data, except where legally required to retain it.
+          </Text>
+        </View>
+
+        <View style={[styles.card, dark && styles.cardDark]}>
+          <Text style={[styles.heading, { color: textMain }]}>6. Data Security &amp; Rights</Text>
+          <Text style={[styles.paragraph, { color: textSub }]}>
+            • We enforce encryption, access limits, and monitoring to protect your information.{'\n'}
+            • Users have the right to access, rectify, restrict, or request permanent deletion of their data at any time.
           </Text>
           <TouchableOpacity
             style={styles.actionBtn}
-            onPress={() => Linking.openURL('mailto:privacy@view2aern.org?subject=Account%20Deletion%20Request')}
+            onPress={() => Linking.openURL('mailto:privacy@view2earn.org?subject=Account%20Deletion%20Request')}
             activeOpacity={0.85}>
             <Icon name="trash-can" iconStyle="solid" size={16} color="#FFFFFF" />
             <Text style={styles.actionBtnText}>Request Data / Account Deletion</Text>
@@ -112,21 +137,21 @@ export default function PrivacyPolicyScreen() {
         </View>
 
         <View style={[styles.card, dark && styles.cardDark]}>
-          <Text style={[styles.heading, { color: textMain }]}>6. Contact &amp; Legal DPO</Text>
+          <Text style={[styles.heading, { color: textMain }]}>7. Contact &amp; DPO</Text>
           <Text style={[styles.paragraph, { color: textSub }]}>
-            For any privacy inquiries or DPO communications:
+            For any privacy inquiries, data deletion requests, or legal notices, contact our official channels:
           </Text>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => Linking.openURL('mailto:privacy@view2aern.org')}>
+            onPress={() => Linking.openURL('mailto:privacy@view2earn.org')}>
             <Icon name="envelope" iconStyle="solid" size={16} color={colors.primary} />
-            <Text style={styles.linkText}>privacy@view2aern.org</Text>
+            <Text style={styles.linkText}>privacy@view2earn.org</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => Linking.openURL('https://view2aern.org/privacy')}>
+            onPress={() => Linking.openURL('https://view2earn.org/privacy')}>
             <Icon name="globe" iconStyle="solid" size={16} color={colors.primary} />
-            <Text style={styles.linkText}>https://view2aern.org/privacy</Text>
+            <Text style={styles.linkText}>https://view2earn.org/privacy</Text>
           </TouchableOpacity>
         </View>
 

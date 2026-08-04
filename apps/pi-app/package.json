@@ -1,0 +1,27 @@
+{
+  "name": "@view2earn/pi-app",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbo",
+    "build": "next build",
+    "start": "next start",
+    "deploy": "next build && wrangler pages deploy --branch production",
+    "deploy:preview": "next build && wrangler pages deploy",
+    "deploy:setup": "wrangler pages project create view2earn-pi --force --production-branch production"
+  },
+  "dependencies": {
+    "@convex-dev/auth": "^0.0.94",
+    "convex": "^1.42.1",
+    "next": "^15.3.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.8.0",
+    "wrangler": "^4.118.0"
+  }
+}

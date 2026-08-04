@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import type { FunctionReference } from "convex/server";
 
 // The admin password, stored at login by AuthGate. Sent as `token` on every
@@ -29,5 +29,12 @@ export function useAdminMutation<Ref extends FunctionReference<"mutation">>(
   ref: Ref,
 ): (args?: Given<Ref>) => Promise<Ret<Ref>> {
   const run = useMutation(ref);
+  return (args?: Given<Ref>) => run({ ...(args ?? {}), token: pw() } as any);
+}
+
+export function useAdminAction<Ref extends FunctionReference<"action">>(
+  ref: Ref,
+): (args?: Given<Ref>) => Promise<Ret<Ref>> {
+  const run = useAction(ref);
   return (args?: Given<Ref>) => run({ ...(args ?? {}), token: pw() } as any);
 }

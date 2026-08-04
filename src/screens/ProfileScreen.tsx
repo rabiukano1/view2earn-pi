@@ -106,6 +106,8 @@ export default function ProfileScreen() {
   const setPayoutWallet = useMutation(api.wallets.setPayoutWallet);
   const linkStart = useMutation(api.telegramAuth.linkStart);
   const linkComplete = useMutation(api.telegramAuth.linkComplete);
+  const generatePdf = useAction(api.reports.generatePdf);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [tgNonce, setTgNonce] = useState<string | null>(null);
   const [tgBusy, setTgBusy] = useState(false);
   const [tgMsg, setTgMsg] = useState('');
@@ -175,6 +177,21 @@ export default function ProfileScreen() {
     setBioCode('');
     setProfileUrl('');
     setUsername('');
+  };
+
+  const handleDownloadReport = async () => {
+    if (!userId || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const result = await generatePdf({ userId });
+      if (result?.url) {
+        await Linking.openURL(result.url);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to generate report. Please try again.');
+    } finally {
+      setPdfBusy(false);
+    }
   };
 
   const handleRequestCode = async () => {
@@ -285,6 +302,14 @@ export default function ProfileScreen() {
             subtitle="Ledger records"
             dark={dark}
             onPress={() => stackNav.navigate('PointsHistory')}
+          />
+          <QuickActionTile
+            icon="file-pdf"
+            tint="#EF4444"
+            label={pdfBusy ? 'Generating…' : 'Download Report'}
+            subtitle="PDF activity report"
+            dark={dark}
+            onPress={handleDownloadReport}
           />
         </View>
 

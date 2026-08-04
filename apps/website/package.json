@@ -11,6 +11,7 @@
     "deploy:setup": "wrangler pages project create view2earn --force --production-branch production"
   },
   "dependencies": {
+    "@convex-dev/auth": "^0.0.94",
     "convex": "^1.42.1",
     "next": "^15.3.1",
     "react": "^19.2.0",

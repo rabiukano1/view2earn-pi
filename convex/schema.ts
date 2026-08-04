@@ -224,6 +224,7 @@ export default defineSchema({
     phoneNumber: v.string(),
     providerRef: v.optional(v.string()),
     status: v.string(),
+    paymentId: v.optional(v.string()), // Pi SDK payment id when paidWith === "PI"
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
 

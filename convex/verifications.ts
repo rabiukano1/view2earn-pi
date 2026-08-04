@@ -304,8 +304,9 @@ export const aiCheck = internalAction({
         const targetInfo = task
           ? `Target: "${task.targetUrl}" on platform "${task.platform || "social media"}"`
           : "Social task completion screenshot";
-        const actionHint = task && Array.isArray(task.steps) && task.steps.length > 0
-          ? `The user was asked to do ALL of these: ${task.steps
+        const taskSteps = task && (task as any).steps;
+        const actionHint = Array.isArray(taskSteps) && taskSteps.length > 0
+          ? `The user was asked to do ALL of these: ${taskSteps
               .map((s: any) => `${s.action} ${s.label ? `(${s.label}) ` : ""}on ${s.targetUrl}`)
               .join("; ")}.`
           : "";

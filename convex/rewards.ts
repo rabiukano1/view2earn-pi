@@ -178,6 +178,13 @@ export const refundRedemption = internalMutation({
 
     await ctx.db.patch(redemptionId, { status: "refunded" });
 
+    if (r.paidWith === "PI") {
+      // Pi purchases are refunded by cancelling the Pi payment (done by the
+      // approveAndFulfill action); the Pi network returns the funds. The user
+      // paid no points here, so there is no ledger entry to reverse.
+      return;
+    }
+
     if (r.paidWith === "PIPRO") {
       const wallet = await ctx.db
         .query("wallets")
@@ -290,13 +297,14 @@ export const myReferral = query({
 });
 
 // Dev seed so the Rewards screen has items before providers are wired.
+// coinPrice = amount of Pi (π) required to buy the bundle (plan §7.8 purchase).
 const CATALOG_SEED = [
-  { itemType: "DATA", name: "1GB Data Bundle", pointsPrice: 500, providerSku: "data-1gb" },
-  { itemType: "DATA", name: "2GB Data Bundle", pointsPrice: 900, providerSku: "data-2gb" },
-  { itemType: "DATA", name: "5GB Data Bundle", pointsPrice: 2000, providerSku: "data-5gb" },
-  { itemType: "AIRTIME", name: "100 Airtime Top-Up", pointsPrice: 300, providerSku: "air-100" },
-  { itemType: "AIRTIME", name: "200 Airtime Top-Up", pointsPrice: 550, providerSku: "air-200" },
-  { itemType: "AIRTIME", name: "500 Airtime Top-Up", pointsPrice: 1200, providerSku: "air-500" },
+  { itemType: "DATA", name: "1GB Data Bundle", pointsPrice: 500, coinPrice: 1.5, providerSku: "data-1gb" },
+  { itemType: "DATA", name: "2GB Data Bundle", pointsPrice: 900, coinPrice: 2.5, providerSku: "data-2gb" },
+  { itemType: "DATA", name: "5GB Data Bundle", pointsPrice: 2000, coinPrice: 5, providerSku: "data-5gb" },
+  { itemType: "AIRTIME", name: "100 Airtime Top-Up", pointsPrice: 300, coinPrice: 0.8, providerSku: "air-100" },
+  { itemType: "AIRTIME", name: "200 Airtime Top-Up", pointsPrice: 550, coinPrice: 1.5, providerSku: "air-200" },
+  { itemType: "AIRTIME", name: "500 Airtime Top-Up", pointsPrice: 1200, coinPrice: 3, providerSku: "air-500" },
 ] as const;
 
 export const seedCatalog = internalMutation({
@@ -304,12 +312,17 @@ export const seedCatalog = internalMutation({
   handler: async (ctx) => {
     const existing = await ctx.db.query("catalog").collect();
     if (existing.length > 0) {
-      // Update any existing seeded items that contain ₦ symbol
+      // Update any existing seeded items that contain ₦ symbol, and backfill
+      // coinPrice for seeded items that predate Pi purchases.
       for (const item of existing) {
-        if (item.name.includes("₦")) {
-          await ctx.db.patch(item._id, {
-            name: item.name.replace("₦", ""),
-          });
+        const patch: Record<string, string | number> = {};
+        if (item.name.includes("₦")) patch.name = item.name.replace("₦", "");
+        if (item.coinPrice === undefined) {
+          const seed = CATALOG_SEED.find((s) => s.name === item.name);
+          if (seed) patch.coinPrice = seed.coinPrice;
+        }
+        if (Object.keys(patch).length > 0) {
+          await ctx.db.patch(item._id, patch);
         }
       }
       return "updated existing catalog items";
@@ -321,6 +334,7 @@ export const seedCatalog = internalMutation({
           itemType: item.itemType,
           name: item.name,
           pointsPrice: item.pointsPrice,
+          coinPrice: item.coinPrice,
           providerSku: item.providerSku,
           countries: ["GLOBAL"],
           enabled: true,
