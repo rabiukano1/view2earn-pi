@@ -87,7 +87,10 @@ android {
         versionName "1.0"
 
         // react-native-app-auth: redirect back to the app after Google OAuth consent.
-        manifestPlaceholders = [appAuthRedirectScheme: "com.view2earn"]
+        manifestPlaceholders = [
+            appAuthRedirectScheme: "com.view2earn",
+            usesCleartextTraffic: "true"
+        ]
     }
     signingConfigs {
         debug {

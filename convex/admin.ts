@@ -236,6 +236,16 @@ export const createTask = mutation({
     verifier: v.string(),
     maxCompletions: v.number(),
     expiresAt: v.number(),
+    steps: v.optional(
+      v.array(
+        v.object({
+          action: v.string(),
+          label: v.optional(v.string()),
+          name: v.optional(v.string()),
+          targetUrl: v.string(),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, { token, ...args }) => {
     requireAdmin(token);
@@ -257,6 +267,16 @@ export const updateTask = mutation({
     maxCompletions: v.optional(v.number()),
     status: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
+    steps: v.optional(
+      v.array(
+        v.object({
+          action: v.string(),
+          label: v.optional(v.string()),
+          name: v.optional(v.string()),
+          targetUrl: v.string(),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, { token, taskId, ...fields }) => {
     requireAdmin(token);

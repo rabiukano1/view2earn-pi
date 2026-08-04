@@ -47,8 +47,24 @@ const PLATFORM_META: Record<string, { label: string; color: string }> = {
 const TYPE_LABELS: Record<string, string> = {
   FOLLOW_PAGE: 'Follow page',
   JOIN_CHANNEL: 'Join channel',
+  MULTI_TASK: 'Multi-task',
   QUIZ: 'Answer quiz',
   SURVEY: 'Complete survey',
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  FOLLOW: 'Follow',
+  JOIN: 'Join',
+  SUBSCRIBE: 'Subscribe',
+  LIKE: 'Like',
+  COMMENT: 'Comment',
+};
+
+type TaskStep = {
+  action: string;
+  label?: string;
+  name?: string;
+  targetUrl: string;
 };
 
 type Task = {
@@ -60,6 +76,7 @@ type Task = {
   pageId?: string;
   points: number;
   verifier: string;
+  steps?: TaskStep[];
 };
 
 type Verification = {
@@ -77,19 +94,22 @@ function targetName(url: string): string {
   return last.startsWith('@') ? last : `@${last}`;
 }
 
-function deepLinkCandidates(task: Task): string[] {
-  const url = task.targetUrl;
+function deepLinkCandidates(
+  platform: string,
+  url: string,
+  pageId?: string,
+): string[] {
   const handle = url.replace(/\/+$/, '').split('/').pop() ?? '';
-  switch (task.platform) {
+  switch (platform) {
     case 'telegram':
       return [`tg://resolve?domain=${handle.replace(/^@/, '')}`, url];
     case 'facebook':
       // Numeric page IDs resolve reliably across the full app, Lite, and web
       // (plan §7.9d): fb://page/{id} → profile.php?id={id} → the raw URL.
-      if (task.pageId) {
+      if (pageId) {
         return [
-          `fb://page/${task.pageId}`,
-          `https://facebook.com/profile.php?id=${task.pageId}`,
+          `fb://page/${pageId}`,
+          `https://facebook.com/profile.php?id=${pageId}`,
           url,
         ];
       }
@@ -99,23 +119,39 @@ function deepLinkCandidates(task: Task): string[] {
   }
 }
 
-async function openTask(task: Task, onQuizNav: () => void) {
-  if (task.type === 'QUIZ') {
-    onQuizNav();
+async function openUrl(platform: string, url: string, pageId?: string) {
+  if (!url) {
     return;
   }
-  if (!task.targetUrl) {
-    Alert.alert('Coming soon', 'This task type is coming soon — check back!');
-    return;
-  }
-  for (const candidate of deepLinkCandidates(task)) {
+  for (const candidate of deepLinkCandidates(platform, url, pageId)) {
     try {
       await Linking.openURL(candidate);
       return;
     } catch {
     }
   }
-  Alert.alert('Could not open link', `Open it manually:\n${task.targetUrl}`);
+  Alert.alert('Could not open link', `Open it manually:\n${url}`);
+}
+
+async function openTask(task: Task, onQuizNav: () => void) {
+  if (task.type === 'QUIZ') {
+    onQuizNav();
+    return;
+  }
+  if (task.type === 'MULTI_TASK') {
+    const first = task.steps?.[0];
+    if (!first?.targetUrl) {
+      Alert.alert('Coming soon', 'This task type is coming soon — check back!');
+      return;
+    }
+    await openUrl(task.platform, first.targetUrl, task.pageId);
+    return;
+  }
+  if (!task.targetUrl) {
+    Alert.alert('Coming soon', 'This task type is coming soon — check back!');
+    return;
+  }
+  await openUrl(task.platform, task.targetUrl, task.pageId);
 }
 
 type ActionState = {
@@ -177,15 +213,28 @@ function TaskCard({
   };
   const action = actionFor(verification, task.verifier);
   const showAction = task.type !== 'QUIZ';
+  const multiAction = task.type === 'MULTI_TASK';
+  const claimLabel = multiAction
+    ? (action.label === 'Follow / Join' ? 'Start & complete steps' : action.label)
+    : action.label;
 
   const handleCopyLink = async () => {
-    if (!task.targetUrl) return;
+    const urls =
+      task.type === 'MULTI_TASK'
+        ? (task.steps ?? []).map((s) => s.targetUrl).filter(Boolean)
+        : task.targetUrl
+        ? [task.targetUrl]
+        : [];
+    if (urls.length === 0) return;
     try {
-      await Share.share({ message: task.targetUrl, url: task.targetUrl });
+      const message = urls.join('\n');
+      await Share.share({ message, url: urls[0] });
     } catch {
       // user cancelled share
     }
   };
+
+  const steps = task.type === 'MULTI_TASK' ? task.steps ?? [] : [];
 
   return (
     <View style={[styles.card, dark && styles.cardDark]}>
@@ -208,6 +257,42 @@ function TaskCard({
           <Text style={styles.pointsUnit}>pts</Text>
         </View>
       </TouchableOpacity>
+
+      {steps.length > 0 && (
+        <View style={styles.stepsWrap}>
+          <Text style={styles.stepsTitle}>Complete all {steps.length} steps</Text>
+          {steps.map((step, i) => {
+            const actionLabel =
+              step.label || ACTION_LABELS[step.action] || step.action;
+            const stepName =
+              step.name || (step.targetUrl ? targetName(step.targetUrl) : '');
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.stepRow, dark && styles.stepRowDark]}
+                activeOpacity={0.7}
+                onPress={() => openUrl(task.platform, step.targetUrl, task.pageId)}>
+                <View style={styles.stepIndex}>
+                  <Text style={styles.stepIndexText}>{i + 1}</Text>
+                </View>
+                <View style={styles.stepBody}>
+                  <Text style={[styles.stepAction, dark && styles.textLight]}>
+                    {actionLabel}
+                    {stepName ? ` · ${stepName}` : ''}
+                  </Text>
+                  {step.targetUrl ? (
+                    <Text style={styles.stepUrl} numberOfLines={1}>
+                      {step.targetUrl}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.stepOpen}>Open</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
       {showAction && (
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -232,10 +317,11 @@ function TaskCard({
                 styles.actionText,
                 action.kind === 'done' && styles.actionTextDone,
               ]}>
-              {action.label}
+              {claimLabel}
             </Text>
           </TouchableOpacity>
-          {task.targetUrl && action.kind === 'claim' && (
+          {((task.targetUrl && action.kind === 'claim') ||
+            (multiAction && action.kind === 'claim')) && (
             <TouchableOpacity style={styles.copyButton} onPress={handleCopyLink}>
               <Text style={styles.copyButtonText}>Copy link</Text>
             </TouchableOpacity>
@@ -706,6 +792,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: 14,
     gap: 8,
+  },
+  stepsWrap: {
+    marginTop: 14,
+    gap: 8,
+  },
+  stepsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 11,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stepRowDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
+  stepIndex: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  stepIndexText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  stepBody: {
+    flex: 1,
+    marginHorizontal: 10,
+  },
+  stepAction: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  stepUrl: {
+    fontSize: 11.5,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  stepOpen: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primary,
   },
   actionButton: {
     flex: 1,

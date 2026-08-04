@@ -95,6 +95,20 @@ export default defineSchema({
     creatorUserId: v.optional(v.id("users")),
     status: v.string(),
     expiresAt: v.number(),
+    // MULTI_TASK bundle: one task = several action steps (JOIN/FOLLOW/SUBSCRIBE/
+    // LIKE/COMMENT) on a platform. The user completes every step, then uploads
+    // a single proof screenshot for the whole bundle. targetUrl above may be
+    // empty for MULTI_TASK; each step carries its own targetUrl.
+    steps: v.optional(
+      v.array(
+        v.object({
+          action: v.string(),
+          label: v.optional(v.string()),
+          name: v.optional(v.string()),
+          targetUrl: v.string(),
+        }),
+      ),
+    ),
     // Tier 3 count-delta snapshot (convex/countDelta.ts): last public-count
     // reading + claimed-follow count at that reading, to compute per-run deltas.
     lastCount: v.optional(v.number()),

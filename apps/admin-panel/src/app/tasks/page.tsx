@@ -6,6 +6,13 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
 
+type StepForm = {
+  action: string;
+  label: string;
+  name: string;
+  targetUrl: string;
+};
+
 type TaskForm = {
   type: string;
   platform: string;
@@ -16,7 +23,10 @@ type TaskForm = {
   verifier: string;
   maxCompletions: number;
   expiresDays: number;
+  steps: StepForm[];
 };
+
+const EMPTY_STEP: StepForm = { action: "FOLLOW", label: "", name: "", targetUrl: "" };
 
 const EMPTY: TaskForm = {
   type: "FOLLOW_PAGE",
@@ -28,7 +38,16 @@ const EMPTY: TaskForm = {
   verifier: "screenshot-ai",
   maxCompletions: 1000,
   expiresDays: 30,
+  steps: [],
 };
+
+const ACTION_LABELS: [string, string][] = [
+  ["FOLLOW", "Follow"],
+  ["JOIN", "Join"],
+  ["SUBSCRIBE", "Subscribe"],
+  ["LIKE", "Like"],
+  ["COMMENT", "Comment"],
+];
 
 function buildTargetUrl(platform: string, name: string): string {
   const n = name.trim().replace(/^@/, "");
@@ -56,6 +75,7 @@ const PLACEHOLDERS: Record<string, string> = {
   facebook: "pinetwork",
   tiktok: "@pinetwork",
   telegram: "pinetwork",
+  instagram: "@pinetwork",
   app: "Quiz / campaign name",
 };
 
@@ -88,6 +108,12 @@ export default function TasksPage() {
       verifier: t.verifier,
       maxCompletions: t.maxCompletions,
       expiresDays: Math.max(1, Math.round((t.expiresAt - Date.now()) / 86400000)),
+      steps: (t.steps ?? []).map((s) => ({
+        action: s.action,
+        label: s.label ?? "",
+        name: s.name ?? "",
+        targetUrl: s.targetUrl,
+      })),
     });
     setOpen(true);
   };
@@ -100,15 +126,52 @@ export default function TasksPage() {
     set({ platform: value, targetUrl: buildTargetUrl(value, form.name) });
   };
 
+  const setStep = (index: number, patch: Partial<StepForm>) => {
+    setForm((f) => {
+      const steps = f.steps.map((s, i) => (i === index ? { ...s, ...patch } : s));
+      return { ...f, steps };
+    });
+  };
+
+  const onStepNameChange = (index: number, value: string) => {
+    const step = form.steps[index];
+    const targetUrl = buildTargetUrl(form.platform, value);
+    let label = step.label;
+    if (!label && value) {
+      const actionLabel = ACTION_LABELS.find(([a]) => a === step.action)?.[1] ?? "Complete";
+      label = `${actionLabel} ${form.platform}`;
+    }
+    setStep(index, { name: value, label, targetUrl });
+  };
+
+  const onStepActionChange = (index: number, action: string) => {
+    const step = form.steps[index];
+    const actionLabel = ACTION_LABELS.find(([a]) => a === action)?.[1] ?? "Complete";
+    setStep(index, {
+      action,
+      label: step.label ? `${actionLabel} ${form.platform}` : "",
+    });
+  };
+
   const save = async () => {
-    const { expiresDays, pageId, name, targetUrl, ...rest } = form;
+    const { expiresDays, pageId, name, targetUrl, steps, ...rest } = form;
     const trimmedName = name.trim();
     const expiresAt = Date.now() + expiresDays * 86400000;
+    const cleanSteps = steps
+      .filter((s) => s.targetUrl.trim() || s.name.trim())
+      .map((s) => ({
+        action: s.action,
+        label: s.label.trim() || undefined,
+        name: s.name.trim() || undefined,
+        targetUrl: s.targetUrl.trim() || buildTargetUrl(form.platform, s.name),
+      }))
+      .filter((s) => s.targetUrl);
     const fields = {
       ...rest,
       name: trimmedName || undefined,
       targetUrl: trimmedName ? buildTargetUrl(form.platform, trimmedName) : targetUrl,
       pageId: pageId.trim() || undefined,
+      steps: form.type === "MULTI_TASK" ? cleanSteps : undefined,
     };
     try {
       if (editing) {
@@ -146,7 +209,12 @@ export default function TasksPage() {
           <tbody>
             {tasks?.map((t) => (
               <tr key={t._id}>
-                <td>{t.type}</td>
+                <td>
+                  {t.type}
+                  {t.type === "MULTI_TASK" && Array.isArray(t.steps) && (
+                    <div className="task-url">{t.steps.length} steps: {t.steps.map((s) => s.action).join(" + ")}</div>
+                  )}
+                </td>
                 <td>{t.platform}</td>
                 <td className="truncate">
                   <div className="task-name">{t.name || "—"}</div>
@@ -194,6 +262,7 @@ export default function TasksPage() {
             <select value={form.type} onChange={(e) => set({ type: e.target.value })}>
               <option value="FOLLOW_PAGE">FOLLOW_PAGE</option>
               <option value="JOIN_CHANNEL">JOIN_CHANNEL</option>
+              <option value="MULTI_TASK">MULTI_TASK (multiple actions)</option>
               <option value="QUIZ">QUIZ</option>
               <option value="SURVEY">SURVEY</option>
             </select>
@@ -203,43 +272,98 @@ export default function TasksPage() {
               <option value="facebook">facebook</option>
               <option value="tiktok">tiktok</option>
               <option value="telegram">telegram</option>
+              <option value="instagram">instagram</option>
               <option value="app">app</option>
             </select>
           </Field>
         </div>
-        <Field
-          label={
-            form.platform === "app" ? "Name" : "Page / Channel name"
-          }
-          hint={
-            form.platform === "app"
-              ? "Shown to users and in the review queue"
-              : "Type the page or channel handle — the link is built from it automatically"
-          }>
-          <input
-            value={form.name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder={PLACEHOLDERS[form.platform] ?? "name"}
-            autoFocus
-          />
-        </Field>
-        {form.name.trim() && form.platform !== "app" && (
-          <div className="url-preview">
-            <span>Link</span>
-            <code>{form.targetUrl}</code>
+
+        {form.type === "MULTI_TASK" ? (
+          <div className="steps-editor">
+            <div className="steps-head">
+              <span>Action steps — user must complete every step, then upload one screenshot</span>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, steps: [...f.steps, { ...EMPTY_STEP }] }))}>
+                + Add step
+              </button>
+            </div>
+            {form.steps.length === 0 && (
+              <p className="steps-empty">No steps yet — click "+ Add step" to build the bundle.</p>
+            )}
+            {form.steps.map((step, i) => (
+              <div key={i} className="step-row">
+                <select value={step.action} onChange={(e) => onStepActionChange(i, e.target.value)}>
+                  {ACTION_LABELS.map(([value, text]) => (
+                    <option key={value} value={value}>{text}</option>
+                  ))}
+                </select>
+                <input
+                  value={step.name}
+                  onChange={(e) => onStepNameChange(i, e.target.value)}
+                  placeholder="Page / channel / video handle"
+                />
+                <input
+                  value={step.targetUrl}
+                  onChange={(e) => setStep(i, { targetUrl: e.target.value })}
+                  placeholder="Full link (leave name empty to paste exact URL)"
+                />
+                <input
+                  value={step.label}
+                  onChange={(e) => setStep(i, { label: e.target.value })}
+                  placeholder="Short instruction (shown in app)"
+                />
+                <button
+                  className="btn btn-danger btn-sm"
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, steps: f.steps.filter((_, idx) => idx !== i) }))
+                  }>
+                  Remove
+                </button>
+              </div>
+            ))}
           </div>
-        )}
-        {form.platform === "facebook" && (
-          <Field label="Facebook Page ID (optional — reliable deep links on FB Lite)">
-            <input
-              value={form.pageId}
-              onChange={(e) => set({ pageId: e.target.value })}
-              placeholder="e.g. 100064860796750"
-            />
-          </Field>
+        ) : (
+          <>
+            <Field
+              label={
+                form.platform === "app" ? "Name" : "Page / Channel name"
+              }
+              hint={
+                form.platform === "app"
+                  ? "Shown to users and in the review queue"
+                  : "Type the page or channel handle — the link is built from it automatically"
+              }>
+              <input
+                value={form.name}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder={PLACEHOLDERS[form.platform] ?? "name"}
+                autoFocus
+              />
+            </Field>
+            {form.name.trim() && form.platform !== "app" && (
+              <div className="url-preview">
+                <span>Link</span>
+                <code>{form.targetUrl}</code>
+              </div>
+            )}
+            {form.platform === "facebook" && (
+              <Field label="Facebook Page ID (optional — reliable deep links on FB Lite)">
+                <input
+                  value={form.pageId}
+                  onChange={(e) => set({ pageId: e.target.value })}
+                  placeholder="e.g. 100064860796750"
+                />
+              </Field>
+            )}
+          </>
         )}
         <div className="form-grid">
-          <Field label="Points">
+          <Field
+            label={form.type === "MULTI_TASK" ? "Total points (all steps)" : "Points"}
+            hint={form.type === "MULTI_TASK" ? "Awarded once when every step is done" : undefined}>
             <input type="number" value={form.points} onChange={(e) => set({ points: Number(e.target.value) })} />
           </Field>
           <Field label="Verifier">

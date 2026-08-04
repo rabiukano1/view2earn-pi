@@ -11,7 +11,7 @@
       --text-main: #f8fafc;
       --text-sub: #94a3b8;
       --accent: #7c3aed;
-      --success: #10b981;
+      --accent-light: #c4b5fd;
       --border: #334155;
     }
     body {
@@ -23,24 +23,24 @@
       line-height: 1.6;
     }
     .container {
-      max-width: 860px;
+      max-width: 900px;
       margin: 0 auto;
       padding: 40px 20px;
     }
     .header {
       text-align: center;
       margin-bottom: 40px;
-      padding-bottom: 20px;
+      padding-bottom: 24px;
       border-bottom: 1px solid var(--border);
     }
     .badge {
       display: inline-block;
       background: rgba(124, 58, 237, 0.15);
-      color: #c4b5fd;
+      color: var(--accent-light);
       font-size: 12px;
       font-weight: 700;
       letter-spacing: 1px;
-      padding: 4px 12px;
+      padding: 4px 14px;
       border-radius: 999px;
       margin-bottom: 12px;
       text-transform: uppercase;
@@ -66,9 +66,18 @@
     h2 {
       font-size: 20px;
       font-weight: 800;
-      color: #c4b5fd;
+      color: var(--accent-light);
       margin-top: 0;
       margin-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 8px;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 18px;
+      margin-bottom: 8px;
     }
     p, li {
       font-size: 14.5px;
@@ -82,12 +91,32 @@
       margin-bottom: 6px;
     }
     a {
-      color: var(--accent);
+      color: var(--accent-light);
       text-decoration: none;
       font-weight: 600;
     }
     a:hover {
       text-decoration: underline;
+    }
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .contact-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .contact-card h4 {
+      margin: 0 0 4px 0;
+      font-size: 14px;
+      color: var(--text-main);
+    }
+    .contact-card a {
+      font-size: 13.5px;
     }
     .footer {
       text-align: center;
@@ -100,67 +129,274 @@
 <body>
   <div class="container">
     <div class="header">
-      <div class="badge">User Agreement & Terms</div>
-      <h1>Terms & Conditions for View2Earn</h1>
-      <div class="meta">Effective Date: August 1, 2026 | Last Updated: August 1, 2026</div>
+      <span class="badge">Official Terms of Service</span>
+      <h1>Terms &amp; Conditions</h1>
+      <div class="meta">Last Updated: August 2026</div>
     </div>
 
     <div class="card">
-      <h2>1. Acceptance of Terms</h2>
-      <p>By creating an account, accessing, or using View2Earn (https://view2aern.org), you agree to be bound by these Terms & Conditions, our Privacy Policy, and all applicable global laws and ad network regulations.</p>
-      <p>If you do not agree to these terms, you must not create an account or use our mobile applications or web portals.</p>
+      <h2>About View2Earn</h2>
+      <p>Welcome to View2Earn ("View2Earn", "we", "our", or "us"). View2Earn is a digital engagement and rewards platform that enables eligible users to participate in supported activities, interact with approved content, and earn reward points that may be redeemed for available rewards in accordance with these Terms.</p>
+      <p>These Terms of Service ("Terms") govern your access to and use of the View2Earn website, mobile applications, APIs, and all related products, features, content, and services (collectively, the "Service").</p>
+      <p>By accessing, registering for, or using the Service, you confirm that you have read, understood, and agree to be legally bound by these Terms, as well as our Privacy Policy and any other policies referenced within them. If you do not agree with any part of these Terms, you must not access or use the Service.</p>
+      <p>View2Earn is committed to providing a secure, transparent, and fair platform for users, advertisers, and business partners. To protect the integrity of our ecosystem, all users are expected to comply with these Terms, applicable laws and regulations, and any additional rules or guidelines published by View2Earn from time to time.</p>
+      <p>Certain features of the Service may be provided through trusted third-party partners. Your use of those features may also be subject to the applicable terms and policies of those third-party providers. Where such terms apply, users are responsible for complying with both these Terms and the relevant third-party requirements.</p>
+      <p>These Terms apply to every visitor, registered user, advertiser, partner, developer, and any other person or organization accessing or using the Service.</p>
     </div>
 
     <div class="card">
-      <h2>2. Eligibility & Account Rules</h2>
+      <h2>1. Eligibility</h2>
+      <p>To use the Service, you must meet all of the following requirements:</p>
       <ul>
-        <li>You must be at least 18 years of age (or the age of legal majority in your country) to create an account.</li>
-        <li>You may maintain only ONE active View2Earn account per individual and per physical mobile device.</li>
-        <li>Account sharing, multi-accounting, emulator farms, and automated scripts/bots are strictly prohibited.</li>
+        <li>You must be at least 18 years of age, or the minimum legal age required to enter into a binding agreement in your country or jurisdiction.</li>
+        <li>You must have the legal capacity to accept and comply with these Terms.</li>
+        <li>You must provide accurate, complete, and up-to-date information when creating and maintaining your account.</li>
+        <li>You may maintain only one (1) personal account unless we have provided written authorization for additional accounts.</li>
+        <li>You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.</li>
+        <li>You must not create or use an account on behalf of another person without their explicit authorization.</li>
+        <li>You must comply with all applicable laws, regulations, and the rules of any third-party platforms or reward providers integrated with the Service.</li>
+        <li>Where applicable, you must also comply with the terms, policies, and account requirements of supported blockchain ecosystems, including <strong>Pi Network</strong> and <strong>Sidra Chain</strong>.</li>
       </ul>
+      <p>View2Earn reserves the right to verify your identity or eligibility at any time. We may request additional information or documentation to confirm your identity, ownership of your account, or compliance with these Terms.</p>
+      <p>We may refuse registration, suspend access, restrict certain features, or permanently terminate any account that does not meet these eligibility requirements or that is suspected of violating these Terms, applicable laws, or our security and anti-fraud policies.</p>
+      <p>You are solely responsible for ensuring that your use of the Service is lawful in your country or jurisdiction. If access to the Service is prohibited where you reside, you must not use the Service.</p>
     </div>
 
     <div class="card">
-      <h2>3. In-App Economy & Reward Redemptions</h2>
+      <h2>2. Points and Rewards</h2>
+      <p>View2Earn rewards eligible users with <strong>reward points</strong> for successfully completing qualifying activities made available through the Service. These activities may include, but are not limited to, engaging with approved content, participating in surveys, completing promotional tasks, referring eligible users, or other opportunities offered by View2Earn or its authorized partners.</p>
+      
+      <h3>2.1 Reward Points</h3>
       <ul>
-        <li>Points earned via social tasks, rewarded ads, daily check-ins, and quizzes are virtual in-app utility rewards.</li>
-        <li>Points may be swapped for PIPRO tokens or redeemed for rewards according to current platform exchange rates.</li>
-        <li>Points are non-transferable between users and hold zero legal cash value until successfully converted or redeemed.</li>
+        <li>Reward points are a promotional incentive provided by View2Earn and <strong>are not legal tender, electronic money, cryptocurrency, securities, or bank deposits</strong>.</li>
+        <li>Reward points have <strong>no cash value</strong> and may only be redeemed through the redemption methods and reward options made available within the Service.</li>
+        <li>Reward points may not be sold, transferred, exchanged, gifted, pledged, or traded between users unless expressly authorized by View2Earn.</li>
       </ul>
+
+      <h3>2.2 Earning Rewards</h3>
+      <p>To earn reward points, users must:</p>
+      <ul>
+        <li>Successfully complete eligible activities in accordance with all applicable instructions.</li>
+        <li>Comply with these Terms, our policies, and any requirements imposed by our advertising, survey, or reward partners.</li>
+        <li>Provide genuine, accurate, and honest participation at all times.</li>
+      </ul>
+      <p>Completion of an activity <strong>does not guarantee</strong> that reward points will be credited. Activities may be reviewed and validated before rewards are issued.</p>
+
+      <h3>2.3 Verification and Approval</h3>
+      <p>All reward points and redemption requests are subject to verification.</p>
+      <p>View2Earn reserves the right to delay, review, reject, adjust, or cancel any reward, redemption request, or account balance where we reasonably believe that:</p>
+      <ul>
+        <li>fraudulent activity has occurred;</li>
+        <li>automated tools, bots, scripts, or emulators have been used;</li>
+        <li>duplicate or multiple accounts exist;</li>
+        <li>false or misleading information has been provided;</li>
+        <li>an advertising or reward partner has rejected or reversed the activity;</li>
+        <li>these Terms or any applicable policies have been violated.</li>
+      </ul>
+      <p>To protect the integrity of the platform, rewards may be subject to a verification or holding period before becoming available for redemption.</p>
+
+      <h3>2.4 Redemption</h3>
+      <p>Reward points may only be redeemed through redemption options offered within the Service.</p>
+      <p>Available rewards, redemption requirements, processing times, minimum redemption thresholds, and exchange rates may change at any time without prior notice.</p>
+      <p>View2Earn reserves the right to refuse or reverse any redemption request that is determined to be fraudulent, unauthorized, or made in violation of these Terms.</p>
+
+      <h3>2.5 Changes to the Reward Program</h3>
+      <p>We may introduce, modify, suspend, or discontinue any reward program, campaign, earning opportunity, redemption option, or point value at our sole discretion. Such changes may occur without prior notice where necessary for operational, security, legal, or business reasons.</p>
+
+      <h3>2.6 Separate Ecosystems</h3>
+      <p>Where the Service supports multiple blockchain ecosystems, including <strong>Pi Network</strong> and <strong>Sidra Chain</strong>, each ecosystem operates independently.</p>
+      <p>Reward points, balances, assets, and redemption options associated with one ecosystem <strong>cannot be transferred, exchanged, merged, or redeemed</strong> within another ecosystem unless View2Earn expressly announces support for such functionality.</p>
     </div>
 
     <div class="card">
-      <h2>4. Prohibited Conduct & Account Termination</h2>
-      <p>Violation of any of the following rules will result in immediate permanent account suspension and forfeiture of unredeemed points:</p>
+      <h2>3. Acceptable Use</h2>
+      <p>To maintain a secure, fair, and trustworthy platform for all users, advertisers, and business partners, you agree to use the Service responsibly and in accordance with these Terms, our policies, and all applicable laws.</p>
+
+      <h3>3.1 Account Abuse</h3>
+      <p>You agree that you will not, directly or indirectly:</p>
       <ul>
-        <li>Using VPNs, proxies, or IP spoofs to manipulate survey offerwalls or task availability.</li>
-        <li>Attempting automated or artificial clicks on Google AdMob ads.</li>
-        <li>Submitting fake or altered screenshot proofs for promotional tasks.</li>
-        <li>Exploiting system glitches or reverse-engineering application APIs.</li>
+        <li>Create or operate multiple accounts without our prior written authorization.</li>
+        <li>Share, sell, rent, transfer, or allow another person to use your account.</li>
+        <li>Create accounts using false, misleading, or stolen information.</li>
+        <li>Impersonate another individual, organization, or entity.</li>
+        <li>Circumvent account restrictions, suspensions, or permanent bans by creating new accounts.</li>
       </ul>
+
+      <h3>3.2 Fraudulent Activity</h3>
+      <ul>
+        <li>Use bots, automation tools, scripts, macros, click farms, emulators, or artificial intelligence systems to perform activities intended for genuine human participation.</li>
+        <li>Submit false, manipulated, duplicated, or fabricated screenshots, survey responses, or proof of task completion.</li>
+        <li>Attempt to earn rewards through deceptive, dishonest, or unauthorized methods.</li>
+        <li>Manipulate referral programs, promotional campaigns, or reward systems.</li>
+        <li>Generate fake traffic, fake engagements, or invalid activity intended to mislead advertisers or partners.</li>
+      </ul>
+
+      <h3>3.3 Platform Security</h3>
+      <p>You must not:</p>
+      <ul>
+        <li>Attempt to hack, exploit, probe, scan, or interfere with the security of the Service.</li>
+        <li>Reverse engineer, decompile, modify, copy, or attempt to extract the source code of any part of the Service, except where permitted by applicable law.</li>
+        <li>Upload malicious software, viruses, worms, ransomware, spyware, or other harmful code.</li>
+        <li>Interfere with the operation, performance, or availability of the Service or any connected systems.</li>
+      </ul>
+
+      <h3>3.4 Abuse of Third-Party Services</h3>
+      <p>Where the Service integrates with third-party providers, including survey companies, advertisers, blockchain networks, payment providers, or social media platforms, you agree to comply with their applicable terms and policies. You must not engage in any activity that could result in fraud, invalid traffic, policy violations, or financial loss for View2Earn or its partners.</p>
+
+      <h3>3.5 Prohibited Conduct</h3>
+      <p>You must not use the Service to:</p>
+      <ul>
+        <li>Engage in illegal, fraudulent, deceptive, or misleading activities.</li>
+        <li>Harass, threaten, intimidate, or abuse other users or members of the View2Earn community.</li>
+        <li>Upload or distribute unlawful, defamatory, hateful, obscene, or infringing content.</li>
+        <li>Violate the intellectual property rights, privacy rights, or other legal rights of any person or organization.</li>
+        <li>Use the Service in any manner that could damage the reputation, integrity, or security of View2Earn or its partners.</li>
+      </ul>
+
+      <h3>3.6 Monitoring and Enforcement</h3>
+      <p>To protect the integrity of the Service, View2Earn may monitor platform activity and investigate suspected violations of these Terms.</p>
+      <p>Where we reasonably determine that a user has violated these Terms or engaged in suspicious, fraudulent, or abusive behavior, we may, without prior notice:</p>
+      <ul>
+        <li>Suspend or permanently terminate the account.</li>
+        <li>Remove or reverse reward points and pending redemptions.</li>
+        <li>Cancel rewards or transactions associated with prohibited activity.</li>
+        <li>Restrict access to certain features of the Service.</li>
+        <li>Report unlawful activity to the appropriate authorities where required by law.</li>
+        <li>Take any other action reasonably necessary to protect the Service, our users, advertisers, and business partners.</li>
+      </ul>
+      <p>Our decisions regarding fraud detection, platform security, and enforcement are made in good faith to maintain a safe and reliable ecosystem for all participants.</p>
     </div>
 
     <div class="card">
-      <h2>5. Non-Custodial Cryptocurrency Notice</h2>
+      <h2>4. Third-Party Services</h2>
+      <p>View2Earn integrates with various third-party services to provide features, rewards, advertising opportunities, surveys, blockchain connectivity, payment processing, analytics, authentication, and other functionality. These third-party services are operated independently and are not owned or controlled by View2Earn unless expressly stated.</p>
+
+      <h3>4.1 Independent Third-Party Providers</h3>
+      <p>Certain features of the Service may be provided by independent third-party providers, including but not limited to survey providers, offerwall providers, advertising partners, reward and redemption providers, payment processors, authentication providers, analytics/security services, social media platforms, and blockchain networks (including <strong>Pi Network</strong> and <strong>Sidra Chain</strong>).</p>
+
+      <h3>4.2 No Responsibility for Third-Party Services</h3>
+      <p>View2Earn does not own, operate, or control third-party platforms and therefore does not guarantee:</p>
       <ul>
-        <li>Token distributions (PIPRO, Solana SPL, EVM tokens) are executed to public wallet addresses provided voluntarily by the user.</li>
-        <li>View2Earn is non-custodial. We never store or access your private keys. You are solely responsible for managing your receiving wallet credentials.</li>
+        <li>The availability or uninterrupted operation of third-party services.</li>
+        <li>Approval or rejection of surveys or offers.</li>
+        <li>The accuracy, quality, legality, or security of third-party content.</li>
+        <li>Rewards, payments, or services provided directly by third parties.</li>
+        <li>The continued availability of any specific third-party integration.</li>
       </ul>
+
+      <h3>4.3 Third-Party Decisions</h3>
+      <p>Some rewards, surveys, campaigns, and offers require validation by third-party providers before reward points can be credited. View2Earn has no control over a third-party provider's decisions regarding eligibility, qualification, validation, rejection, chargebacks, fraud detection, or reward approval. Where a third-party provider rejects, reverses, or invalidates an activity, View2Earn reserves the right to decline, reverse, or remove any associated reward points or redemption requests.</p>
+
+      <h3>4.4 Blockchain Networks</h3>
+      <p>Where the Service supports blockchain ecosystems such as <strong>Pi Network</strong> or <strong>Sidra Chain</strong>, each network operates independently under its own rules, policies, technical standards, and governance. View2Earn is not responsible for network outages, blockchain congestion, wallet issues, or transaction failures caused by the blockchain.</p>
+
+      <h3>4.5 External Links</h3>
+      <p>The Service may contain links to third-party websites, applications, or services for your convenience. View2Earn does not endorse, monitor, or assume responsibility for external sites.</p>
+
+      <h3>4.6 Future Integrations</h3>
+      <p>View2Earn may add, remove, replace, or discontinue third-party integrations at any time to improve the Service or comply with legal requirements.</p>
     </div>
 
     <div class="card">
-      <h2>6. Contact & Legal Support</h2>
-      <p>For legal inquiries or terms clarification, contact our support team:</p>
-      <ul>
-        <li><strong>Official Domain:</strong> <a href="https://view2aern.org">https://view2aern.org</a></li>
-        <li><strong>Terms URL:</strong> <a href="https://view2aern.org/terms.html">https://view2aern.org/terms</a></li>
-        <li><strong>Privacy URL:</strong> <a href="https://view2aern.org/privacy.html">https://view2aern.org/privacy</a></li>
-        <li><strong>Support Email:</strong> <a href="mailto:support@view2aern.org">support@view2aern.org</a></li>
-      </ul>
+      <h2>5. Suspension and Termination</h2>
+      <h3>5.1 Suspension of Accounts</h3>
+      <p>We may temporarily suspend your account, with or without prior notice, if we reasonably believe that you have violated these Terms, engaged in suspicious or fraudulent activity, compromised account security, or where required by law.</p>
+
+      <h3>5.2 Permanent Termination</h3>
+      <p>We may permanently terminate your account if you repeatedly violate our policies, engage in fraud or abuse, use bots or automation tools, create unauthorized accounts, or cause reputational/financial harm to View2Earn. Termination may result in the permanent loss of access to the Service and unredeemed points.</p>
+
+      <h3>5.3 User-Initiated Termination</h3>
+      <p>You may stop using the Service at any time. You may request account closure by contacting our support team.</p>
+
+      <h3>5.4 Effect of Termination</h3>
+      <p>Upon suspension or termination, your right to access and use the Service immediately ends. Pending investigations may continue, and rewards under review may be forfeited where fraud is identified.</p>
+
+      <h3>5.5 Survival</h3>
+      <p>Provisions relating to intellectual property, fraud prevention, limitation of liability, indemnification, dispute resolution, governing law, and outstanding obligations shall survive termination.</p>
+    </div>
+
+    <div class="card">
+      <h2>6. Disclaimer of Warranties</h2>
+      <p>The Service is provided on an <strong>"as is"</strong> and <strong>"as available"</strong> basis, to the fullest extent permitted by applicable law. We do not warrant that the Service will always be uninterrupted, error-free, or available at all times.</p>
+      <p>Participation in the Service does not guarantee eligibility for campaigns, approval of activities, a specific number of points, or any minimum level of income or financial benefit.</p>
+    </div>
+
+    <div class="card">
+      <h2>7. Limitation of Liability</h2>
+      <p>To the fullest extent permitted by applicable law, View2Earn and its owners, directors, officers, employees, and partners shall not be liable for any direct, indirect, incidental, consequential, special, exemplary, or punitive damages arising out of your access to or use of the Service.</p>
+      <p>To the fullest extent permitted by law, if View2Earn is found liable for any claim, our total aggregate liability shall not exceed the amount, if any, that you paid directly to View2Earn for the specific Service giving rise to the claim during the twelve (12) months preceding the event.</p>
+    </div>
+
+    <div class="card">
+      <h2>8. Intellectual Property Rights</h2>
+      <p>View2Earn and its licensors own and retain all rights, title, and interest in the Service, including branding, logos, software, UI/UX designs, graphics, code, and educational materials. Subject to compliance with these Terms, View2Earn grants you a limited, non-exclusive, non-transferable, revocable license to access and use the Service for personal, lawful use.</p>
+    </div>
+
+    <div class="card">
+      <h2>9. Privacy and Data Protection</h2>
+      <p>Your privacy is important to View2Earn. By accessing or using the Service, you acknowledge that View2Earn may collect, use, store, and process information as described in our <a href="privacy.html">Privacy Policy</a>.</p>
+    </div>
+
+    <div class="card">
+      <h2>10. Communications and Electronic Notices</h2>
+      <p>By creating an account, accessing, or using the Service, you agree to receive communications from View2Earn electronically via in-app notifications, email, SMS, or other electronic methods. Official communications from View2Earn will be sent through official channels ending with <strong>@view2earn.org</strong>.</p>
+    </div>
+
+    <div class="card">
+      <h2>11. Dispute Resolution</h2>
+      <p>If a disagreement arises between you and View2Earn regarding the Service or these Terms, both parties agree to make reasonable efforts to resolve the matter informally in good faith before pursuing formal legal proceedings. Contact support with your full name, account information, and a clear description of the issue.</p>
+    </div>
+
+    <div class="card">
+      <h2>12. Governing Law and Jurisdiction</h2>
+      <p>These Terms shall be governed by and interpreted in accordance with applicable international principles of contract law and mandatory consumer protection laws. Disputes shall be submitted to the competent courts of the jurisdiction where View2Earn is legally established.</p>
+    </div>
+
+    <div class="card">
+      <h2>13. Force Majeure</h2>
+      <p>View2Earn shall not be liable for any failure, delay, or interruption resulting from circumstances beyond our reasonable control, including natural disasters, acts of war, pandemics, government restrictions, power outages, internet failures, cybersecurity incidents, or blockchain network outages.</p>
+    </div>
+
+    <div class="card">
+      <h2>14. Severability &amp; 15. Entire Agreement</h2>
+      <p>If any provision of these Terms is found to be invalid or unenforceable, the remaining provisions will continue in full force and effect. These Terms, together with our Privacy Policy, constitute the entire agreement between you and View2Earn.</p>
+    </div>
+
+    <div class="card">
+      <h2>16 &amp; 18. Changes to These Terms</h2>
+      <p>We reserve the right to modify or update these Terms at any time to reflect changes in our Services, legal requirements, or security practices. Material updates will be notified via website/app publication or email. Continued use of the Service constitutes acceptance of the updated Terms.</p>
+    </div>
+
+    <div class="card">
+      <h2>19. Contact Information</h2>
+      <p>If you have any questions, feedback, or legal inquiries regarding these Terms of Service, please contact our team via the appropriate channel below:</p>
+      
+      <div class="contact-grid">
+        <div class="contact-card">
+          <h4>General Support</h4>
+          <a href="mailto:support@view2earn.org">support@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>Business Partnerships</h4>
+          <a href="mailto:partners@view2earn.org">partners@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>Legal Notices</h4>
+          <a href="mailto:legal@view2earn.org">legal@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>Intellectual Property</h4>
+          <a href="mailto:ip@view2earn.org">ip@view2earn.org</a>
+        </div>
+        <div class="contact-card">
+          <h4>Security Reports</h4>
+          <a href="mailto:security@view2earn.org">security@view2earn.org</a>
+        </div>
+      </div>
     </div>
 
     <div class="footer">
-      &copy; 2026 View2Earn Platform. All rights reserved.
+      &copy; 2026 View2Earn. All rights reserved. | <a href="privacy.html">Privacy Policy</a>
     </div>
   </div>
 </body>

@@ -10,6 +10,17 @@ function normalizeUrl(url: string): string {
     .replace(/\/+$/, "");
 }
 
+// All target URLs a task requires, including every MULTI_TASK step. Used by
+// list() to hide fully-done bundles and by release to record completions.
+export function targetUrlsOf(task: any): string[] {
+  if (Array.isArray(task?.steps) && task.steps.length > 0) {
+    return task.steps
+      .map((s: any) => s?.targetUrl)
+      .filter((u: string | null | undefined): u is string => !!u);
+  }
+  return task?.targetUrl ? [task.targetUrl] : [];
+}
+
 function getPlatform(url: string): string | null {
   const n = normalizeUrl(url);
   if (n.includes("facebook.com") || n.includes("fb.com")) return "facebook";
@@ -55,8 +66,11 @@ export const list = query({
       .filter((t) => {
         if (t.expiresAt <= now) return false;
         if (t.creatorUserId === userId) return false;
-        const url = normalizeUrl(t.targetUrl);
-        if (doneUrls.has(url)) return false;
+        // A task is done if every one of its target URLs was already completed.
+        const urls = targetUrlsOf(t);
+        if (urls.length > 0 && urls.every((u) => doneUrls.has(normalizeUrl(u)))) {
+          return false;
+        }
         if (excludedTaskIds.has(t._id)) return false;
         return true;
       })
@@ -69,6 +83,7 @@ export const list = query({
         pageId: t.pageId,
         points: t.points,
         verifier: t.verifier,
+        steps: t.steps,
       }));
   },
 });
@@ -174,6 +189,11 @@ export const seed = internalMutation({
       { type: "FOLLOW_PAGE", platform: "facebook", name: "sidrachain", targetUrl: "https://facebook.com/sidrachain", points: 50, verifier: "screenshot-ai" },
       { type: "QUIZ", platform: "app", name: "Pi Quiz", targetUrl: "", points: 20, verifier: "quiz" },
       { type: "JOIN_CHANNEL", platform: "telegram", name: "sidrachain", targetUrl: "https://t.me/sidrachain", points: 75, verifier: "telegram-bot" },
+      { type: "MULTI_TASK", platform: "tiktok", name: "pinetwork engagement", targetUrl: "", points: 150, verifier: "screenshot-ai", steps: [
+        { action: "FOLLOW", label: "Follow the account", name: "pinetwork", targetUrl: "https://tiktok.com/@pinetwork" },
+        { action: "LIKE", label: "Like a video", name: "", targetUrl: "https://tiktok.com/@pinetwork" },
+        { action: "COMMENT", label: "Comment on a video", name: "", targetUrl: "https://tiktok.com/@pinetwork" },
+      ] },
     ];
     for (const s of samples) {
       await ctx.db.insert("tasks", {
@@ -199,6 +219,16 @@ export const create = mutation({
     verifier: v.string(),
     maxCompletions: v.number(),
     expiresAt: v.number(),
+    steps: v.optional(
+      v.array(
+        v.object({
+          action: v.string(),
+          label: v.optional(v.string()),
+          name: v.optional(v.string()),
+          targetUrl: v.string(),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     await requireUser(ctx, args.userId);
@@ -214,6 +244,7 @@ export const create = mutation({
       creatorUserId: args.userId,
       status: "active",
       expiresAt: args.expiresAt,
+      steps: args.steps,
     });
   },
 });

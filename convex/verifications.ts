@@ -11,6 +11,7 @@ import { enforceRateLimit } from "./lib/ratelimit";
 import { requireUser, requireAuth } from "./lib/guards";
 import { isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
+import { targetUrlsOf } from "./tasks";
 
 // Task Verification State Machine (plan §5):
 // CREATED → USER_CLAIMED_DONE → PROOF_SUBMITTED
@@ -303,7 +304,12 @@ export const aiCheck = internalAction({
         const targetInfo = task
           ? `Target: "${task.targetUrl}" on platform "${task.platform || "social media"}"`
           : "Social task completion screenshot";
-        const promptText = `Analyze this task completion screenshot.\n${targetInfo}.\nDoes this screenshot clearly show that the user has followed, subscribed to, joined, or liked this page/account?\nRespond ONLY with a raw JSON object formatted as: {"isFollowing": boolean, "targetMatch": boolean, "confidence": number}`;
+        const actionHint = task && Array.isArray(task.steps) && task.steps.length > 0
+          ? `The user was asked to do ALL of these: ${task.steps
+              .map((s: any) => `${s.action} ${s.label ? `(${s.label}) ` : ""}on ${s.targetUrl}`)
+              .join("; ")}.`
+          : "";
+        const promptText = `Analyze this task completion screenshot.\n${targetInfo}\n${actionHint}\nDoes this screenshot clearly show that the user has followed, subscribed to, joined, liked, or commented on the page/account as requested?\nRespond ONLY with a raw JSON object formatted as: {"isFollowing": boolean, "targetMatch": boolean, "confidence": number}`;
 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`;
         const apiRes = await fetch(apiUrl, {
@@ -462,11 +468,13 @@ export const releaseImmediately = internalMutation({
       refId: verification.taskId,
     });
 
-    if (task.targetUrl) {
-      await ctx.db.insert("completedTargets", {
-        userId: verification.userId,
-        normalizedUrl: normalizeUrl(task.targetUrl),
-      });
+    if (task.targetUrl || (Array.isArray(task.steps) && task.steps.length > 0)) {
+      for (const url of targetUrlsOf(task)) {
+        await ctx.db.insert("completedTargets", {
+          userId: verification.userId,
+          normalizedUrl: normalizeUrl(url),
+        });
+      }
     }
 
     const listing = await ctx.db
@@ -521,11 +529,13 @@ export const release = internalMutation({
       reason: "TASK_COMPLETED",
       refId: verification.taskId,
     });
-    if (task.targetUrl) {
-      await ctx.db.insert("completedTargets", {
-        userId: verification.userId,
-        normalizedUrl: normalizeUrl(task.targetUrl),
-      });
+    if (task.targetUrl || (Array.isArray(task.steps) && task.steps.length > 0)) {
+      for (const url of targetUrlsOf(task)) {
+        await ctx.db.insert("completedTargets", {
+          userId: verification.userId,
+          normalizedUrl: normalizeUrl(url),
+        });
+      }
     }
     const listing = await ctx.db
       .query("marketplaceListings")
