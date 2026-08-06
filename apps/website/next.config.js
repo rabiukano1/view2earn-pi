@@ -4,6 +4,7 @@ const path = require("path");
 const nextConfig = {
   output: "export",
   images: { unoptimized: true },
+  transpilePackages: ["@view2earn/core"],
   turbopack: {
     root: path.resolve(__dirname, "../.."),
   },

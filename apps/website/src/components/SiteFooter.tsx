@@ -30,6 +30,9 @@ export function SiteFooter() {
             <Link href="/partner">Partner with us</Link>
             <Link href="/privacy">Privacy policy</Link>
             <Link href="/terms">Terms of service</Link>
+            <Link href="/cookies">Cookie policy</Link>
+            <Link href="/anti-fraud">Anti-fraud policy</Link>
+            <Link href="/rewards-redemption">Rewards &amp; redemption</Link>
           </div>
           <div className="footer-col">
             <h4>Follow</h4>

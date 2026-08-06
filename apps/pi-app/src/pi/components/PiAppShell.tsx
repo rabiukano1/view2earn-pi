@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 const NAV = [
   { href: "/home", label: "Home" },
   { href: "/tasks", label: "Tasks" },
+  { href: "/wallet", label: "Wallet" },
   { href: "/redeem", label: "Redeem" },
 ];
 
@@ -46,6 +47,18 @@ export function PiAppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="container pi-main">{children}</main>
+      <footer className="pi-footer">
+        <div className="container pi-footer-inner">
+          <span>© {new Date().getFullYear()} View2Earn. All rights reserved.</span>
+          <nav className="pi-footer-links">
+            <Link href="/privacy">Privacy</Link>
+            <Link href="/cookies">Cookies</Link>
+            <Link href="/anti-fraud">Anti-Fraud</Link>
+            <Link href="/rewards-redemption">Rewards &amp; Redemption</Link>
+            <Link href="/terms">Terms</Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -21,8 +21,8 @@ import AcademyScreen from '../screens/AcademyScreen';
 import SpinScreen from '../screens/SpinScreen';
 import WalletScreen from '../screens/WalletScreen';
 import WalletHistoryScreen from '../screens/WalletHistoryScreen';
-import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import TermsScreen from '../screens/TermsScreen';
+import PolicyScreen from '../screens/PolicyScreen';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -130,8 +130,8 @@ export default function AppNavigator() {
       <Stack.Screen name="Academy" component={AcademyScreen} />
       <Stack.Screen name="Quiz" component={QuizScreen} />
       <Stack.Screen name="Spin" component={SpinScreen} />
-      <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <Stack.Screen name="Terms" component={TermsScreen} />
+      <Stack.Screen name="Policy" component={PolicyScreen} />
     </Stack.Navigator>
   );
 }

@@ -274,12 +274,30 @@ export default function LoginScreen() {
               style={styles.termsLink}
               onPress={() => navigation.navigate('Terms')}>
               Terms &amp; Conditions
-            </Text>{' '}
-            and{' '}
+            </Text>
+            ,{' '}
             <Text
               style={styles.termsLink}
-              onPress={() => navigation.navigate('PrivacyPolicy')}>
+              onPress={() => navigation.navigate('Policy', { policy: 'privacy' })}>
               Privacy Policy
+            </Text>
+            ,{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate('Policy', { policy: 'anti-fraud' })}>
+              Anti-Fraud Policy
+            </Text>
+            ,{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate('Policy', { policy: 'cookies' })}>
+              Cookie Policy
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate('Policy', { policy: 'rewards' })}>
+              Rewards &amp; Redemption Policy
             </Text>
           </Text>
         </View>

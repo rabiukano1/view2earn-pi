@@ -569,14 +569,70 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={[styles.settingRowCard, dark && styles.cardDark, { marginTop: 10 }]}
-            onPress={() => stackNav.navigate('PrivacyPolicy')}
+            onPress={() => stackNav.navigate('Policy', { policy: 'privacy' })}
             activeOpacity={0.85}>
             <View style={[styles.settingIconBg, { backgroundColor: colors.success + '1F' }]}>
               <Icon name="shield-check" iconStyle="solid" size={18} color={colors.success} />
             </View>
             <View style={styles.settingTextGroup}>
-              <Text style={[styles.settingTitle, dark && styles.textLight]}>Privacy Policy &amp; Terms</Text>
-              <Text style={styles.settingSubtitle}>GDPR, CCPA &amp; Data Security Disclosures</Text>
+              <Text style={[styles.settingTitle, dark && styles.textLight]}>Privacy Policy</Text>
+              <Text style={styles.settingSubtitle}>How we collect, use &amp; protect your data</Text>
+            </View>
+            <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRowCard, dark && styles.cardDark]}
+            onPress={() => stackNav.navigate('Policy', { policy: 'anti-fraud' })}
+            activeOpacity={0.85}>
+            <View style={[styles.settingIconBg, { backgroundColor: colors.danger + '1F' }]}>
+              <Icon name="shield-halved" iconStyle="solid" size={18} color={colors.danger} />
+            </View>
+            <View style={styles.settingTextGroup}>
+              <Text style={[styles.settingTitle, dark && styles.textLight]}>Anti-Fraud Policy</Text>
+              <Text style={styles.settingSubtitle}>Zero-tolerance fraud prevention rules</Text>
+            </View>
+            <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRowCard, dark && styles.cardDark]}
+            onPress={() => stackNav.navigate('Policy', { policy: 'cookies' })}
+            activeOpacity={0.85}>
+            <View style={[styles.settingIconBg, { backgroundColor: '#F59E0B' + '1F' }]}>
+              <Icon name="cookie-bite" iconStyle="solid" size={18} color="#F59E0B" />
+            </View>
+            <View style={styles.settingTextGroup}>
+              <Text style={[styles.settingTitle, dark && styles.textLight]}>Cookie Policy</Text>
+              <Text style={styles.settingSubtitle}>How cookies &amp; similar tech are used</Text>
+            </View>
+            <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRowCard, dark && styles.cardDark]}
+            onPress={() => stackNav.navigate('Policy', { policy: 'rewards' })}
+            activeOpacity={0.85}>
+            <View style={[styles.settingIconBg, { backgroundColor: colors.primary + '1F' }]}>
+              <Icon name="gift" iconStyle="solid" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.settingTextGroup}>
+              <Text style={[styles.settingTitle, dark && styles.textLight]}>Rewards &amp; Redemption</Text>
+              <Text style={styles.settingSubtitle}>How points are earned &amp; redeemed</Text>
+            </View>
+            <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingRowCard, dark && styles.cardDark]}
+            onPress={() => stackNav.navigate('Terms')}
+            activeOpacity={0.85}>
+            <View style={[styles.settingIconBg, { backgroundColor: colors.textMuted + '1F' }]}>
+              <Icon name="file-lines" iconStyle="solid" size={18} color={colors.textMuted} />
+            </View>
+            <View style={styles.settingTextGroup}>
+              <Text style={[styles.settingTitle, dark && styles.textLight]}>Terms &amp; Conditions</Text>
+              <Text style={styles.settingSubtitle}>Official Terms of Service</Text>
             </View>
             <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
           </TouchableOpacity>

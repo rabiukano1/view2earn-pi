@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { PolicyPageContent } from "@/components/PolicyPage";
+import { PiPolicyPage } from "@/pi/components/PiPolicyPage";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - View2Earn",
+  title: "Privacy Policy",
   description: "Official Privacy Policy for View2Earn digital engagement and rewards platform.",
 };
 
 export default function PrivacyPage() {
-  return <PolicyPageContent policy="privacy" />;
+  return <PiPolicyPage policy="privacy" />;
 }

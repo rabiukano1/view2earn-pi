@@ -1,4 +1,5 @@
 import type { Id } from '../../convex/_generated/dataModel';
+import type { PolicyKey } from '@view2earn/core';
 
 export type RootTabParamList = {
   Home: undefined;
@@ -18,7 +19,7 @@ export type RootStackParamList = {
   Academy: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
   Quiz: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
   Spin: { userId: string } | undefined;
-  PrivacyPolicy: undefined;
   Terms: undefined;
+  Policy: { policy: PolicyKey };
 };
 
