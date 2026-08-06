@@ -4,25 +4,21 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
-
 import RewardedAdModal from './RewardedAdModal';
+import AdPromptModal from './AdPromptModal';
 
 export default function DailyBox({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
   const [won, setWon] = useState<number | null>(null);
   const [adVisible, setAdVisible] = useState(false);
+  const [promptVisible, setPromptVisible] = useState(false);
   const status = useQuery(api.bonus.getBoxStatus, { userId });
   const openBox = useMutation(api.bonus.openBox);
 
   if (!status) return null;
 
-  const handleOpenPress = () => {
-    if (busy || !status.eligible) return;
-    setAdVisible(true);
-  };
-
-  const handleAdSuccess = async () => {
+  const doOpenBox = async () => {
     if (busy || !status.eligible) return;
     setBusy(true);
     try {
@@ -34,6 +30,13 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
       setBusy(false);
     }
   };
+
+  const handleOpenPress = () => {
+    if (busy || !status.eligible) return;
+    setPromptVisible(true);
+  };
+
+  const handleAdSuccess = () => doOpenBox();
 
   // Just opened this session — show the prize.
   if (won !== null) {
@@ -74,9 +77,8 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
             {status.eligible ? 'Daily box ready!' : 'Daily mystery box'}
           </Text>
           {status.eligible ? (
-            <Text style={styles.subReady}>Tap to watch ad & open · win up to 250 pts</Text>
-          ) : (
-            <>
+            <Text style={styles.subReady}>Tap to open · win up to 250 pts</Text>
+          ) : (            <>
               <Text style={styles.sub}>
                 {status.tasksToday}/{status.needed} tasks today to unlock
               </Text>
@@ -92,6 +94,17 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
           </View>
         )}
       </TouchableOpacity>
+      <AdPromptModal
+        visible={promptVisible}
+        onClose={() => {
+          setPromptVisible(false);
+          doOpenBox();
+        }}
+        onConfirm={() => {
+          setPromptVisible(false);
+          setAdVisible(true);
+        }}
+      />
       <RewardedAdModal
         visible={adVisible}
         onClose={() => setAdVisible(false)}

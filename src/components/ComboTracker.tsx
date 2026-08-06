@@ -5,6 +5,7 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
 import RewardedAdModal from './RewardedAdModal';
+import AdPromptModal from './AdPromptModal';
 
 const LEGS = [
   { key: 'social', icon: '🔗', label: 'Follow' },
@@ -16,19 +17,15 @@ export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
   const [adVisible, setAdVisible] = useState(false);
+  const [promptVisible, setPromptVisible] = useState(false);
   const status = useQuery(api.combos.getComboStatus, { userId });
   const claimCombo = useMutation(api.combos.claimCombo);
 
   // Hidden until the user starts a leg (and after it's claimed) to avoid clutter.
   if (!status || status.claimedToday || legDoneCount(status) === 0) return null;
 
-  const onClaimPress = () => {
+  const doClaim = async () => {
     if (busy || !status.canClaim) return;
-    setAdVisible(true);
-  };
-
-  const handleAdSuccess = async () => {
-    setAdVisible(false);
     setBusy(true);
     try {
       const res = await claimCombo({ userId });
@@ -39,6 +36,13 @@ export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
       setBusy(false);
     }
   };
+
+  const onClaimPress = () => {
+    if (busy || !status.canClaim) return;
+    setPromptVisible(true);
+  };
+
+  const handleAdSuccess = () => doClaim();
 
   return (
     <>
@@ -70,6 +74,17 @@ export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
         </View>
       </View>
 
+      <AdPromptModal
+        visible={promptVisible}
+        onClose={() => {
+          setPromptVisible(false);
+          doClaim();
+        }}
+        onConfirm={() => {
+          setPromptVisible(false);
+          setAdVisible(true);
+        }}
+      />
       <RewardedAdModal
         visible={adVisible}
         onClose={() => setAdVisible(false)}

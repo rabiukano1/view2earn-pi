@@ -24,6 +24,17 @@ interface RewardedAdModalProps {
 
 type AdPhase = 'loading' | 'ready' | 'error';
 
+// Never surface provider names or ad unit IDs to the user — strip them from any
+// SDK error string so they can't leak through the UI.
+function sanitize(msg: string, adUnitId: string): string {
+  return msg
+    .replace(new RegExp(adUnitId, 'g'), '')
+    .replace(/AdMob|admob|ADMOB|UnityAds|unityads|UNITY/g, '')
+    .replace(/ca-app-pub-[0-9/]+/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export default function RewardedAdModal({ visible, onClose, onSuccess }: RewardedAdModalProps) {
   const { userId } = useAuth();
   const [phase, setPhase] = useState<AdPhase>('loading');
@@ -35,8 +46,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
   const rewardForAd = useMutation(api.ads.rewardForAd);
 
   // Parse active ad network config from Convex backend if configured by Admin Panel
-  const enabledProviders = adConfig?.providers;
-  const activeProvider = enabledProviders?.[0];
+  const activeProvider = adConfig?.providers?.[0];
   let parsedConfig: Record<string, any> = {};
   if (activeProvider?.configJson) {
     try {
@@ -44,7 +54,6 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
     } catch {}
   }
 
-  const networkName = activeProvider?.name ?? 'Google AdMob';
   const rewardPoints = adConfig?.rewardPoints ?? 50;
   const adUnitId =
     Platform.OS === 'ios'
@@ -64,7 +73,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
       try {
         load();
       } catch (err: any) {
-        setAdError(err?.message || 'Failed to load ad');
+        setAdError(sanitize(err?.message || 'Failed to load ad', adUnitId));
         setPhase('error');
       }
     }
@@ -73,10 +82,10 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
   // Surface load/show failures so the user can retry.
   useEffect(() => {
     if (error) {
-      setAdError(error.message);
+      setAdError(sanitize(error.message, adUnitId));
       setPhase('error');
     }
-  }, [error]);
+  }, [error, adUnitId]);
 
   // Ad became ready → flip to the "Watch Ad" CTA.
   useEffect(() => {
@@ -130,12 +139,10 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.adCard}>
-          {/* Ad Network Header Badge */}
+          {/* Rewarded Ad Header Badge */}
           <View style={styles.testBadgeHeader}>
             <Icon name="shield-halved" iconStyle="solid" size={12} color="#F59E0B" />
-            <Text style={styles.testBadgeText}>
-              {networkName.toUpperCase()} REWARDED AD ({Platform.OS.toUpperCase()})
-            </Text>
+            <Text style={styles.testBadgeText}>REWARDED AD ({Platform.OS.toUpperCase()})</Text>
           </View>
 
           {/* Ad Status Area */}
@@ -144,7 +151,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
               <>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={styles.adTitle}>Loading ad…</Text>
-                <Text style={styles.adSubtitle}>Fetching a test ad for your device</Text>
+                <Text style={styles.adSubtitle}>Fetching an ad for your device</Text>
               </>
             )}
 
@@ -167,18 +174,10 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
                 </View>
                 <Text style={styles.adTitle}>Could not load ad</Text>
                 <Text style={styles.adSubtitle} numberOfLines={3}>
-                  {adError || 'No fill for this ad unit on your device'}
+                  {adError || 'No ads available right now'}
                 </Text>
               </>
             )}
-
-            {/* Active placement label */}
-            <View style={styles.timerBadge}>
-              <Icon name="tag" iconStyle="solid" size={12} color="#F59E0B" />
-              <Text style={styles.timerText}>
-                {adUnitId.length > 32 ? adUnitId.substring(0, 32) + '…' : adUnitId}
-              </Text>
-            </View>
           </View>
 
           {/* Action Footer */}
@@ -284,21 +283,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     textAlign: 'center',
     paddingHorizontal: 10,
-  },
-  timerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#222234',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-  },
-  timerText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#F59E0B',
-    maxWidth: '92%',
   },
   footerRow: {
     flexDirection: 'row',

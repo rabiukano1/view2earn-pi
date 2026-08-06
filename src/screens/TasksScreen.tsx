@@ -30,6 +30,7 @@ import ComboTracker from '../components/ComboTracker';
 import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
 import RewardedAdModal from '../components/RewardedAdModal';
+import AdPromptModal from '../components/AdPromptModal';
 import UploadScreenshotModal from '../components/UploadScreenshotModal';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
@@ -338,8 +339,10 @@ export default function TasksScreen() {
   const { userId } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [selectedTaskForAd, setSelectedTaskForAd] = useState<Task | null>(null);
+  const [promptForTask, setPromptForTask] = useState<Task | null>(null);
   const [uploadTarget, setUploadTarget] = useState<Verification | null>(null);
   const [adAfterUpload, setAdAfterUpload] = useState(false);
+  const [promptAfterUpload, setPromptAfterUpload] = useState(false);
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
   const claim = useMutation(api.verifications.claim);
@@ -376,22 +379,8 @@ export default function TasksScreen() {
         await openTask(task, handleQuizNav);
         return;
       }
-      
-      Alert.alert(
-        'Support Us',
-        'Would you like to watch a short ad before completing this task?',
-        [
-          {
-            text: 'No, thanks',
-            style: 'cancel',
-            onPress: () => openTask(task, handleQuizNav),
-          },
-          {
-            text: 'Yes, watch ad',
-            onPress: () => setSelectedTaskForAd(task),
-          },
-        ]
-      );
+
+      setPromptForTask(task);
     } catch (e) {
       let msg = String(e).replace('[CONVEX] ', '');
       msg = msg.replace(/Uncaught Error:\s*/, '');
@@ -435,7 +424,7 @@ export default function TasksScreen() {
       const { storageId } = (await result.json()) as { storageId: Id<'_storage'> };
       await submitProof({ verificationId: verification._id, storageId });
       setUploadTarget(null);
-      setAdAfterUpload(true);
+      setPromptAfterUpload(true);
     } catch (e) {
       console.error('Upload failed:', e);
       Alert.alert('Upload failed', String(e).replace('[CONVEX] ', ''));
@@ -586,6 +575,29 @@ export default function TasksScreen() {
           if (!uploading) setUploadTarget(null);
         }}
       />
+      <AdPromptModal
+        visible={!!promptForTask}
+        onClose={() => {
+          const t = promptForTask;
+          setPromptForTask(null);
+          if (t) openTask(t, handleQuizNav);
+        }}
+        onConfirm={() => {
+          const t = promptForTask;
+          setPromptForTask(null);
+          if (t) setSelectedTaskForAd(t);
+        }}
+      />
+      <AdPromptModal
+        visible={promptAfterUpload}
+        title="Screenshot uploaded 🎉"
+        subtitle="Your proof is in review — points are credited once approved."
+        onClose={() => setPromptAfterUpload(false)}
+        onConfirm={() => {
+          setPromptAfterUpload(false);
+          setAdAfterUpload(true);
+        }}
+      />
       <RewardedAdModal
         visible={!!selectedTaskForAd || adAfterUpload}
         onClose={() => {
@@ -595,10 +607,6 @@ export default function TasksScreen() {
             openTask(t, handleQuizNav);
           } else if (adAfterUpload) {
             setAdAfterUpload(false);
-            Alert.alert(
-              'Screenshot uploaded 🎉',
-              'Your proof is in review — points are credited once approved.',
-            );
           }
         }}
       />

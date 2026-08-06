@@ -87,7 +87,6 @@ export default function SpinScreen() {
 
   // Rewarded Ad & Refill Timer states
   const [adVisible, setAdVisible] = useState(false);
-  const [adMode, setAdMode] = useState<'spin_ad' | 'bonus_spin'>('spin_ad');
   const [refillMs, setRefillMs] = useState(0);
 
   // Win celebration + button shine animations
@@ -232,28 +231,21 @@ export default function SpinScreen() {
   };
 
   const handleSpinPress = () => {
-    if (spinsRemaining <= 0) return;
-    setAdMode('spin_ad');
-    setAdVisible(true);
+    if (disabled || spinning) return;
+    executeSpin();
   };
 
   const handleGetBonusSpinPress = () => {
     if (adBonusRemaining <= 0) return;
-    setAdMode('bonus_spin');
     setAdVisible(true);
   };
 
   const handleAdSuccess = async () => {
-    if (adMode === 'bonus_spin') {
-      if (userId) {
-        try {
-          await earnBonusSpin({ userId, amount: 1 });
-        } catch {
-          // quota reached — ignore
-        }
-      }
-    } else if (adMode === 'spin_ad') {
-      await executeSpin();
+    if (!userId) return;
+    try {
+      await earnBonusSpin({ userId, amount: 1 });
+    } catch {
+      // quota reached — ignore
     }
   };
 

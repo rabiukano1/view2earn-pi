@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,7 +13,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import type { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 
@@ -22,7 +21,6 @@ export default function SurveysScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const [adVisible, setAdVisible] = useState(false);
 
   const surveys = useQuery(api.surveys.listAvailable, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
