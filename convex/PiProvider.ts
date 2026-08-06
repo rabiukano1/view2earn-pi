@@ -14,6 +14,7 @@ export const PiProvider = ConvexCredentials({
   authorize: async (credentials, ctx): Promise<{ userId: Id<"users"> }> => {
     const accessToken = credentials.accessToken as string | undefined;
     const uid = credentials.uid as string | undefined;
+    const walletAddress = credentials.walletAddress as string | undefined;
     if (!accessToken || !uid) throw new Error("Missing Pi credentials");
 
     // Server-side verification: never trust a client-sent UID on its own.
@@ -26,15 +27,27 @@ export const PiProvider = ConvexCredentials({
     const existing = await retrieveAccount(ctx, { provider: "pi", account }).catch(
       () => null,
     );
-    if (existing) return { userId: existing.user._id as Id<"users"> };
+    if (existing) {
+      // Refresh the wallet address on re-login if the Pioneer has one.
+      if (walletAddress && existing.user.piWalletAddress !== walletAddress) {
+        await ctx.runMutation(internal.piWallet.setPiWalletAddressInternal, {
+          userId: existing.user._id as Id<"users">,
+          walletAddress,
+        });
+      }
+      return { userId: existing.user._id as Id<"users"> };
+    }
+
+    const profile: Record<string, string> = {
+      name: verified.username,
+      piUid: verified.uid,
+    };
+    if (walletAddress) profile.piWalletAddress = walletAddress;
 
     const created = await createAccount(ctx, {
       provider: "pi",
       account,
-      profile: {
-        name: verified.username,
-        piUid: verified.uid,
-      },
+      profile,
     });
     return { userId: created.user._id as Id<"users"> };
   },

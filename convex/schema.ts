@@ -67,6 +67,7 @@ export default defineSchema({
     telegramUserId: v.optional(v.string()), // set at Telegram sign-in; used for channel-join checks
     payoutEvm: v.optional(v.string()), // EVM payout address (public only, no keys held)
     payoutSolana: v.optional(v.string()), // Solana payout address
+    piWalletAddress: v.optional(v.string()), // Pi blockchain wallet address (public, no keys held)
     referredBy: v.optional(v.id("users")), // set at signup if a referral code was applied
   }).index("by_ecosystem", ["ecosystem"])
     .index("by_externalUid", ["externalUid"])
@@ -157,6 +158,21 @@ export default defineSchema({
     status: v.string(), // "pending" | "processing" | "completed" | "rejected"
     txHash: v.optional(v.string()),
     createdAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  // Points-to-Pi withdrawals: A2U (App-to-User) Pi payments. The app sends
+  // real Pi from its treasury wallet to the user's linked Pi wallet address
+  // in exchange for earned points (plan §7.8 extension).
+  piWithdrawals: defineTable({
+    userId: v.id("users"),
+    pointsSpent: v.number(),                      // points deducted from user
+    piAmount: v.number(),                          // Pi sent to wallet
+    walletAddress: v.string(),                     // destination Pi address
+    status: v.string(),                            // "pending" | "processing" | "completed" | "failed"
+    paymentId: v.optional(v.string()),             // Pi Platform payment ID
+    txid: v.optional(v.string()),                  // blockchain transaction ID
+    failureReason: v.optional(v.string()),
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
 
@@ -345,4 +361,31 @@ export default defineSchema({
     ip: v.optional(v.string()), // for spam/abuse triage
   }).index("by_status", ["status"])
     .index("by_kind", ["kind"]),
+
+  // Videos and zero-cost watch-to-earn logs
+  videos: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    provider: v.union(v.literal("YOUTUBE"), v.literal("CONVEX"), v.literal("R2")),
+    externalId: v.string(),
+    videoUrl: v.string(),
+    thumbnailUrl: v.optional(v.string()),
+    durationSeconds: v.number(),
+    viewsCount: v.number(),
+    rewardPoints: v.number(),
+    status: v.union(v.literal("PROCESSING"), v.literal("ACTIVE"), v.literal("BLOCKED")),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status_createdAt", ["status", "createdAt"]),
+
+  videoWatchLogs: defineTable({
+    userId: v.id("users"),
+    videoId: v.id("videos"),
+    watchDurationSeconds: v.number(),
+    completed: v.boolean(),
+    rewardClaimed: v.boolean(),
+    watchedAt: v.number(),
+  }).index("by_user_video", ["userId", "videoId"]),
 });

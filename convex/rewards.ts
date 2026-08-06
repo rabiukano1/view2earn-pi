@@ -318,7 +318,7 @@ export const seedCatalog = internalMutation({
         const patch: Record<string, string | number> = {};
         if (item.name.includes("₦")) patch.name = item.name.replace("₦", "");
         if (item.coinPrice === undefined) {
-          const seed = CATALOG_SEED.find((s) => s.name === item.name);
+          const seed = CATALOG_SEED.find((s) => s.providerSku === item.providerSku);
           if (seed) patch.coinPrice = seed.coinPrice;
         }
         if (Object.keys(patch).length > 0) {

@@ -73,6 +73,16 @@ export const startPiRedemption = mutation({
   },
   handler: async (ctx, { userId, catalogId, phoneNumber, paymentId }) => {
     await requireUser(ctx, userId);
+
+    // The Pi SDK retries onReadyForServerApproval roughly every 10s with the
+    // SAME paymentId when a prior attempt fails. Reuse the existing redemption
+    // instead of inserting a duplicate on retry (checked before rate-limit so
+    // legitimate retries are never rejected).
+    const existing = await ctx.db.query("redemptions").filter((q) =>
+      q.eq(q.field("paymentId"), paymentId),
+    ).first();
+    if (existing) return { redemptionId: existing._id };
+
     await enforceRateLimit(ctx, userId, "redeem");
 
     const user = await ctx.db.get(userId);
@@ -178,7 +188,8 @@ export const completePiRedemption = mutation({
     ).first();
     if (!redemption) throw new Error("No matching Pi purchase for this account");
     if (redemption.status !== "processing") {
-      throw new Error("This purchase is already finalised");
+      // SDK retries this callback on failure; a finalised purchase is a no-op.
+      return { redemptionId: redemption._id };
     }
 
     await ctx.scheduler.runAfter(0, internal.piPayments.completeAndFulfill, {

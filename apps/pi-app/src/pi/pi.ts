@@ -9,7 +9,7 @@
 //       onReadyForServerCompletion, onCancel, onError })  — callback-driven
 "use client";
 
-type PiUser = { uid: string; username?: string };
+type PiUser = { uid: string; username?: string; wallet_address?: string };
 export type PiAuthResult = {
   accessToken: string;
   user: PiUser;
@@ -46,7 +46,7 @@ declare global {
 }
 
 const PI_SDK_URL = "https://sdk.minepi.com/pi-sdk.js";
-const DEFAULT_PI_SCOPES = ["username", "payments"] as const;
+const DEFAULT_PI_SCOPES = ["username", "payments", "wallet_address"] as const;
 
 // Sandbox vs mainnet. Controlled by env so the same build can run either way;
 // defaults to sandbox (true) and flips off only when explicitly set to "false".
@@ -115,6 +115,47 @@ export async function signInWithPi(
 ): Promise<PiAuthResult> {
   const Pi = await initPi(sandbox);
   return Pi.authenticate([...DEFAULT_PI_SCOPES], onIncompletePaymentFound);
+}
+
+// Reads the authenticated user's Pi wallet address. Uses the SAME scope set as
+// sign-in: requesting a subset of already-granted scopes can make the Pi SDK
+// hang instead of returning the cached auth, so we always re-request the full
+// default set. A timeout keeps the caller from spinning forever.
+export async function authenticatePiWallet(
+  sandbox = getPiSandbox(),
+): Promise<string | undefined> {
+  const Pi = await initPi(sandbox);
+  let res: PiAuthResult;
+  try {
+    res = await withTimeout(
+      Pi.authenticate([...DEFAULT_PI_SCOPES], () => {
+        // no incomplete-payment resume needed for a read-only address fetch
+      }),
+      30000,
+    );
+  } catch (e) {
+    throw new Error(
+      e instanceof TimeoutError
+        ? "Pi didn't respond. Open the Pi authorization dialog and approve it."
+        : `Pi wallet access failed: ${(e as Error)?.message ?? e}`,
+    );
+  }
+  return res.user.wallet_address;
+}
+
+class TimeoutError extends Error {}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new TimeoutError()), ms);
+    p.then((v) => {
+      clearTimeout(t);
+      resolve(v);
+    }).catch((e) => {
+      clearTimeout(t);
+      reject(e);
+    });
+  });
 }
 
 // Resumes a payment that was submitted to the blockchain but never completed

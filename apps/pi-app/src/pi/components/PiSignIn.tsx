@@ -29,7 +29,11 @@ export function PiSignIn() {
         // with the real account once the session is known.
         stashPendingPiPayment(payment);
       });
-      await signIn("pi", { accessToken: res.accessToken, uid: res.user.uid });
+      await signIn("pi", {
+        accessToken: res.accessToken,
+        uid: res.user.uid,
+        ...(res.user.wallet_address ? { walletAddress: res.user.wallet_address } : {}),
+      });
     } catch (e) {
       setError(String((e as Error)?.message ?? e).replace("[CONVEX] ", ""));
     } finally {
