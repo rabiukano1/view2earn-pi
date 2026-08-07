@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -63,6 +63,7 @@ export default function MarketplaceScreen() {
       <PageHeader
         title="Marketplace"
         subtitle="List your profile — earn points when others follow"
+        back
         right={
           <View style={styles.balancePill}>
             <Text style={styles.balanceText}>{balance === undefined ? '…' : balance} pts</Text>

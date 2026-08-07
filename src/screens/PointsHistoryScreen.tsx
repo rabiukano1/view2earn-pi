@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -8,9 +8,8 @@ import {
   useColorScheme,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import type { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 
@@ -52,6 +51,7 @@ export default function PointsHistoryScreen() {
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader
         title="Points History"
+        back
         right={
           <View style={styles.balancePill}>
             <Text style={styles.balanceText}>{balance === undefined ? '…' : balance} pts</Text>

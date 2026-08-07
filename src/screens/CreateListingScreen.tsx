@@ -85,8 +85,20 @@ export default function CreateListingScreen() {
         contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 40 }}
         keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={[styles.title, dark && styles.textLight]}>Create listing</Text>
-          <Text style={styles.sub}>List your social profile as a follow task</Text>
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back">
+              <Text style={[styles.backText, dark && styles.textLight]}>← Back</Text>
+            </TouchableOpacity>
+            <View style={styles.headerText}>
+              <Text style={[styles.title, dark && styles.textLight]}>Create listing</Text>
+              <Text style={styles.sub}>List your social profile as a follow task</Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -216,6 +228,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F4F5' },
   containerDark: { backgroundColor: '#18181B' },
   header: { paddingHorizontal: 20, marginBottom: 12 },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  headerText: { flex: 1 },
+  backButton: { marginRight: 12, marginTop: 4 },
+  backText: { fontSize: 16, fontWeight: '700', color: '#7C3AED' },
   title: { fontSize: 28, fontWeight: '700', color: '#18181B' },
   sub: { fontSize: 14, color: '#71717A', marginTop: 4 },
   textLight: { color: '#FAFAFA' },

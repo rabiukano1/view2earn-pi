@@ -1,7 +1,7 @@
 # View2Earn — Progress & Roadmap
 
 Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.md`
-(plan sections referenced as §). Last updated: 2026-07-29.
+(plan sections referenced as §). Last updated: 2026-08-07.
 
 ---
 
@@ -54,6 +54,7 @@ Status tracker for the View2Earn build. Pairs with `View2Earn-Master-Plan-v2.4.m
 - Modern design system (`theme.ts`) — tokens, shadows; floating tab bar; branded hero headers; unified scroll
 - **Real icons app-wide** — FontAwesome6 via `react-native-vector-icons` (`components/Icon.tsx`, `PlatformIcon.tsx`): nav tabs, home shortcuts, social brand logos, login inputs. *Needs `fonts.gradle` line + native rebuild to render.*
 - **Modernized screens** — login (password / email-code / Telegram tabs, icon inputs, signup-on-failure prompt), profile (identity header, icon menu rows, fingerprint toggle, sign out), fingerprint unlock screen
+- **Smart profile redesign** — Profile is now a hub: level ring + XP bar, Daily Smart Score coach panel (top 4 next-best actions with navigation), stats overview strip (balance/earned/tasks/rank), achievements preview, and grouped screens for Referral, Stats & Analytics, Achievements, Linked Accounts, Security, and Payout Wallets (`convex/profile.ts` `smartDashboard` aggregates 8 queries in one round-trip; `src/profile/smart.ts` pure helpers for level curve, achievements, coach insights, smart score; `AchievementsScreen`, `StatsScreen`, `ReferralScreen`, `LinkedAccountsScreen`, `SecurityScreen`, `PayoutSettingsScreen`)
 - **Fingerprint app-lock** — `react-native-biometrics` (`auth/biometric.ts` lazy/guarded), `BiometricGate` prompts on reopen when enabled (toggle in Profile)
 
 ---

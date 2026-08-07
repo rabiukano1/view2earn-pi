@@ -129,7 +129,11 @@ export default function SpinScreen() {
   const refillProgress = Math.min(1, Math.max(0, 1 - refillMs / windowTotalMs));
 
   const disabled = spinning || spinsRemaining <= 0 || result !== null || !userId;
-  const bonusAdDisabled = disabled || adBonusRemaining <= 0;
+  // The ad button stays usable even when out of spins — that's its whole point:
+  // watch a rewarded ad to earn one more spin. Only block it while spinning,
+  // showing a result, or after the per-window ad quota is used up.
+  const bonusAdDisabled =
+    spinning || result !== null || !userId || adBonusRemaining <= 0;
 
   const startCelebration = () => {
     popScale.setValue(0.4);

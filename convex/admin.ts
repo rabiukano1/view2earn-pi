@@ -10,7 +10,7 @@ import { REWARD_KEYS } from "./rewardsConfig";
 // so this is what actually stops direct calls to these endpoints.
 // ponytail: shared-secret auth. Upgrade to real per-admin identity
 // (ctx.auth + role check via a JWT provider) once one exists — see convex-setup-auth.
-function requireAdmin(token: string) {
+export function requireAdmin(token: string) {
   const expected = process.env.ADMIN_PASSWORD ?? "admin";
   if (token !== expected) throw new Error("Unauthorized");
 }

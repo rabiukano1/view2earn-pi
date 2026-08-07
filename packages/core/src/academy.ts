@@ -106,6 +106,46 @@ export const ACADEMY: Record<Ecosystem, AcademyLesson[]> = {
         },
       ],
     },
+    {
+      level: 4,
+      title: "Create & Use Your Pi Wallet",
+      body: "Your Pi Wallet is created inside the Pi Browser, not the mining app. Download the Pi Browser, sign in with your Pi account, and open the wallet.pi page to generate your wallet. The passphrase (your private key) is generated locally on your phone and never touches Pi's servers — you are the sole owner. Your public key is meant to be visible, like any blockchain address. Because the wallet is noncustodial, no one can recover it if you lose the passphrase, so store it offline. Note: your balance in the mining app (mobile balance) is not automatically in your wallet — it becomes transferable only after KYC and the Mainnet Checklist, and more unlocks as your Security Circle members pass KYC. During the Enclosed Network you can send and receive Pi peer-to-peer or through ecosystem apps; in the future Open Network, external wallets and other crypto assets will be supported.",
+      quiz: [
+        {
+          question: "Where do you create your Pi Wallet?",
+          options: [
+            "In the Pi Browser on the wallet.pi page",
+            "Inside the mining app's settings",
+            "On a third-party exchange website",
+            "By emailing Pi support",
+          ],
+          correctIndex: 0,
+          explanation: "Create it inside the Pi Browser by opening wallet.pi — never on an external site.",
+        },
+        {
+          question: "Who has access to your wallet passphrase (private key)?",
+          options: [
+            "Only you — it is generated locally and never sent to Pi's servers",
+            "Pi Network keeps an encrypted backup",
+            "Anyone in your Security Circle",
+            "Any app that asks for it",
+          ],
+          correctIndex: 0,
+          explanation: "The wallet is noncustodial: your passphrase is generated on your phone and never reaches Pi's servers.",
+        },
+        {
+          question: "When does your mobile mining balance move into your wallet?",
+          options: [
+            "After you pass KYC and complete the Mainnet Checklist",
+            "As soon as you create the wallet",
+            "Instantly after every daily tap",
+            "It never becomes transferable",
+          ],
+          correctIndex: 0,
+          explanation: "Your mobile balance becomes transferable only after KYC and the Mainnet Checklist.",
+        },
+      ],
+    },
   ],
   SIDRA: [
     {

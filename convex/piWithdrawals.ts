@@ -90,13 +90,13 @@ export const requestPiWithdrawal = mutation({
       pointsSpent: pointsToRedeem,
       piAmount,
       walletAddress: user.piWalletAddress,
-      status: "processing",
+      status: "pending",
+      createdAt: Date.now(),
     });
 
-    // Schedule background A2U payout execution (Node runtime, see piWithdrawalsPayout.ts)
-    await ctx.scheduler.runAfter(0, internal.piWithdrawalsPayout.processA2UPayout, {
-      withdrawalId,
-    });
+    // Kick the A2U payout worker. The worker itself serializes payouts (Pi only
+    // allows one A2U payment at a time) and drains the queue (see piWithdrawalsPayout.ts).
+    await ctx.scheduler.runAfter(0, internal.piWithdrawalsPayout.processA2UPayout, {});
 
     return { withdrawalId, piAmount };
   },
@@ -118,6 +118,60 @@ export const updateWithdrawalStatus = internalMutation({
       ...(txid ? { txid } : {}),
       ...(failureReason ? { failureReason } : {}),
     });
+  },
+});
+
+// ---- A2U payout serialization ------------------------------------------------
+// Pi allows only ONE A2U payment in flight at a time (all A2U payments use the
+// developer wallet's sequence number), so every payout claims a single mutex
+// slot in `payoutLocks` before running. `expiresAt` lets a crashed worker's
+// slot be reclaimed, and stale "processing" withdrawals are resumed.
+
+const LOCK_DURATION_MS = 10 * 60 * 1000; // stale lock reclaim window
+
+export const acquireA2USlot = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const lock = await ctx.db.query("payoutLocks").withIndex("by_name", (q) => q.eq("name", "pi-a2u")).first();
+    if (lock && lock.expiresAt > now) {
+      return { acquired: false as const, busy: true as const, withdrawalId: null as null };
+    }
+
+    const oldestPending = await ctx.db
+      .query("piWithdrawals")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "pending"))
+      .order("asc")
+      .first();
+    const staleProcessing = await ctx.db
+      .query("piWithdrawals")
+      .withIndex("by_status_createdAt", (q) => q.eq("status", "processing"))
+      .order("asc")
+      .first();
+    const target = oldestPending ?? staleProcessing;
+
+    if (!target) {
+      if (lock) await ctx.db.delete(lock._id);
+      return { acquired: false as const, busy: false as const, withdrawalId: null as null };
+    }
+
+    if (lock) {
+      await ctx.db.patch(lock._id, { expiresAt: now + LOCK_DURATION_MS });
+    } else {
+      await ctx.db.insert("payoutLocks", { name: "pi-a2u", expiresAt: now + LOCK_DURATION_MS });
+    }
+    if (target.status !== "processing") {
+      await ctx.db.patch(target._id, { status: "processing" });
+    }
+    return { acquired: true as const, busy: false as const, withdrawalId: target._id };
+  },
+});
+
+export const releaseA2USlot = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const lock = await ctx.db.query("payoutLocks").withIndex("by_name", (q) => q.eq("name", "pi-a2u")).first();
+    if (lock) await ctx.db.delete(lock._id);
   },
 });
 

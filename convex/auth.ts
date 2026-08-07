@@ -20,6 +20,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const image = profile.image as string | undefined;
       const telegramUserId = profile.telegramId as string | undefined;
       const piUid = profile.piUid as string | undefined;
+      const piWalletAddress = profile.piWalletAddress as string | undefined;
       return await ctx.db.insert("users", {
         email,
         name,
@@ -40,6 +41,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         signupIp: "unknown",
         country: "unknown",
         telegramUserId,
+        piWalletAddress,
       });
     },
   },

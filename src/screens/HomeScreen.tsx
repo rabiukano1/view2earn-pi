@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -13,7 +13,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
-import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { collectDeviceSignals } from '../lib/device';
 import { useAuth } from '../auth/AuthContext';
@@ -64,6 +63,12 @@ export default function HomeScreen() {
       label: 'Spin',
       tint: '#EC4899',
       go: () => stackNav.navigate('Spin', userId ? { userId } : undefined),
+    },
+    {
+      icon: 'clipboard-list',
+      label: 'Surveys',
+      tint: '#F97316',
+      go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined),
     },
     { icon: 'gift', label: 'Rewards', tint: '#10B981', go: () => tabNav.navigate('Rewards') },
     { icon: 'trophy', label: 'Leaderboard', tint: '#EF4444', go: () => tabNav.navigate('Leaderboard') },

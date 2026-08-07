@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -105,7 +104,7 @@ export default function WalletHistoryScreen() {
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
-      <PageHeader title="Wallet History" subtitle="All token & points transactions" />
+      <PageHeader title="Wallet History" subtitle="All token & points transactions" back />
 
       {/* Filter tabs */}
       <View style={styles.filterRow}>

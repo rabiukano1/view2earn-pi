@@ -19,7 +19,14 @@ export type RootStackParamList = {
   Academy: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
   Quiz: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
   Spin: { userId: string } | undefined;
+  Surveys: { userId?: string } | undefined;
   Terms: undefined;
   Policy: { policy: PolicyKey };
+  Referral: undefined;
+  LinkedAccounts: undefined;
+  Security: undefined;
+  Achievements: undefined;
+  Stats: undefined;
+  PayoutSettings: undefined;
 };
 

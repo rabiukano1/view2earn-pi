@@ -1,21 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { ReactNode } from "react";
-
-const NAV = [
-  { href: "/home", label: "Home" },
-  { href: "/tasks", label: "Tasks" },
-  { href: "/wallet", label: "Wallet" },
-  { href: "/redeem", label: "Redeem" },
-];
+import { PiBottomNav } from "./PiBottomNav";
 
 export function PiAppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const me = useQuery(api.users.me);
   const { signOut } = useAuthActions();
 
@@ -24,26 +16,11 @@ export function PiAppShell({ children }: { children: ReactNode }) {
       <header className="pi-nav">
         <div className="container pi-nav-inner">
           <Link href="/home" className="pi-brand">
-            <span className="pi-brand-mark">V</span>
+            <img src="/icon.png" alt="View2Earn Logo" className="pi-brand-mark" width={40} height={40} style={{ borderRadius: '12px', objectFit: 'contain' }} />
             View2Earn
             <span className="pi-brand-tag">PI</span>
           </Link>
-          <nav className="pi-links">
-            {NAV.map((n) => (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={`pi-link ${pathname?.startsWith(n.href) ? "pi-link-active" : ""}`}>
-                {n.label}
-              </Link>
-            ))}
-          </nav>
-          <div className="pi-user">
-            {me ? <span className="pi-username">@{me.username}</span> : null}
-            <button className="btn btn-secondary btn-sm" onClick={() => signOut()}>
-              Sign out
-            </button>
-          </div>
+          {me ? <span className="pi-username pi-nav-user">@{me.username}</span> : null}
         </div>
       </header>
       <main className="container pi-main">{children}</main>
@@ -56,9 +33,13 @@ export function PiAppShell({ children }: { children: ReactNode }) {
             <Link href="/anti-fraud">Anti-Fraud</Link>
             <Link href="/rewards-redemption">Rewards &amp; Redemption</Link>
             <Link href="/terms">Terms</Link>
+            <button className="pi-signout" onClick={() => signOut()}>
+              Sign out
+            </button>
           </nav>
         </div>
       </footer>
+      <PiBottomNav />
     </div>
   );
 }

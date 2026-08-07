@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Linking,
   ScrollView,
   StyleSheet,
@@ -175,9 +176,11 @@ export default function LoginScreen() {
       showsVerticalScrollIndicator={false}>
       {/* Hero */}
       <View style={styles.hero}>
-        <View style={styles.emblem}>
-          <Icon name="bolt" iconStyle="solid" size={30} color={colors.white} />
-        </View>
+        <Image
+          source={require('../assets/icon.png')}
+          style={{ width: 112, height: 112, borderRadius: 24, marginBottom: 16 }}
+          resizeMode="contain"
+        />
         <Text style={styles.logo}>View2Earn</Text>
         <Text style={styles.tagline}>Earn rewards for social engagement</Text>
       </View>
@@ -388,8 +391,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...shadow.raised,
   },
-  logo: { fontSize: 30, fontWeight: '800', color: colors.text, letterSpacing: -0.5 },
-  tagline: { fontSize: 14, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
+  logo: { fontSize: 40, fontWeight: '900', color: colors.text, letterSpacing: -0.5 },
+  tagline: { fontSize: 15, color: colors.textMuted, marginTop: 6, fontWeight: '600' },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: 22, ...shadow.card },
   tabs: { flexDirection: 'row', gap: 8, marginBottom: 18 },
   tab: {

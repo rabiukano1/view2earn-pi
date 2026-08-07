@@ -7,12 +7,40 @@
 //   - Pi.authenticate(scopes, onIncompletePaymentFound)
 //   - Pi.createPayment(paymentData, { onReadyForServerApproval,
 //       onReadyForServerCompletion, onCancel, onError })  — callback-driven
+//   - Pi.Ads.showAd("rewarded") → adId, verified server-side via the Platform
+//       API before a reward is granted (never trust the client alone)
 "use client";
 
 type PiUser = { uid: string; username?: string; wallet_address?: string };
 export type PiAuthResult = {
   accessToken: string;
   user: PiUser;
+};
+
+export type PiAdType = "interstitial" | "rewarded";
+
+export type PiShowAdResponse =
+  | {
+      type: "interstitial";
+      result: "AD_CLOSED" | "AD_DISPLAY_ERROR" | "AD_NETWORK_ERROR" | "AD_NOT_AVAILABLE";
+    }
+  | {
+      type: "rewarded";
+      result:
+        | "AD_REWARDED"
+        | "AD_CLOSED"
+        | "AD_DISPLAY_ERROR"
+        | "AD_NETWORK_ERROR"
+        | "AD_NOT_AVAILABLE"
+        | "ADS_NOT_SUPPORTED"
+        | "USER_UNAUTHENTICATED";
+      adId?: string;
+    };
+
+export type PiIsAdReadyResponse = { type: PiAdType; ready: boolean };
+export type PiRequestAdResponse = {
+  type: PiAdType;
+  result: "AD_LOADED" | "AD_FAILED_TO_LOAD" | "AD_NOT_AVAILABLE";
 };
 
 export type PiPaymentData = {
@@ -41,6 +69,12 @@ declare global {
         onIncompletePaymentFound?: (payment: unknown) => void,
       ) => Promise<PiAuthResult>;
       createPayment: (paymentData: PiPaymentData, callbacks: PiPaymentCallbacks) => void;
+      nativeFeaturesList?: () => Promise<string[]>;
+      Ads?: {
+        isAdReady: (adType: PiAdType) => Promise<PiIsAdReadyResponse>;
+        requestAd: (adType: PiAdType) => Promise<PiRequestAdResponse>;
+        showAd: (adType: PiAdType) => Promise<PiShowAdResponse>;
+      };
     };
   }
 }
@@ -219,4 +253,69 @@ export async function startPiPayment(
     onCancel: (paymentId) => callbacks.onCancel?.(paymentId),
     onError: (error, payment) => callbacks.onError?.(error, payment),
   });
+}
+
+// Whether the Pi Browser build supports the Developer Ad Network. Checking
+// Pi.nativeFeaturesList() avoids running the whole ad flow on old browsers.
+export async function isPiAdsSupported(
+  sandbox = getPiSandbox(),
+): Promise<boolean> {
+  try {
+    const Pi = await initPi(sandbox);
+    if (!Pi.Ads) return false;
+    if (Pi.nativeFeaturesList) {
+      const features = await Pi.nativeFeaturesList();
+      return features.includes("ad_network");
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type PiRewardedAdResult =
+  | { supported: true; rewarded: true; adId: string }
+  | { supported: true; rewarded: false; reason: string }
+  | { supported: false; reason: string };
+
+// Runs the full rewarded-ad flow per the SDK contract: check readiness,
+// request a fresh ad if needed, show it, and resolve with the adId ONLY on
+// "AD_REWARDED". The backend must still verify the adId via the Platform API.
+export async function showPiRewardedAd(
+  sandbox = getPiSandbox(),
+): Promise<PiRewardedAdResult> {
+  try {
+    const Pi = await initPi(sandbox);
+    if (!Pi.Ads) {
+      return { supported: false, reason: "ADS_NOT_SUPPORTED" };
+    }
+    if (Pi.nativeFeaturesList) {
+      const features = await Pi.nativeFeaturesList();
+      if (!features.includes("ad_network")) {
+        return { supported: false, reason: "ADS_NOT_SUPPORTED" };
+      }
+    }
+
+    const ready = await Pi.Ads.isAdReady("rewarded");
+    if (!ready.ready) {
+      const request = await Pi.Ads.requestAd("rewarded");
+      if (request.result !== "AD_LOADED") {
+        return { supported: true, rewarded: false, reason: request.result };
+      }
+    }
+
+    const shown = await Pi.Ads.showAd("rewarded");
+    if (shown.type !== "rewarded") {
+      return { supported: true, rewarded: false, reason: "AD_ERROR" };
+    }
+    if (shown.result === "AD_REWARDED" && shown.adId) {
+      return { supported: true, rewarded: true, adId: shown.adId };
+    }
+    return { supported: true, rewarded: false, reason: shown.result };
+  } catch (e) {
+    return {
+      supported: false,
+      reason: e instanceof Error ? e.message : "AD_ERROR",
+    };
+  }
 }

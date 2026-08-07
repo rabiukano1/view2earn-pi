@@ -4,9 +4,9 @@ export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="container site-header-inner">
-        <Link href="/" className="brand">
-          <span className="brand-mark">V</span>
-          <span>View2Earn</span>
+        <Link href="/" className="brand" style={{ gap: '14px' }}>
+          <img src="/icon.png" alt="View2Earn Logo" className="brand-mark-img" width={60} height={60} style={{ borderRadius: '13px', objectFit: 'contain' }} />
+          <span style={{ fontSize: '1.65rem', fontWeight: 800, letterSpacing: '-0.02em' }}>View2Earn</span>
         </Link>
         <nav className="site-nav">
           <Link href="/#live">Live</Link>

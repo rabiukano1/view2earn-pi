@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -8,11 +9,14 @@ import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 
 const STATUS_LABEL: Record<string, string> = {
+  pending: "Queued",
   processing: "Processing…",
   completed: "Completed ✓",
   failed: "Failed",
 };
 
+// Pi wallet: points + Pi balances, linked wallet, withdrawal + history.
+// Modernized with a gradient hero and compact glass cards (no inline styles).
 export default function PiWallet() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -22,14 +26,13 @@ export default function PiWallet() {
   const myWallet = useQuery(api.piWallet.getMyWallet, userId ? { userId } : "skip");
   const withdrawalRate = useQuery(api.piWithdrawals.getWithdrawalRate, userId ? { userId } : "skip");
   const withdrawals = useQuery(api.piWithdrawals.listMyWithdrawals, userId ? { userId } : "skip");
-  
+
   const getPiBalance = useAction(api.piWallet.getPiBalance);
   const requestWithdrawal = useMutation(api.piWithdrawals.requestPiWithdrawal);
 
   const [piBalance, setPiBalance] = useState<number | null>(null);
   const [balError, setBalError] = useState<string>("");
 
-  // Withdrawal form state
   const [pointsInput, setPointsInput] = useState<string>("");
   const [withdrawBusy, setWithdrawBusy] = useState<boolean>(false);
   const [withdrawMsg, setWithdrawMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -108,138 +111,137 @@ export default function PiWallet() {
   };
 
   return (
-    <div className="pi-page">
-      <div className="pi-page-head">
-        <h1>Wallet & Withdrawals</h1>
-        <p className="pi-muted">Your points and Pi balances — redeem earned points directly to your Pi blockchain wallet.</p>
-      </div>
-
-      <div className="pi-grid">
-        <section className="pi-card">
-          <div className="pi-card-head">
-            <h2>Points</h2>
-            <span className="pi-badge pi-badge-accent">APP BALANCE</span>
-          </div>
-          <div className="pi-balance-value">{myWallet?.pointsBalance ?? "…"}</div>
-          <p className="pi-muted">Earn more points on the Tasks page.</p>
-        </section>
-
-        <section className="pi-card">
-          <div className="pi-card-head">
-            <h2>Pi (π)</h2>
-            <span className="pi-badge pi-badge-accent">ON-CHAIN · {myWallet?.network?.toUpperCase()}</span>
-          </div>
-          <div className="pi-balance-value">{piBalance !== null ? `${piBalance} π` : "…"}</div>
-          {balError ? <p className="pi-error">{balError}</p> : null}
-          <p className="pi-muted">Live balance from the Pi blockchain.</p>
-        </section>
-      </div>
-
-      <section className="pi-card">
-        <div className="pi-card-head">
-          <h2>Withdraw points to Pi wallet</h2>
-          <span className="pi-badge pi-badge-live">
-            1 Pi = {pointsPerPi} pts
-          </span>
+    <div className="pi-page pi-wallet">
+      {/* Hero */}
+      <div className="pi-hero">
+        <span className="pi-hero-blob pi-hero-blob-a" aria-hidden />
+        <span className="pi-hero-blob pi-hero-blob-b" aria-hidden />
+        <span className="pi-hero-blob pi-hero-blob-c" aria-hidden />
+        <p className="pi-hero-hi">My Wallet 💜</p>
+        <p className="pi-balance-label">Points Balance</p>
+        <p className="pi-balance-value">{myWallet?.pointsBalance ?? "…"}</p>
+        <div className="pi-hero-actions">
+          <Link className="pi-chip" href="/tasks">Earn more →</Link>
+          <span className="pi-hero-date">ON-CHAIN · {myWallet?.network?.toUpperCase() ?? "…"}</span>
         </div>
+      </div>
 
-        {address ? (
-          <form onSubmit={handleWithdraw} style={{ marginTop: "1rem" }}>
-            <p className="pi-muted" style={{ marginBottom: "1rem" }}>
-              Recipient Wallet: <strong className="pi-wallet-addr" title={address}>{short(address)}</strong>
-            </p>
-
-            {withdrawMsg ? (
-              <div className={`pi-msg ${withdrawMsg.ok ? "pi-msg-ok" : "pi-msg-err"}`} style={{ marginBottom: "1rem" }}>
-                {withdrawMsg.text}
-              </div>
-            ) : null}
-
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-              <input
-                className="pi-input"
-                type="number"
-                min={withdrawalRate?.minPoints ?? 100}
-                step="1"
-                placeholder={`Points to redeem (min ${withdrawalRate?.minPoints ?? 100})`}
-                value={pointsInput}
-                onChange={(e) => setPointsInput(e.target.value)}
-                style={{ flex: 1, minWidth: "200px" }}
-              />
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={withdrawBusy || !pointsNum || pointsNum <= 0}>
-                {withdrawBusy ? "Processing…" : `Withdraw ${calculatedPi} π`}
-              </button>
+      <div className="pi-home-body">
+        {/* Pi on-chain balance */}
+        <section className="pi-card pi-card-glass">
+          <div className="pi-row">
+            <span className="pi-wallet-icon" style={{ background: "rgba(98,126,234,0.14)" }}>π</span>
+            <div className="pi-grow">
+              <p className="pi-card-title">Pi on-chain</p>
+              <p className="pi-muted">Live balance from the Pi blockchain</p>
             </div>
-            {pointsNum > 0 ? (
-              <p className="pi-hint" style={{ marginTop: "0.5rem" }}>
-                You will receive <strong>{calculatedPi} π</strong> directly in your linked Pi wallet.
+            <span className="pi-badge pi-badge-accent">{myWallet?.network?.toUpperCase()}</span>
+          </div>
+          <p className="pi-wallet-pi-balance">
+            {piBalance !== null ? `${piBalance} π` : "…"}
+          </p>
+          {balError ? <p className="pi-error">{balError}</p> : null}
+        </section>
+
+        {/* Withdraw */}
+        <section className="pi-card pi-card-glass">
+          <div className="pi-card-head">
+            <h2>Withdraw to Pi</h2>
+            <span className="pi-badge pi-badge-live">1 Pi = {pointsPerPi} pts</span>
+          </div>
+
+          {address ? (
+            <form onSubmit={handleWithdraw}>
+              <p className="pi-muted">
+                Recipient wallet: <strong className="pi-wallet-addr" title={address}>{short(address)}</strong>
               </p>
+
+              {withdrawMsg ? (
+                <div className={`pi-msg ${withdrawMsg.ok ? "pi-msg-ok" : "pi-msg-err"}`}>
+                  {withdrawMsg.text}
+                </div>
+              ) : null}
+
+              <div className="pi-withdraw-row">
+                <input
+                  className="pi-input pi-withdraw-input"
+                  type="number"
+                  min={withdrawalRate?.minPoints ?? 100}
+                  step="1"
+                  placeholder={`Points to redeem (min ${withdrawalRate?.minPoints ?? 100})`}
+                  value={pointsInput}
+                  onChange={(e) => setPointsInput(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={withdrawBusy || !pointsNum || pointsNum <= 0}>
+                  {withdrawBusy ? "Processing…" : `Withdraw ${calculatedPi} π`}
+                </button>
+              </div>
+              {pointsNum > 0 ? (
+                <p className="pi-hint">
+                  You will receive <strong>{calculatedPi} π</strong> directly in your linked Pi wallet.
+                </p>
+              ) : null}
+            </form>
+          ) : (
+            <p className="pi-muted">
+              Your Pi wallet is linked automatically when you sign in with Pi inside the Pi Browser.
+            </p>
+          )}
+        </section>
+
+        {/* Linked wallet */}
+        <section className="pi-card pi-card-glass">
+          <div className="pi-card-head">
+            <h2>Linked Pi wallet</h2>
+            {address ? <span className="pi-badge pi-badge-live">LINKED</span> : null}
+          </div>
+          {address ? (
+            <p className="pi-wallet-addr" title={address}>{address}</p>
+          ) : (
+            <p className="pi-muted">
+              Your Pi wallet is linked automatically when you sign in with Pi.
+            </p>
+          )}
+        </section>
+
+        {/* History */}
+        <section className="pi-card pi-card-glass">
+          <div className="pi-card-head">
+            <h2>Withdrawal history</h2>
+            {withdrawals && withdrawals.length > 0 ? (
+              <span className="pi-badge pi-badge-accent">{withdrawals.length}</span>
             ) : null}
-          </form>
-        ) : (
-          <p className="pi-muted">
-            Your Pi wallet is linked automatically when you sign in with Pi inside the Pi Browser.
-          </p>
-        )}
-      </section>
-
-      <section className="pi-card">
-        <div className="pi-card-head">
-          <h2>Linked Pi wallet</h2>
-          {address ? <span className="pi-badge pi-badge-live">LINKED</span> : null}
-        </div>
-        {address ? (
-          <p className="pi-wallet-addr" title={address}>{address}</p>
-        ) : (
-          <p className="pi-muted">
-            Your Pi wallet is linked automatically when you sign in with Pi.
-          </p>
-        )}
-      </section>
-
-      <section className="pi-card pi-history">
-        <div className="pi-card-head">
-          <h2>Pi withdrawal history</h2>
-        </div>
-        {withdrawals === undefined ? (
-          <div className="pi-spinner" />
-        ) : withdrawals.length === 0 ? (
-          <p className="pi-muted">No Pi withdrawals requested yet.</p>
-        ) : (
-          <table className="pi-table">
-            <thead>
-              <tr style={{ textAlign: "left", opacity: 0.7 }}>
-                <th style={{ paddingBottom: "0.5rem" }}>Date</th>
-                <th style={{ paddingBottom: "0.5rem" }}>Points</th>
-                <th style={{ paddingBottom: "0.5rem" }}>Pi Amount</th>
-                <th style={{ paddingBottom: "0.5rem" }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
+          </div>
+          {withdrawals === undefined ? (
+            <div className="pi-spinner" />
+          ) : withdrawals.length === 0 ? (
+            <p className="pi-muted">No Pi withdrawals requested yet.</p>
+          ) : (
+            <div className="pi-activity">
               {withdrawals.map((w) => (
-                <tr key={w._id}>
-                  <td className="pi-muted">{new Date(w._creationTime).toLocaleDateString()}</td>
-                  <td className="pi-num">-{w.pointsSpent} pts</td>
-                  <td style={{ fontWeight: 600 }}>+{w.piAmount} π</td>
-                  <td>
-                    <span className={`pi-status ${w.status}`}>
-                      {STATUS_LABEL[w.status] ?? w.status}
-                    </span>
-                    {w.txid ? (
-                      <span className="pi-muted" style={{ display: "block", fontSize: "0.75rem" }}>
-                        Tx: {short(w.txid)}
+                <div key={w._id} className="pi-activity-row">
+                  <span className="pi-withdraw-status-icon">π</span>
+                  <div className="pi-grow">
+                    <div className="pi-withdraw-line">
+                      <span className="pi-withdraw-pi">+{w.piAmount} π</span>
+                      <span className={`pi-status ${w.status}`}>
+                        {STATUS_LABEL[w.status] ?? w.status}
                       </span>
-                    ) : null}
-                  </td>
-                </tr>
+                    </div>
+                    <p className="pi-muted">
+                      {new Date(w._creationTime).toLocaleDateString()} · -{w.pointsSpent} pts
+                      {w.txid ? ` · Tx ${short(w.txid)}` : ""}
+                    </p>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

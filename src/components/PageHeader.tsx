@@ -9,6 +9,8 @@ import {
   useColorScheme,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import Icon from './Icon';
 import { colors, radius, shadow } from '../theme';
 
 type Action = {
@@ -21,11 +23,16 @@ type Props = {
   subtitle?: string;
   right?: React.ReactNode;
   actions?: Action[];
+  back?: boolean;
+  onBack?: () => void;
 };
 
-export default function PageHeader({ title, subtitle, right, actions }: Props) {
+export default function PageHeader({ title, subtitle, right, actions, back, onBack }: Props) {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const showBack = back ?? false;
+  const handleBack = onBack ?? (() => navigation.canGoBack() && navigation.goBack());
   // Under Android edge-to-edge, insets.top can read 0 before the frame is
   // measured, dropping the header behind the status bar — fall back to the
   // real status-bar height so the title always clears it.
@@ -42,6 +49,17 @@ export default function PageHeader({ title, subtitle, right, actions }: Props) {
         { paddingTop: topInset + 12 },
       ]}>
       <View style={styles.topRow}>
+        {showBack && (
+          <TouchableOpacity
+            onPress={handleBack}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.backButton, dark && styles.backButtonDark]}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
+            <Icon name="arrow-left" iconStyle="solid" size={16} color={colors.white} />
+          </TouchableOpacity>
+        )}
         <View style={styles.titleCol}>
           <Text style={styles.title}>{title}</Text>
           {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -80,6 +98,18 @@ const styles = StyleSheet.create({
   },
   titleCol: { flex: 1, marginRight: 12 },
   rightCol: {},
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  backButtonDark: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
   title: {
     fontSize: 30,
     fontWeight: '800',

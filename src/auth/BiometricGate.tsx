@@ -49,7 +49,7 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 14 },
-  brand: { fontSize: 26, fontWeight: '800', color: colors.primary, letterSpacing: -0.5 },
+  brand: { fontSize: 32, fontWeight: '800', color: colors.primary, letterSpacing: -0.5 },
   hint: { fontSize: 14, color: colors.textMuted, fontWeight: '600' },
   fingerprint: {
     width: 132,

@@ -31,6 +31,14 @@ export default defineSchema({
     lastDay: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
+  // Pi Ad Network rewarded-ad completions (plan §7.9 / Pi Ads). One row per
+  // adId so a claimed rewarded ad can never be replayed for another reward.
+  adCompletions: defineTable({
+    userId: v.id("users"),
+    adId: v.string(),
+    at: v.number(),
+  }).index("by_adId", ["adId"]),
+
   // Daily task combo (plan §7.11b): follow + telegram join + quiz in one day.
   combos: defineTable({
     userId: v.id("users"),
@@ -173,8 +181,18 @@ export default defineSchema({
     paymentId: v.optional(v.string()),             // Pi Platform payment ID
     txid: v.optional(v.string()),                  // blockchain transaction ID
     failureReason: v.optional(v.string()),
+    createdAt: v.number(),                         // when the withdrawal was requested
   }).index("by_user", ["userId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_status_createdAt", ["status", "createdAt"]),
+
+  // Singleton mutex for Pi A2U payouts. Pi allows only ONE A2U payment in
+  // flight at a time (all A2U payments use the developer wallet's sequence
+  // number). `expiresAt` lets a crashed worker's slot be reclaimed.
+  payoutLocks: defineTable({
+    name: v.string(),        // "pi-a2u"
+    expiresAt: v.number(),   // epoch ms; stale when < now
+  }).index("by_name", ["name"]),
 
   // Exchange rates (global singleton) for swapping points ↔ pipro
   exchangeRates: defineTable({
@@ -388,4 +406,19 @@ export default defineSchema({
     rewardClaimed: v.boolean(),
     watchedAt: v.number(),
   }).index("by_user_video", ["userId", "videoId"]),
+
+  // Admin-configurable achievements (plan: smart profile). Each row overrides
+  // a default achievement (see convex/achievements.ts ACHIEVEMENT_DEFAULTS).
+  // `metric` selects what the progress measures; `target` is the threshold.
+  achievements: defineTable({
+    key: v.string(),        // stable id, e.g. "first-task"
+    metric: v.string(),     // "tasks" | "earned" | "streak" | "referrals" | "rank"
+    target: v.number(),
+    icon: v.string(),       // FontAwesome6 icon name
+    tint: v.string(),       // accent hex color
+    title: v.string(),
+    desc: v.string(),
+    enabled: v.boolean(),
+    sortOrder: v.number(),
+  }).index("by_key", ["key"]),
 });

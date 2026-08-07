@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -19,10 +19,17 @@ import CreateListingScreen from '../screens/CreateListingScreen';
 import PointsHistoryScreen from '../screens/PointsHistoryScreen';
 import AcademyScreen from '../screens/AcademyScreen';
 import SpinScreen from '../screens/SpinScreen';
+import SurveysScreen from '../screens/SurveysScreen';
 import WalletScreen from '../screens/WalletScreen';
 import WalletHistoryScreen from '../screens/WalletHistoryScreen';
 import TermsScreen from '../screens/TermsScreen';
 import PolicyScreen from '../screens/PolicyScreen';
+import ReferralScreen from '../screens/ReferralScreen';
+import LinkedAccountsScreen from '../screens/LinkedAccountsScreen';
+import SecurityScreen from '../screens/SecurityScreen';
+import AchievementsScreen from '../screens/AchievementsScreen';
+import StatsScreen from '../screens/StatsScreen';
+import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -130,8 +137,15 @@ export default function AppNavigator() {
       <Stack.Screen name="Academy" component={AcademyScreen} />
       <Stack.Screen name="Quiz" component={QuizScreen} />
       <Stack.Screen name="Spin" component={SpinScreen} />
+      <Stack.Screen name="Surveys" component={SurveysScreen} />
       <Stack.Screen name="Terms" component={TermsScreen} />
       <Stack.Screen name="Policy" component={PolicyScreen} />
+      <Stack.Screen name="Referral" component={ReferralScreen} />
+      <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen} />
+      <Stack.Screen name="Security" component={SecurityScreen} />
+      <Stack.Screen name="Achievements" component={AchievementsScreen} />
+      <Stack.Screen name="Stats" component={StatsScreen} />
+      <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
     </Stack.Navigator>
   );
 }
