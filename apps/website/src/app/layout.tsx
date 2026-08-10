@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { CookieConsentBanner } from "@/components/CookieConsentBanner";
+import { VisitorTracker } from "@/components/VisitorTracker";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,6 +39,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SiteHeader />
           <main>{children}</main>
           <SiteFooter />
+          <VisitorTracker />
+          <CookieConsentBanner />
         </Providers>
       </body>
     </html>

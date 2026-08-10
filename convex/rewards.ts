@@ -296,6 +296,85 @@ export const myReferral = query({
   },
 });
 
+export const applyReferralCode = mutation({
+  args: {
+    userId: v.id("users"),
+    code: v.string(),
+  },
+  handler: async (ctx, { userId, code }) => {
+    await requireUser(ctx, userId);
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+    if (user.referredBy) {
+      throw new Error("You have already applied a referral code.");
+    }
+
+    const cleanCode = code.trim().toUpperCase().replace(/^V2E-/, "");
+    if (!cleanCode) throw new Error("Please enter a valid referral code.");
+
+    const allUsers = await ctx.db.query("users").collect();
+    const referrer = allUsers.find(
+      (u) =>
+        u._id.toUpperCase().endsWith(cleanCode) ||
+        (u.username && u.username.toUpperCase() === cleanCode)
+    );
+
+    if (!referrer) {
+      throw new Error("Invalid referral code. No Pioneer found with this code.");
+    }
+
+    if (referrer._id === userId) {
+      throw new Error("You cannot use your own referral code.");
+    }
+
+    // Record referral
+    const referralId = await ctx.db.insert("referrals", {
+      referrerId: referrer._id,
+      refereeId: userId,
+      qualifiedAt: Date.now(),
+      rewarded: true,
+    });
+
+    await ctx.db.patch(userId, { referredBy: referrer._id });
+
+    // Credit referee bonus (+100 PTS)
+    const refereeLast = await ctx.db
+      .query("pointsLedger")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .first();
+    const refereeBalanceAfter = (refereeLast?.balanceAfter ?? 0) + 100;
+    await ctx.db.insert("pointsLedger", {
+      userId,
+      delta: 100,
+      reason: "REFERRAL_WELCOME_BONUS",
+      refId: referralId,
+      balanceAfter: refereeBalanceAfter,
+    });
+
+    // Credit referrer bonus (+250 PTS)
+    const referrerLast = await ctx.db
+      .query("pointsLedger")
+      .withIndex("by_user", (q) => q.eq("userId", referrer._id))
+      .order("desc")
+      .first();
+    const referrerBalanceAfter = (referrerLast?.balanceAfter ?? 0) + 250;
+    await ctx.db.insert("pointsLedger", {
+      userId: referrer._id,
+      delta: 250,
+      reason: "REFERRAL_QUALIFIED_BONUS",
+      refId: referralId,
+      balanceAfter: referrerBalanceAfter,
+    });
+
+    return {
+      success: true,
+      referrerName: referrer.username ?? referrer.name ?? "Pioneer",
+      bonusPoints: 100,
+    };
+  },
+});
+
 // Dev seed so the Rewards screen has items before providers are wired.
 // coinPrice = amount of Pi (π) required to buy the bundle (plan §7.8 purchase).
 const CATALOG_SEED = [

@@ -44,10 +44,13 @@ export function PiSignIn() {
   return (
     <div className="pi-card pi-signin">
       <div className="pi-logo" aria-hidden>
-        <svg viewBox="0 0 24 24" width="34" height="34" fill="none">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M8 7v10M8 12h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
+        <img
+          src="/logo.png"
+          alt="View2Earn Logo"
+          width={64}
+          height={64}
+          style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "18px" }}
+        />
       </div>
       <h1 className="pi-title">Sign in with Pi</h1>
       <p className="pi-sub">

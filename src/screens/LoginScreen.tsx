@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,9 +13,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from '@convex-dev/auth/react';
+import { smartOpenUrl } from '../lib/openUrl';
 import { api } from '../../convex/_generated/api';
 import Icon from '../components/Icon';
-import GoogleAuthButton from '../components/GoogleAuthButton';
 import { colors, radius, shadow } from '../theme';
 
 import { useNavigation } from '@react-navigation/native';
@@ -26,7 +25,11 @@ import type { RootStackParamList } from '../navigation/types';
 type Method = 'password' | 'otp';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-export default function LoginScreen() {
+interface LoginScreenProps {
+  onShowSplash?: () => void;
+}
+
+export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { signIn } = useAuthActions();
@@ -79,7 +82,7 @@ export default function LoginScreen() {
     try {
       const { nonce, url } = await startTelegram({});
       setTgNonce(nonce);
-      await Linking.openURL(url);
+      await smartOpenUrl(url);
     } catch {
       setTgNonce(null);
       setError('Could not open Telegram.');
@@ -176,12 +179,13 @@ export default function LoginScreen() {
       showsVerticalScrollIndicator={false}>
       {/* Hero */}
       <View style={styles.hero}>
-        <Image
-          source={require('../assets/icon.png')}
-          style={{ width: 112, height: 112, borderRadius: 24, marginBottom: 16 }}
-          resizeMode="contain"
-        />
-        <Text style={styles.logo}>View2Earn</Text>
+        <TouchableOpacity activeOpacity={0.85} onPress={onShowSplash}>
+          <Image
+            source={require('../assets/icon.png')}
+            style={{ width: 112, height: 112, borderRadius: 24, marginBottom: 16 }}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
         <Text style={styles.tagline}>Earn rewards for social engagement</Text>
       </View>
 
@@ -367,10 +371,6 @@ export default function LoginScreen() {
           {tgNonce ? 'Waiting for Telegram…' : 'Continue with Telegram'}
         </Text>
       </TouchableOpacity>
-
-      <View style={{ marginTop: 10 }}>
-        <GoogleAuthButton disabled={!acceptedTerms} onDisabledPress={handleTermsUnchecked} />
-      </View>
 
       <Text style={styles.soon}>Sidra KYC sign-in coming soon</Text>
     </ScrollView>

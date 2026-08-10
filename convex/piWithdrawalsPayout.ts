@@ -55,7 +55,7 @@ export const processA2UPayout = internalAction({
         return;
       }
 
-      const apiKey = process.env.PI_API_KEY;
+      const apiKey = process.env.PI_API_KEY ?? process.env.PI_API;
       const privateSeed = process.env.PI_WALLET_PRIVATE_SEED;
 
       // Dev/sandbox simulation when no live wallet is configured.
@@ -172,7 +172,7 @@ async function handlePayoutFailure(ctx: any, withdrawalId: any, reason: string) 
   });
   if (!withdrawal || withdrawal.status !== "processing") return;
 
-  const apiKey = process.env.PI_API_KEY;
+  const apiKey = process.env.PI_API_KEY ?? process.env.PI_API;
   const privateSeed = process.env.PI_WALLET_PRIVATE_SEED;
   if (apiKey && privateSeed && withdrawal.paymentId) {
     try {

@@ -4,7 +4,7 @@ import {
   Alert,
   AppState,
   FlatList,
-  Linking,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -29,20 +29,25 @@ import DailyBox from '../components/DailyBox';
 import ComboTracker from '../components/ComboTracker';
 import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
-import RewardedAdModal from '../components/RewardedAdModal';
-import AdPromptModal from '../components/AdPromptModal';
+import Icon from '../components/Icon';
 import UploadScreenshotModal from '../components/UploadScreenshotModal';
+import { smartOpenUrl } from '../lib/openUrl';
+
+// ponytail: default active platform filter set to 'all'; fallback logic for dynamic filter state.
+type PlatformFilter = 'all' | 'telegram' | 'youtube' | 'tiktok' | 'facebook' | 'x';
+type StatusFilter = 'all' | 'available' | 'in_progress' | 'completed';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
 
-const PLATFORM_META: Record<string, { label: string; color: string }> = {
-  facebook: { label: 'Facebook', color: '#1877F2' },
-  tiktok: { label: 'TikTok', color: '#010101' },
-  telegram: { label: 'Telegram', color: '#229ED9' },
-  youtube: { label: 'YouTube', color: '#FF0000' },
-  x: { label: 'X (Twitter)', color: '#000000' },
-  app: { label: 'View2Earn', color: '#7C3AED' },
+const PLATFORM_META: Record<string, { label: string; color: string; icon: string }> = {
+  all: { label: 'All Tasks', color: colors.primary, icon: 'layer-group' },
+  telegram: { label: 'Telegram', color: '#229ED9', icon: 'telegram' },
+  youtube: { label: 'YouTube', color: '#FF0000', icon: 'youtube' },
+  tiktok: { label: 'TikTok', color: '#000000', icon: 'tiktok' },
+  facebook: { label: 'Facebook', color: '#1877F2', icon: 'facebook' },
+  x: { label: 'X (Twitter)', color: '#14171A', icon: 'x-twitter' },
+  app: { label: 'View2Earn', color: '#7C3AED', icon: 'shield-halved' },
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -88,50 +93,17 @@ type Verification = {
 };
 
 function targetName(url: string): string {
-  if (!url) {
-    return '';
-  }
+  if (!url) return '';
   const last = url.replace(/\/+$/, '').split('/').pop() ?? '';
   return last.startsWith('@') ? last : `@${last}`;
 }
 
-function deepLinkCandidates(
-  platform: string,
-  url: string,
-  pageId?: string,
-): string[] {
-  const handle = url.replace(/\/+$/, '').split('/').pop() ?? '';
-  switch (platform) {
-    case 'telegram':
-      return [`tg://resolve?domain=${handle.replace(/^@/, '')}`, url];
-    case 'facebook':
-      // Numeric page IDs resolve reliably across the full app, Lite, and web
-      // (plan §7.9d): fb://page/{id} → profile.php?id={id} → the raw URL.
-      if (pageId) {
-        return [
-          `fb://page/${pageId}`,
-          `https://facebook.com/profile.php?id=${pageId}`,
-          url,
-        ];
-      }
-      return [`fb://facewebmodal/f?href=${encodeURIComponent(url)}`, url];
-    default:
-      return [url];
-  }
-}
-
-async function openUrl(platform: string, url: string, pageId?: string) {
-  if (!url) {
-    return;
-  }
-  for (const candidate of deepLinkCandidates(platform, url, pageId)) {
-    try {
-      await Linking.openURL(candidate);
-      return;
-    } catch {
-    }
-  }
-  Alert.alert('Could not open link', `Open it manually:\n${url}`);
+// Delegates to smartOpenUrl which tries the native app deep-link scheme
+// first (tg://, vnd.youtube://, fb://, twitter://, etc.) and falls back to
+// the HTTPS URL — same WhatsApp-like behavior across all platforms.
+async function openUrl(_platform: string, url: string, _pageId?: string) {
+  if (!url) return;
+  await smartOpenUrl(url);
 }
 
 async function openTask(task: Task, onQuizNav: () => void) {
@@ -159,35 +131,33 @@ type ActionState = {
   label: string;
   disabled: boolean;
   kind: 'claim' | 'upload' | 'verify' | 'done' | 'busy';
+  iconName: string;
 };
 
-function actionFor(
-  verification: Verification | undefined,
-  verifier: string,
-): ActionState {
+function actionFor(verification: Verification | undefined, verifier: string): ActionState {
   const telegram = verifier === 'telegram-bot';
   if (!verification) {
-    return { label: 'Follow / Join', disabled: false, kind: 'claim' };
+    return { label: 'Start Task', disabled: false, kind: 'claim', iconName: 'play' };
   }
   switch (verification.state) {
     case 'USER_CLAIMED_DONE':
       return telegram
-        ? { label: 'Verify join', disabled: false, kind: 'verify' }
-        : { label: 'Upload screenshot', disabled: false, kind: 'upload' };
+        ? { label: 'Verify Join', disabled: false, kind: 'verify', iconName: 'shield-check' }
+        : { label: 'Upload Proof', disabled: false, kind: 'upload', iconName: 'arrow-up-from-bracket' };
     case 'REJECTED':
       return telegram
-        ? { label: 'Retry verify', disabled: false, kind: 'verify' }
-        : { label: 'Retry screenshot', disabled: false, kind: 'upload' };
+        ? { label: 'Retry Verify', disabled: false, kind: 'verify', iconName: 'rotate-right' }
+        : { label: 'Retry Proof', disabled: false, kind: 'upload', iconName: 'arrow-up-from-bracket' };
     case 'PROOF_SUBMITTED':
-      return { label: 'Verifying…', disabled: true, kind: 'busy' };
+      return { label: 'Verifying…', disabled: true, kind: 'busy', iconName: 'spinner' };
     case 'ADMIN_REVIEW':
-      return { label: 'In review', disabled: true, kind: 'busy' };
+      return { label: 'In Review', disabled: true, kind: 'busy', iconName: 'clock' };
     case 'PENDING_HOLD':
-      return { label: 'Approved — on hold', disabled: true, kind: 'busy' };
+      return { label: 'Holding', disabled: true, kind: 'busy', iconName: 'lock' };
     case 'RELEASED':
-      return { label: '✓ Points earned', disabled: true, kind: 'done' };
+      return { label: 'Completed', disabled: true, kind: 'done', iconName: 'circle-check' };
     default:
-      return { label: verification.state, disabled: true, kind: 'busy' };
+      return { label: verification.state, disabled: true, kind: 'busy', iconName: 'clock' };
   }
 }
 
@@ -211,13 +181,12 @@ function TaskCard({
   const meta = PLATFORM_META[task.platform] ?? {
     label: task.platform,
     color: '#6B7280',
+    icon: 'share-nodes',
   };
   const action = actionFor(verification, task.verifier);
   const showAction = task.type !== 'QUIZ';
   const multiAction = task.type === 'MULTI_TASK';
-  const claimLabel = multiAction
-    ? (action.label === 'Follow / Join' ? 'Start & complete steps' : action.label)
-    : action.label;
+  const steps = task.type === 'MULTI_TASK' ? task.steps ?? [] : [];
 
   const handleCopyLink = async () => {
     const urls =
@@ -228,103 +197,95 @@ function TaskCard({
         : [];
     if (urls.length === 0) return;
     try {
-      const message = urls.join('\n');
-      await Share.share({ message, url: urls[0] });
-    } catch {
-      // user cancelled share
-    }
+      await Share.share({ message: urls.join('\n'), url: urls[0] });
+    } catch {}
   };
-
-  const steps = task.type === 'MULTI_TASK' ? task.steps ?? [] : [];
 
   return (
     <View style={[styles.card, dark && styles.cardDark]}>
+      {/* Top Header & Platform Badge */}
       <TouchableOpacity
-        style={styles.cardTop}
-        activeOpacity={0.7}
+        style={styles.cardHeader}
+        activeOpacity={0.75}
         onPress={() => openTask(task, onQuizNav)}>
         <View style={[styles.platformBadge, { backgroundColor: meta.color }]}>
-          <PlatformIcon platform={task.platform} size={18} color="#fff" />
+          <PlatformIcon platform={task.platform} size={20} color="#FFF" />
         </View>
-        <View style={styles.cardBody}>
-          <Text style={[styles.cardTitle, dark && styles.textLight]}>
-            {TYPE_LABELS[task.type] ?? task.type}
-            {task.name || (task.targetUrl ? ` · ${targetName(task.targetUrl)}` : '')}
+
+        <View style={styles.cardInfo}>
+          <Text style={[styles.taskTitle, dark && styles.textLight]} numberOfLines={1}>
+            {task.name || (task.targetUrl ? targetName(task.targetUrl) : TYPE_LABELS[task.type] ?? task.type)}
           </Text>
-          <Text style={styles.cardSubtitle}>{meta.label}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.platformName}>{meta.label}</Text>
+            <Text style={styles.metaDot}>•</Text>
+            <Text style={styles.taskType}>{TYPE_LABELS[task.type] ?? task.type}</Text>
+          </View>
         </View>
-        <View style={styles.pointsPill}>
-          <Text style={styles.pointsText}>+{task.points}</Text>
-          <Text style={styles.pointsUnit}>pts</Text>
+
+        <View style={styles.rewardPill}>
+          <Icon name="coins" iconStyle="solid" size={13} color="#D97706" />
+          <Text style={styles.rewardValue}>+{task.points}</Text>
         </View>
       </TouchableOpacity>
 
+      {/* Multi-Task Steps Section */}
       {steps.length > 0 && (
-        <View style={styles.stepsWrap}>
-          <Text style={styles.stepsTitle}>Complete all {steps.length} steps</Text>
+        <View style={[styles.stepsBox, dark && styles.stepsBoxDark]}>
+          <Text style={styles.stepsHeader}>Complete {steps.length} Steps to Claim:</Text>
           {steps.map((step, i) => {
-            const actionLabel =
-              step.label || ACTION_LABELS[step.action] || step.action;
-            const stepName =
-              step.name || (step.targetUrl ? targetName(step.targetUrl) : '');
+            const actionLabel = step.label || ACTION_LABELS[step.action] || step.action;
+            const stepName = step.name || (step.targetUrl ? targetName(step.targetUrl) : '');
             return (
               <TouchableOpacity
                 key={i}
-                style={[styles.stepRow, dark && styles.stepRowDark]}
-                activeOpacity={0.7}
+                style={[styles.stepItem, dark && styles.stepItemDark]}
+                activeOpacity={0.8}
                 onPress={() => openUrl(task.platform, step.targetUrl, task.pageId)}>
-                <View style={styles.stepIndex}>
-                  <Text style={styles.stepIndexText}>{i + 1}</Text>
+                <View style={styles.stepNumBadge}>
+                  <Text style={styles.stepNumText}>{i + 1}</Text>
                 </View>
-                <View style={styles.stepBody}>
-                  <Text style={[styles.stepAction, dark && styles.textLight]}>
-                    {actionLabel}
-                    {stepName ? ` · ${stepName}` : ''}
-                  </Text>
-                  {step.targetUrl ? (
-                    <Text style={styles.stepUrl} numberOfLines={1}>
-                      {step.targetUrl}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={styles.stepOpen}>Open</Text>
+                <Text style={[styles.stepTitle, dark && styles.textLight]} numberOfLines={1}>
+                  {actionLabel} {stepName ? `· ${stepName}` : ''}
+                </Text>
+                <Icon name="arrow-up-right-from-square" iconStyle="solid" size={12} color={colors.primary} />
               </TouchableOpacity>
             );
           })}
         </View>
       )}
 
+      {/* Action Footer */}
       {showAction && (
-        <View style={styles.actionRow}>
+        <View style={styles.actionFooter}>
           <TouchableOpacity
             style={[
-              styles.actionButton,
-              styles.actionButtonPrimary,
-              action.kind === 'done' && styles.actionDone,
-              action.disabled && action.kind !== 'done' && styles.actionBusy,
+              styles.actionBtn,
+              action.kind === 'done' && styles.actionBtnDone,
+              action.kind === 'upload' && styles.actionBtnUpload,
+              action.kind === 'verify' && styles.actionBtnVerify,
+              action.disabled && action.kind !== 'done' && styles.actionBtnBusy,
             ]}
             disabled={action.disabled}
             onPress={() => {
-              if (action.kind === 'claim') {
-                onClaim(task);
-              } else if (action.kind === 'upload' && verification) {
-                onUpload(verification);
-              } else if (action.kind === 'verify' && verification) {
-                onVerify(verification);
-              }
+              if (action.kind === 'claim') onClaim(task);
+              else if (action.kind === 'upload' && verification) onUpload(verification);
+              else if (action.kind === 'verify' && verification) onVerify(verification);
             }}>
-            <Text
-              style={[
-                styles.actionText,
-                action.kind === 'done' && styles.actionTextDone,
-              ]}>
-              {claimLabel}
+            <Icon
+              name={action.iconName}
+              iconStyle="solid"
+              size={14}
+              color={action.kind === 'done' ? '#15803D' : '#FFF'}
+            />
+            <Text style={[styles.actionBtnText, action.kind === 'done' && styles.actionBtnTextDone]}>
+              {action.label}
             </Text>
           </TouchableOpacity>
-          {((task.targetUrl && action.kind === 'claim') ||
-            (multiAction && action.kind === 'claim')) && (
-            <TouchableOpacity style={styles.copyButton} onPress={handleCopyLink}>
-              <Text style={styles.copyButtonText}>Copy link</Text>
+
+          {(task.targetUrl || multiAction) && action.kind === 'claim' && (
+            <TouchableOpacity style={styles.shareBtn} onPress={handleCopyLink}>
+              <Icon name="share-nodes" iconStyle="solid" size={14} color={colors.textFaint} />
             </TouchableOpacity>
           )}
         </View>
@@ -338,11 +299,12 @@ export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const [uploading, setUploading] = useState(false);
-  const [selectedTaskForAd, setSelectedTaskForAd] = useState<Task | null>(null);
-  const [promptForTask, setPromptForTask] = useState<Task | null>(null);
+  const [activePlatform, setActivePlatform] = useState<PlatformFilter>('all');
+  const [activeStatus, setActiveStatus] = useState<StatusFilter>('all');
+  const [showRewardsDrawer, setShowRewardsDrawer] = useState(true);
+
   const [uploadTarget, setUploadTarget] = useState<Verification | null>(null);
-  const [adAfterUpload, setAdAfterUpload] = useState(false);
-  const [promptAfterUpload, setPromptAfterUpload] = useState(false);
+
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
   const claim = useMutation(api.verifications.claim);
@@ -353,16 +315,10 @@ export default function TasksScreen() {
   const tasks = useQuery(api.tasks.list, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const limits = useQuery(api.tasks.myLimits, userId ? { userId } : 'skip');
-  const verifications = useQuery(
-    api.verifications.listMine,
-    userId ? { userId } : 'skip',
-  );
+  const verifications = useQuery(api.verifications.listMine, userId ? { userId } : 'skip');
 
   const verificationByTask = new Map<string, Verification>(
-    (verifications ?? []).map((verification) => [
-      verification.taskId,
-      verification,
-    ]),
+    (verifications ?? []).map((v) => [v.taskId, v])
   );
 
   const handleQuizNav = () => {
@@ -374,16 +330,9 @@ export default function TasksScreen() {
     if (!userId) return;
     try {
       await claim({ taskId: task._id, userId });
-      
-      if (task.type === 'QUIZ') {
-        await openTask(task, handleQuizNav);
-        return;
-      }
-
-      setPromptForTask(task);
+      await openTask(task, handleQuizNav);
     } catch (e) {
-      let msg = String(e).replace('[CONVEX] ', '');
-      msg = msg.replace(/Uncaught Error:\s*/, '');
+      let msg = String(e).replace('[CONVEX] ', '').replace(/Uncaught Error:\s*/, '');
       Alert.alert('Could not claim', msg);
     }
   };
@@ -424,9 +373,7 @@ export default function TasksScreen() {
       const { storageId } = (await result.json()) as { storageId: Id<'_storage'> };
       await submitProof({ verificationId: verification._id, storageId });
       setUploadTarget(null);
-      setPromptAfterUpload(true);
     } catch (e) {
-      console.error('Upload failed:', e);
       Alert.alert('Upload failed', String(e).replace('[CONVEX] ', ''));
     } finally {
       setUploading(false);
@@ -441,65 +388,43 @@ export default function TasksScreen() {
     }
   };
 
-  // When the user comes back from the target link (follow/join), nudge them to
-  // upload a screenshot of the completed task instead of waiting to find the
-  // card in the feed. Only fires once per pending verification.
-  const verificationsRef = useRef(verifications);
-  verificationsRef.current = verifications;
-  const taskByIdRef = useRef<Map<string, Task>>(new Map());
-  taskByIdRef.current = new Map((tasks ?? []).map((t) => [t._id, t]));
-  const promptedVerificationRef = useRef<string | null>(null);
-
   const openUploadModal = (verification: Verification) => {
-    promptedVerificationRef.current = verification._id;
     setUploadTarget(verification);
   };
 
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') return;
-      const pending = (verificationsRef.current ?? []).find(
-        (v) =>
-          (v.state === 'USER_CLAIMED_DONE' || v.state === 'REJECTED') &&
-          taskByIdRef.current.get(v.taskId)?.verifier !== 'telegram-bot',
-      );
-      if (!pending) {
-        promptedVerificationRef.current = null;
-        return;
-      }
-      if (promptedVerificationRef.current === pending._id) return;
-      openUploadModal(pending);
-    });
-    return () => sub.remove();
-  }, []);
+  // Filter tasks based on platform & completion status
+  const filteredTasks = (tasks ?? []).filter((t) => {
+    if (activePlatform !== 'all' && t.platform !== activePlatform) return false;
+    const v = verificationByTask.get(t._id);
+    if (activeStatus === 'completed') return v?.state === 'RELEASED';
+    if (activeStatus === 'in_progress') return v && v.state !== 'RELEASED';
+    if (activeStatus === 'available') return !v;
+    return true;
+  });
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader
         title="Tasks"
-        subtitle="Earn points — redeemable for rewards"
+        subtitle="Complete quick tasks & earn points"
         right={
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.marketBtn}
-              onPress={() => stackNav.navigate('Marketplace')}>
-              <Text style={styles.marketBtnText}>Market</Text>
+          <View style={styles.headerRightRow}>
+            <TouchableOpacity style={styles.marketPill} onPress={() => stackNav.navigate('Marketplace')}>
+              <Icon name="rocket" iconStyle="solid" size={13} color="#FFF" />
+              <Text style={styles.marketPillText}>Promote</Text>
             </TouchableOpacity>
-            <View style={styles.balancePill}>
-              <Text style={styles.balanceText}>
-                {balance === undefined ? '…' : balance} pts
-              </Text>
+            <View style={styles.ptsBadge}>
+              <Icon name="coins" iconStyle="solid" size={13} color="#FBBF24" />
+              <Text style={styles.ptsBadgeText}>{balance === undefined ? '…' : balance}</Text>
             </View>
           </View>
         }
       />
+
       <FlatList
-        data={tasks ?? []}
+        data={filteredTasks}
         keyExtractor={(item) => item._id}
-        contentContainerStyle={[
-          styles.list,
-          { paddingBottom: insets.bottom + 100 },
-        ]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         renderItem={({ item }) => (
           <TaskCard
             task={item}
@@ -512,59 +437,121 @@ export default function TasksScreen() {
           />
         )}
         ListHeaderComponent={
-          <View>
+          <View style={styles.headerBlock}>
+            {/* Daily Limits Summary Bar */}
             {limits && limits.some((l) => l.used > 0 || l.remaining < l.limit) && (
-              <View style={styles.limitRow}>
-                {limits.map((l) => {
-                  const meta = PLATFORM_META[l.platform] ?? { label: l.platform, color: '#6B7280' };
-                  const maxed = l.remaining === 0;
+              <View style={styles.limitsContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.limitsScroll}>
+                  {limits.map((l) => {
+                    const meta = PLATFORM_META[l.platform] ?? { label: l.platform, color: '#6B7280' };
+                    const maxed = l.remaining === 0;
+                    return (
+                      <View key={l.platform} style={[styles.limitChip, maxed && styles.limitChipMaxed]}>
+                        <View style={[styles.limitDot, { backgroundColor: meta.color }]} />
+                        <Text style={[styles.limitText, maxed && styles.limitTextMaxed]}>
+                          {meta.label}: {l.remaining}/{l.limit} left
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Daily Rewards Expandable Card Header */}
+            {userId && (
+              <View style={[styles.rewardsSection, dark && styles.rewardsSectionDark]}>
+                <TouchableOpacity
+                  style={styles.rewardsSectionHeader}
+                  activeOpacity={0.8}
+                  onPress={() => setShowRewardsDrawer(!showRewardsDrawer)}>
+                  <View style={styles.rewardsHeaderLeft}>
+                    <Icon name="fire" iconStyle="solid" size={16} color="#F59E0B" />
+                    <Text style={[styles.rewardsTitle, dark && styles.textLight]}>Daily Rewards & Streaks</Text>
+                  </View>
+                  <Icon
+                    name={showRewardsDrawer ? 'chevron-up' : 'chevron-down'}
+                    iconStyle="solid"
+                    size={14}
+                    color={colors.textFaint}
+                  />
+                </TouchableOpacity>
+
+                {showRewardsDrawer && (
+                  <View style={styles.cardsGrid}>
+                    <StreakCard userId={userId} />
+                    <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
+                    <DailyBox userId={userId} />
+                    <ComboTracker userId={userId} />
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Platform Horizontal Filter Bar */}
+            <View style={styles.filterSection}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                {(['all', 'telegram', 'youtube', 'tiktok', 'facebook', 'x'] as PlatformFilter[]).map((p) => {
+                  const meta = PLATFORM_META[p];
+                  const isActive = activePlatform === p;
                   return (
-                    <View key={l.platform} style={[styles.limitChip, maxed && styles.limitChipMaxed]}>
-                      <View style={[styles.limitDot, { backgroundColor: meta.color }]} />
-                      <Text style={[styles.limitText, maxed && styles.limitTextMaxed]}>
-                        {meta.label} {l.remaining}/{l.limit}
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.filterChip,
+                        dark && styles.filterChipDark,
+                        isActive && { backgroundColor: meta.color },
+                      ]}
+                      onPress={() => setActivePlatform(p)}>
+                      <PlatformIcon platform={p === 'all' ? 'app' : p} size={14} color={isActive ? '#FFF' : dark ? '#A7F3D0' : colors.textMuted} />
+                      <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                        {meta.label}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
-              </View>
-            )}
-            {limits?.some((l) => l.remaining === 0) && (
-              <Text style={styles.limitNote}>
-                Daily limit reached on some platforms — this protects your account from suspension. More tasks tomorrow.
-              </Text>
-            )}
-            {userId && (
-              <View style={styles.cardsWrap}>
-                <StreakCard userId={userId} />
-                <ProgressToReward
-                  userId={userId}
-                  onPress={() => tabNav.navigate('Rewards')}
-                />
-                <DailyBox userId={userId} />
-                <ComboTracker userId={userId} />
-              </View>
-            )}
+              </ScrollView>
+            </View>
+
+            {/* Status Filter Chips */}
+            <View style={styles.statusRow}>
+              {(['all', 'available', 'in_progress', 'completed'] as StatusFilter[]).map((s) => {
+                const isActive = activeStatus === s;
+                const label = s === 'all' ? 'All Status' : s === 'available' ? 'Available' : s === 'in_progress' ? 'In Progress' : 'Completed';
+                return (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.statusChip, isActive && styles.statusChipActive]}
+                    onPress={() => setActiveStatus(s)}>
+                    <Text style={[styles.statusChipText, isActive && styles.statusChipTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         }
         ListEmptyComponent={
           tasks === undefined ? (
-            <View style={styles.centerPad}>
-              <ActivityIndicator size="large" color="#7C3AED" />
-              <Text style={styles.headerSubtitle}>Loading tasks…</Text>
+            <View style={styles.emptyContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.emptyText}>Loading available tasks…</Text>
             </View>
           ) : (
-            <View style={styles.centerPad}>
-              <Text style={[styles.emptyTitle, dark && styles.textLight]}>
-                No tasks right now
-              </Text>
-              <Text style={styles.headerSubtitle}>
-                Check back soon — new tasks are added daily.
+            <View style={styles.emptyContainer}>
+              <Icon name="clipboard-check" iconStyle="solid" size={40} color={colors.textFaint} />
+              <Text style={[styles.emptyTitle, dark && styles.textLight]}>No tasks found</Text>
+              <Text style={styles.emptyText}>
+                {activePlatform !== 'all' || activeStatus !== 'all'
+                  ? 'Try selecting a different filter above.'
+                  : 'Check back soon — new tasks are added daily.'}
               </Text>
             </View>
           )
         }
       />
+
       <UploadScreenshotModal
         visible={!!uploadTarget}
         uploading={uploading}
@@ -573,41 +560,6 @@ export default function TasksScreen() {
         }}
         onClose={() => {
           if (!uploading) setUploadTarget(null);
-        }}
-      />
-      <AdPromptModal
-        visible={!!promptForTask}
-        onClose={() => {
-          const t = promptForTask;
-          setPromptForTask(null);
-          if (t) openTask(t, handleQuizNav);
-        }}
-        onConfirm={() => {
-          const t = promptForTask;
-          setPromptForTask(null);
-          if (t) setSelectedTaskForAd(t);
-        }}
-      />
-      <AdPromptModal
-        visible={promptAfterUpload}
-        title="Screenshot uploaded 🎉"
-        subtitle="Your proof is in review — points are credited once approved."
-        onClose={() => setPromptAfterUpload(false)}
-        onConfirm={() => {
-          setPromptAfterUpload(false);
-          setAdAfterUpload(true);
-        }}
-      />
-      <RewardedAdModal
-        visible={!!selectedTaskForAd || adAfterUpload}
-        onClose={() => {
-          if (selectedTaskForAd) {
-            const t = selectedTaskForAd;
-            setSelectedTaskForAd(null);
-            openTask(t, handleQuizNav);
-          } else if (adAfterUpload) {
-            setAdAfterUpload(false);
-          }
         }}
       />
     </View>
@@ -622,33 +574,52 @@ const styles = StyleSheet.create({
   containerDark: {
     backgroundColor: colors.bgDark,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  headerRow: {
+  headerRightRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  limitRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
-    paddingHorizontal: 20,
+  },
+  marketPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
+  marketPillText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  ptsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
+  ptsBadgeText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  headerBlock: {
+    marginBottom: 16,
+    gap: 14,
+  },
+  limitsContainer: {
+    marginBottom: 4,
+  },
+  limitsScroll: {
+    gap: 8,
   },
   limitChip: {
     flexDirection: 'row',
@@ -656,11 +627,11 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: colors.primarySoft,
     borderRadius: radius.pill,
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
     paddingVertical: 6,
   },
   limitChipMaxed: {
-    backgroundColor: colors.dangerSoft,
+    backgroundColor: '#FEE2E2',
   },
   limitDot: {
     width: 8,
@@ -675,63 +646,87 @@ const styles = StyleSheet.create({
   limitTextMaxed: {
     color: '#B91C1C',
   },
-  limitNote: {
-    fontSize: 12,
-    color: '#B91C1C',
-    marginTop: 10,
-    marginHorizontal: 20,
-    lineHeight: 16,
+  rewardsSection: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
   },
-  headerActions: {
+  rewardsSectionDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
+  rewardsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rewardsHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  marketBtn: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  marketBtnText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  balancePill: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: radius.pill,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  balanceText: {
-    color: colors.white,
+  rewardsTitle: {
     fontSize: 15,
     fontWeight: '800',
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
     color: colors.text,
   },
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
+  cardsGrid: {
+    marginTop: 12,
+    gap: 10,
   },
-  cardsWrap: {
-    paddingTop: 8,
-  },
-  centerPad: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
+  filterSection: {},
+  filterScroll: {
     gap: 8,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  filterChipTextActive: {
+    color: '#FFF',
+    fontWeight: '800',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+  },
+  statusChipActive: {
+    backgroundColor: colors.primarySoft,
+  },
+  statusChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textFaint,
+  },
+  statusChipTextActive: {
+    color: colors.primaryDeep,
+    fontWeight: '800',
   },
   card: {
     backgroundColor: colors.surface,
@@ -746,203 +741,172 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceDark,
     borderColor: colors.borderDark,
   },
-  cardTop: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  cardBody: {
+  platformBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardInfo: {
     flex: 1,
     marginHorizontal: 12,
   },
-  cardTitle: {
+  taskTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text,
   },
-  cardSubtitle: {
-    fontSize: 13,
-    color: colors.textMuted,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 2,
   },
-  textLight: {
-    color: colors.textDark,
-  },
-  platformBadge: {
-    width: 46,
-    height: 46,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  platformBadgeText: {
-    color: colors.white,
-    fontSize: 19,
-    fontWeight: '800',
-  },
-  pointsPill: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    alignItems: 'center',
-  },
-  pointsText: {
-    color: colors.primaryDeep,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  pointsUnit: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    marginTop: 14,
-    gap: 8,
-  },
-  stepsWrap: {
-    marginTop: 14,
-    gap: 8,
-  },
-  stepsTitle: {
+  platformName: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
-  stepRow: {
+  metaDot: {
+    fontSize: 10,
+    color: colors.textFaint,
+  },
+  taskType: {
+    fontSize: 12,
+    color: colors.textFaint,
+  },
+  rewardPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 11,
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  rewardValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#D97706',
+  },
+  stepsBox: {
+    marginTop: 12,
+    padding: 10,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: 6,
   },
-  stepRowDark: {
+  stepsBoxDark: {
     backgroundColor: colors.surfaceDark,
-    borderColor: colors.borderDark,
   },
-  stepIndex: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  stepsHeader: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textFaint,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    gap: 8,
+  },
+  stepItemDark: {
+    backgroundColor: colors.surfaceAlt,
+  },
+  stepNumBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
   },
-  stepIndexText: {
-    color: colors.white,
-    fontSize: 13,
+  stepNumText: {
+    color: '#FFF',
+    fontSize: 11,
     fontWeight: '800',
   },
-  stepBody: {
+  stepTitle: {
     flex: 1,
-    marginHorizontal: 10,
-  },
-  stepAction: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: colors.text,
   },
-  stepUrl: {
-    fontSize: 11.5,
-    color: colors.textMuted,
-    marginTop: 1,
-  },
-  stepOpen: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.primary,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: radius.sm,
-    paddingVertical: 12,
+  actionFooter: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    gap: 10,
+    marginTop: 14,
   },
-  actionButtonPrimary: {
+  actionBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
-    ...shadow.raised,
-  },
-  copyButton: {
-    borderRadius: radius.sm,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: 8,
+    ...shadow.raised,
   },
-  copyButtonText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
+  actionBtnUpload: {
+    backgroundColor: '#2563EB',
   },
-  actionBusy: {
+  actionBtnVerify: {
+    backgroundColor: '#059669',
+  },
+  actionBtnBusy: {
     backgroundColor: colors.textFaint,
     shadowOpacity: 0,
     elevation: 0,
   },
-  actionDone: {
+  actionBtnDone: {
     backgroundColor: colors.successSoft,
     shadowOpacity: 0,
     elevation: 0,
   },
-  actionText: {
-    color: colors.white,
+  actionBtnText: {
+    color: '#FFF',
     fontSize: 14,
     fontWeight: '800',
   },
-  actionTextDone: {
+  actionBtnTextDone: {
     color: '#15803D',
   },
-  rewardedAdBanner: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#FEF3C7',
-    ...shadow.card,
-  },
-  adBannerIconBg: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FEF3C7',
+  shareBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(150, 150, 150, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  adBannerContent: {
-    flex: 1,
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+    gap: 10,
   },
-  adBannerTitle: {
-    fontSize: 14,
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: '800',
     color: colors.text,
   },
-  adBannerSub: {
-    fontSize: 11,
+  emptyText: {
+    fontSize: 13,
     color: colors.textMuted,
-    marginTop: 2,
+    textAlign: 'center',
   },
-  adBannerBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-  },
-  adBannerBtnText: {
-    color: colors.white,
-    fontWeight: '800',
-    fontSize: 12,
+  textLight: {
+    color: colors.textDark,
   },
 });

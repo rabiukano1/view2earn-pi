@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./lib/guards";
 
 // Pi Ad Network rewarded ads (plan §7.9 / Pi Ads). The client SDK
@@ -19,8 +21,8 @@ type RewardedAdStatus = {
   mediator_revoked_at?: string | null;
 };
 
-async function verifyRewardedAd(adId: string): Promise<boolean> {
-  const apiKey = process.env.PI_API_KEY;
+async function isAdGranted(adId: string): Promise<boolean> {
+  const apiKey = process.env.PI_API_KEY ?? process.env.PI_API;
   // Dev/sandbox simulation when no live server key is configured — the same
   // pattern as the A2U payout simulation in piWithdrawalsPayout.ts.
   if (!apiKey) {
@@ -38,6 +40,31 @@ async function verifyRewardedAd(adId: string): Promise<boolean> {
   return status.mediator_ack_status === "granted";
 }
 
+// Shared server-side consumption of a rewarded ad: verifies the adId against
+// Pi's Platform API and records it in adCompletions (replay protection). Any
+// calling mutation must run this BEFORE granting its reward so the whole
+// transaction rolls back if the ad isn't verified.
+export async function consumeRewardedAd(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  adId: string,
+): Promise<void> {
+  if (!adId.trim()) throw new Error("Missing ad identifier");
+
+  // Replay protection: an adId can be redeemed once, ever.
+  const existing = await ctx.db
+    .query("adCompletions")
+    .withIndex("by_adId", (q) => q.eq("adId", adId))
+    .first();
+  if (existing) throw new Error("This ad was already claimed");
+
+  // Server-side verification of the rewarded ad before any reward is given.
+  const granted = await isAdGranted(adId);
+  if (!granted) throw new Error("Ad not verified as rewarded — please try again");
+
+  await ctx.db.insert("adCompletions", { userId, adId, at: Date.now() });
+}
+
 export const claimRewardedAd = mutation({
   args: {
     userId: v.id("users"),
@@ -53,25 +80,13 @@ export const claimRewardedAd = mutation({
     adBonusRemaining: number;
   }> => {
     await requireUser(ctx, userId);
-    if (!adId.trim()) throw new Error("Missing ad identifier");
 
-    // Replay protection: an adId can be redeemed once, ever.
-    const existing = await ctx.db
-      .query("adCompletions")
-      .withIndex("by_adId", (q) => q.eq("adId", adId))
-      .first();
-    if (existing) throw new Error("This ad was already claimed");
-
-    // Server-side verification of the rewarded ad before any reward is given.
-    const granted = await verifyRewardedAd(adId);
-    if (!granted) throw new Error("Ad not verified as rewarded — please try again");
-
-    // Grant the bonus spin (enforces the adBonusSpinsPerWindow cap). If this
-    // throws (limit reached), the outer transaction rolls back and the ad is
-    // NOT consumed, so the user can retry in the next window.
+    // Consume (verify + replay-protect) the rewarded ad, then grant the bonus
+    // spin (enforces the adBonusSpinsPerWindow cap). If the grant throws (limit
+    // reached), the outer transaction rolls back and the ad is NOT consumed, so
+    // the user can retry in the next window.
+    await consumeRewardedAd(ctx, userId, adId);
     const grant = await ctx.runMutation(api.spin.earnBonusSpin, { userId, amount: 1 });
-
-    await ctx.db.insert("adCompletions", { userId, adId, at: Date.now() });
 
     return grant;
   },

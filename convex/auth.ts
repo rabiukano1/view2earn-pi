@@ -1,14 +1,19 @@
 import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
-import Google from "@auth/core/providers/google";
 import { ResendOTP } from "./ResendOTP";
 import { TelegramProvider } from "./TelegramProvider";
 import { PiProvider } from "./PiProvider";
 
-// Sign-in methods: email+password, email OTP (Resend), Google OAuth, Telegram,
+// Sign-in methods: email+password, email OTP (Resend), Telegram,
 // and Pi Network (Pi Browser, plan §7.1). Sidra KYC is added later.
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [Password(), Google({}), ResendOTP, TelegramProvider, PiProvider],
+  providers: [Password(), ResendOTP, TelegramProvider, PiProvider],
+  // Short-lived sessions: expire after 10 minutes of inactivity and force a
+  // fresh Pi/OTP sign-in after 1 hour total (default is 30 days each).
+  session: {
+    totalDurationMs: 60 * 60 * 1000,
+    inactiveDurationMs: 10 * 60 * 1000,
+  },
   callbacks: {
     // Central user creation for every provider — fills our app fields so each
     // user row is complete (ecosystem, tier, fraudScore, …). Existing users

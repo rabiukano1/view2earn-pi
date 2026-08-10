@@ -73,7 +73,7 @@ export const consumeNonce = internalMutation({
   },
 });
 
-// "Link Telegram" for an existing account (email/Google sign-ups included).
+// "Link Telegram" for an existing account (email sign-ups included).
 // Same deep-link flow as sign-in, but instead of creating a new auth account we
 // stamp telegramUserId onto the current user, which is what the real channel-join
 // check (telegram.check → getChatMember) needs to verify membership.

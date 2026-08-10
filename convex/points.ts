@@ -26,6 +26,43 @@ export const history = query({
   },
 });
 
+// Wallet dashboard summary: lifetime + trailing-7-day earned/spent totals, so
+// the wallet can render stat cards without scanning the whole ledger per row.
+export const summary = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
+    const items = await ctx.db.query("pointsLedger")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    const weekCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    let totalEarned = 0;
+    let totalSpent = 0;
+    let weekEarned = 0;
+    let weekSpent = 0;
+
+    for (const it of items) {
+      const delta = it.delta;
+      if (delta >= 0) totalEarned += delta;
+      else totalSpent += -delta;
+      if (it._creationTime >= weekCutoff) {
+        if (delta >= 0) weekEarned += delta;
+        else weekSpent += -delta;
+      }
+    }
+
+    return {
+      totalEarned,
+      totalSpent,
+      weekEarned,
+      weekSpent,
+      balance: items.length > 0 ? items[0].balanceAfter : 0,
+      count: items.length,
+    };
+  },
+});
+
 export const creditHelper = internalMutation({
   args: {
     userId: v.id("users"),

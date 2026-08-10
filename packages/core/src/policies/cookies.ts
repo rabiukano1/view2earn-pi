@@ -63,6 +63,22 @@ export const COOKIE_POLICY: PolicyDoc = {
       t: "p",
       x: "Some trusted third-party providers integrated with the Service may place or access their own cookies in accordance with their respective privacy policies. These providers may include analytics providers, authentication providers, advertising partners, survey providers, and cloud infrastructure providers. View2Earn does not control third-party cookies.",
     },
+    { t: "s", x: "4.6 Cookies Used on This Website" },
+    {
+      t: "p",
+      x: 'The View2Earn website sets the following first-party cookies. Consent cookies are stored as soon as you make a choice in the cookie banner; analytics cookies are only set once you accept the banner.',
+    },
+    {
+      t: "l",
+      x: [
+        'v2e_consent — records whether you accepted or rejected non-essential cookies. Essential; always set after you respond to the cookie banner. Expires after 1 year.',
+        'v2e_vid — an anonymous, randomly generated visitor identifier used to count unique visitors. Analytics; set only with your consent. Expires after 1 year.',
+        'v2e_visits — the number of times you have visited the website, used to distinguish new from returning visitors. Analytics; set only with your consent. Expires after 1 year.',
+        'v2e_first_visit — the date and time of your first visit to the website. Analytics; set only with your consent. Expires after 1 year.',
+        'v2e_last_visit — the date and time of your most recent visit to the website. Analytics; set only with your consent. Expires after 1 year.',
+        'v2e_last_page — the last page you visited on the website, used to understand navigation patterns. Analytics; set only with your consent. Expires after 1 day.',
+      ],
+    },
     { t: "h", x: "5. Managing Cookies" },
     {
       t: "p",

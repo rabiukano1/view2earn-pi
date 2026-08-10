@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
 import { getNum } from "./rewardsConfig";
+import { consumeRewardedAd } from "./piAds";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000);
@@ -54,8 +55,11 @@ export const getComboStatus = query({
 });
 
 export const claimCombo = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: {
+    userId: v.id("users"),
+    adId: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, adId }) => {
     await requireUser(ctx, userId);
     const today = dayNumber(Date.now());
 
@@ -70,6 +74,10 @@ export const claimCombo = mutation({
     if (!(legs.social && legs.telegram && legs.quiz)) {
       throw new Error("Finish all three today to claim the combo.");
     }
+
+    // Rewarded-ad gate (mirrors Android's ComboTracker): verify the ad
+    // server-side before granting the combo bonus.
+    if (adId) await consumeRewardedAd(ctx, userId, adId);
 
     const reward = await getNum(ctx, "comboBonus");
 

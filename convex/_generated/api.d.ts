@@ -33,6 +33,7 @@ import type * as linkedProfiles from "../linkedProfiles.js";
 import type * as marketplace from "../marketplace.js";
 import type * as piAds from "../piAds.js";
 import type * as piAuth from "../piAuth.js";
+import type * as piDonations from "../piDonations.js";
 import type * as piPayments from "../piPayments.js";
 import type * as piWallet from "../piWallet.js";
 import type * as piWithdrawals from "../piWithdrawals.js";
@@ -56,6 +57,7 @@ import type * as users from "../users.js";
 import type * as vas from "../vas.js";
 import type * as verifications from "../verifications.js";
 import type * as videos from "../videos.js";
+import type * as visitors from "../visitors.js";
 import type * as wallets from "../wallets.js";
 
 import type {
@@ -90,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   marketplace: typeof marketplace;
   piAds: typeof piAds;
   piAuth: typeof piAuth;
+  piDonations: typeof piDonations;
   piPayments: typeof piPayments;
   piWallet: typeof piWallet;
   piWithdrawals: typeof piWithdrawals;
@@ -113,6 +116,7 @@ declare const fullApi: ApiFromModules<{
   vas: typeof vas;
   verifications: typeof verifications;
   videos: typeof videos;
+  visitors: typeof visitors;
   wallets: typeof wallets;
 }>;
 

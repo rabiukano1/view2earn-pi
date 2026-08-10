@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import { smartOpenUrl } from '../lib/openUrl';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { useNavigation } from '@react-navigation/native';
@@ -39,7 +39,7 @@ export default function SurveysScreen() {
     setBusy(true);
     try {
       const url = await getOfferwallUrl({ userId });
-      await Linking.openURL(url);
+      await smartOpenUrl(url);
     } catch (e) {
       Alert.alert(
         'Surveys unavailable',

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,6 +7,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import { smartOpenUrl } from '../lib/openUrl';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction, useQuery } from 'convex/react';
 import { useNavigation } from '@react-navigation/native';
@@ -57,7 +57,7 @@ export default function ProfileScreen() {
     if (!userId) return;
     try {
       const result = await generatePdf({ userId });
-      if (result?.url) await Linking.openURL(result.url);
+      if (result?.url) await smartOpenUrl(result.url);
     } catch {
       // ignore — the report screen handles its own errors
     }
@@ -135,6 +135,13 @@ export default function ProfileScreen() {
       label: 'Points History',
       sub: 'Full ledger records',
       onPress: () => nav.navigate('PointsHistory'),
+    },
+    {
+      icon: 'heart',
+      tint: '#EC4899',
+      label: 'Donate π (Pi Browser)',
+      sub: 'Support platform & test payments',
+      onPress: () => nav.navigate('Donate'),
     },
     {
       icon: 'file-pdf',

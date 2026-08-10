@@ -28,6 +28,7 @@ import ReferralScreen from '../screens/ReferralScreen';
 import LinkedAccountsScreen from '../screens/LinkedAccountsScreen';
 import SecurityScreen from '../screens/SecurityScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
+import DonateScreen from '../screens/DonateScreen';
 import StatsScreen from '../screens/StatsScreen';
 import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
 
@@ -146,6 +147,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Achievements" component={AchievementsScreen} />
       <Stack.Screen name="Stats" component={StatsScreen} />
       <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
+      <Stack.Screen name="Donate" component={DonateScreen} />
     </Stack.Navigator>
   );
 }

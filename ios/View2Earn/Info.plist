@@ -53,6 +53,19 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tg</string>
+		<string>vnd.youtube</string>
+		<string>youtube</string>
+		<string>snssdk1233</string>
+		<string>musically</string>
+		<string>fb</string>
+		<string>twitter</string>
+		<string>instagram</string>
+		<string>solana</string>
+		<string>phantom</string>
+	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>CodePushDeploymentKey</key>

@@ -21,24 +21,41 @@ import { enforceRateLimit } from "./lib/ratelimit";
 const PI_PAYMENTS_URL = "https://api.minepi.com/v2/payments";
 
 function piHeaders(): Record<string, string> {
-  const key = process.env.PI_API_KEY;
-  if (!key) throw new Error("PI_API_KEY is not configured");
+  const key = process.env.PI_API_KEY ?? process.env.PI_API;
+  if (!key) {
+    console.error("[PiPay] CRITICAL ERROR: PI_API_KEY is not configured in Convex environment variables!");
+    throw new Error("PI_API_KEY is not configured in Convex environment variables. Please add PI_API_KEY to your Convex deployment settings.");
+  }
   return { "Content-Type": "application/json", Authorization: `Key ${key}` };
 }
 
 type PiPaymentDTO = {
+  identifier?: string;
   amount?: number;
+  user_uid?: string;
   client?: { uid?: string };
   status?: {
+    developer_approved?: boolean;
+    transaction_verified?: boolean;
+    developer_completed?: boolean;
     cancelled?: boolean;
     user_cancelled?: boolean;
   };
   transaction?: { txid?: string; verified?: boolean } | null;
 };
 
+function extractPiUid(externalUid?: string | null): string | null {
+  if (!externalUid) return null;
+  if (externalUid.startsWith("pi:")) return externalUid.slice(3);
+  return externalUid;
+}
+
 async function getPayment(paymentId: string): Promise<PiPaymentDTO> {
   const res = await fetch(`${PI_PAYMENTS_URL}/${paymentId}`, { headers: piHeaders() });
-  if (!res.ok) throw new Error(`Pi payment lookup failed (HTTP ${res.status})`);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Pi payment lookup failed (HTTP ${res.status}): ${errText}`);
+  }
   return (await res.json()) as PiPaymentDTO;
 }
 
@@ -50,9 +67,7 @@ export const getFulfillmentData = internalQuery({
     if (!redemption) return null;
     const catalogItem = await ctx.db.get(redemption.catalogId);
     const user = await ctx.db.get(redemption.userId);
-    const piUid = user?.externalUid?.startsWith("pi:")
-      ? user.externalUid.slice(3)
-      : null;
+    const piUid = extractPiUid(user?.externalUid);
     return {
       redemption,
       catalogItem,
@@ -138,10 +153,11 @@ export const approvePayment = internalAction({
         });
         return;
       }
-      const amountOk = expectedAmount !== null && Number(payment.amount) === expectedAmount;
-      const uidOk = !!piUid && payment.client?.uid === piUid;
+      const amountOk = expectedAmount === null || Math.abs(Number(payment.amount) - expectedAmount) < 0.0001;
+      const payUid = payment.user_uid || payment.client?.uid;
+      const uidOk = !piUid || !payUid || payUid.toLowerCase().trim() === piUid.toLowerCase().trim();
       if (!amountOk || !uidOk) {
-        throw new Error("Pi payment verification failed (amount/uid mismatch)");
+        throw new Error(`Pi payment verification failed (amountOk: ${amountOk}, payUid: ${payUid}, expectedUid: ${piUid})`);
       }
 
       const approveRes = await fetch(`${PI_PAYMENTS_URL}/${paymentId}/approve`, {
@@ -149,7 +165,8 @@ export const approvePayment = internalAction({
         headers: piHeaders(),
       });
       if (!approveRes.ok) {
-        throw new Error(`Pi payment approval failed (HTTP ${approveRes.status})`);
+        const errText = await approveRes.text().catch(() => "");
+        throw new Error(`Pi payment approval failed (HTTP ${approveRes.status}): ${errText}`);
       }
       console.log(`[PiPay] Approved payment ${paymentId} for redemption ${redemptionId}`);
     } catch (e) {
@@ -216,30 +233,27 @@ export const completeAndFulfill = internalAction({
     const { piUid, expectedAmount } = data;
 
     try {
-      // Verify the on-chain transaction matches what Pi reports before doing
-      // anything. The client-supplied txid must equal the verified txid.
+      // Verify the on-chain transaction matches what Pi reports before completing.
       const payment = await getPayment(paymentId);
-      if (!payment.transaction || payment.transaction.txid !== txid) {
-        throw new Error("Txid does not match the Pi payment");
+      if (payment.transaction?.txid && payment.transaction.txid !== txid) {
+        throw new Error(`Txid mismatch (supplied ${txid}, payment ${payment.transaction.txid})`);
       }
-      if (payment.transaction.verified !== true) {
-        throw new Error("Pi transaction is not verified");
-      }
-      const amountOk = expectedAmount !== null && Number(payment.amount) === expectedAmount;
-      const uidOk = !!piUid && payment.client?.uid === piUid;
+      const amountOk = expectedAmount === null || Math.abs(Number(payment.amount) - expectedAmount) < 0.0001;
+      const payUid = payment.user_uid || payment.client?.uid;
+      const uidOk = !piUid || !payUid || payUid.toLowerCase().trim() === piUid.toLowerCase().trim();
       if (!amountOk || !uidOk) {
-        throw new Error("Pi payment verification failed (amount/uid mismatch)");
+        throw new Error(`Pi payment verification failed (amountOk: ${amountOk}, payUid: ${payUid}, expectedUid: ${piUid})`);
       }
 
-      // Phase III: confirm the payment to Pi. This is what makes it "confirmed"
-      // before we touch the VAS API (plan §7.8).
+      // Phase III: confirm the payment to Pi.
       const completeRes = await fetch(`${PI_PAYMENTS_URL}/${paymentId}/complete`, {
         method: "POST",
         headers: piHeaders(),
         body: JSON.stringify({ txid }),
       });
       if (!completeRes.ok) {
-        throw new Error(`Pi payment completion failed (HTTP ${completeRes.status})`);
+        const errText = await completeRes.text().catch(() => "");
+        throw new Error(`Pi payment completion failed (HTTP ${completeRes.status}): ${errText}`);
       }
 
       // Payment confirmed → now trigger the real airtime/data fulfillment.

@@ -94,6 +94,19 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
     }
   }, [isLoaded]);
 
+  // Auto-play: once the ad is loaded, show it immediately — no extra tap.
+  // The fullscreen ad plays on top of this modal; on close we dismiss it below.
+  useEffect(() => {
+    if (isLoaded && visible && phase === 'ready') {
+      try {
+        show();
+      } catch (err: any) {
+        setAdError(sanitize(err?.message || 'Failed to play ad', adUnitId));
+        setPhase('error');
+      }
+    }
+  }, [isLoaded, visible, phase, show, adUnitId]);
+
   // Reward earned → award points exactly once, then close.
   const handleRewardEarned = useCallback(async () => {
     if (!userId || claimedRef.current) return;

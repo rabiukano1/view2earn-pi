@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Modal,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import { smartOpenUrl } from '../lib/openUrl';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -69,7 +69,7 @@ export default function LinkedAccountsScreen() {
     try {
       const { nonce, url } = await linkStart({ userId });
       setTgNonce(nonce);
-      await Linking.openURL(url);
+      await smartOpenUrl(url);
       setTgMsg('Tap Start in the Telegram bot, then come back — it verifies automatically.');
     } catch {
       setTgNonce(null);

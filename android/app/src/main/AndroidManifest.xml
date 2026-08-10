@@ -35,4 +35,57 @@
         </intent-filter>
       </activity>
     </application>
+
+    <!-- Deep-link scheme visibility for Linking.canOpenURL on Android 11+ -->
+    <queries>
+      <!-- Telegram -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="tg" />
+      </intent>
+      <!-- YouTube -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="vnd.youtube" />
+      </intent>
+      <!-- TikTok (global) -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="snssdk1233" />
+      </intent>
+      <!-- TikTok (Musical.ly legacy) -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="musically" />
+      </intent>
+      <!-- Facebook -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="fb" />
+      </intent>
+      <!-- X / Twitter -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="twitter" />
+      </intent>
+      <!-- Instagram -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="instagram" />
+      </intent>
+      <!-- HTTPS fallback (browser / App Links) -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="https" />
+      </intent>
+      <!-- Phantom / Solana wallets -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="solana" />
+      </intent>
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="phantom" />
+      </intent>
+    </queries>
 </manifest>

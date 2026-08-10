@@ -12,13 +12,11 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
 import RewardedAdModal from './RewardedAdModal';
-import AdPromptModal from './AdPromptModal';
 
 export default function StreakCard({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
   const [adVisible, setAdVisible] = useState(false);
-  const [promptVisible, setPromptVisible] = useState(false);
   const streak = useQuery(api.streaks.getStreak, { userId });
   const checkIn = useMutation(api.streaks.checkIn);
 
@@ -39,7 +37,7 @@ export default function StreakCard({ userId }: { userId: Id<'users'> }) {
 
   const onCheckInPress = () => {
     if (busy || !streak.canCheckIn) return;
-    setPromptVisible(true);
+    setAdVisible(true);
   };
 
   const handleAdSuccess = () => doCheckIn();
@@ -96,17 +94,6 @@ export default function StreakCard({ userId }: { userId: Id<'users'> }) {
           );
         })}
       </View>
-      <AdPromptModal
-        visible={promptVisible}
-        onClose={() => {
-          setPromptVisible(false);
-          doCheckIn();
-        }}
-        onConfirm={() => {
-          setPromptVisible(false);
-          setAdVisible(true);
-        }}
-      />
       <RewardedAdModal
         visible={adVisible}
         onClose={() => setAdVisible(false)}

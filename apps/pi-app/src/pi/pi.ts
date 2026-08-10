@@ -243,7 +243,13 @@ export async function startPiPayment(
   sandbox = getPiSandbox(),
 ): Promise<void> {
   const Pi = await initPi(sandbox);
-  Pi.createPayment(data, {
+  // Pass clean payment object per Pi SDK specification
+  const paymentPayload: PiPaymentData = {
+    amount: Number(data.amount),
+    memo: String(data.memo),
+    metadata: data.metadata ?? {},
+  };
+  Pi.createPayment(paymentPayload, {
     onReadyForServerApproval: (paymentId) => {
       callbacks.onReadyForServerApproval(paymentId);
     },
@@ -318,4 +324,26 @@ export async function showPiRewardedAd(
       reason: e instanceof Error ? e.message : "AD_ERROR",
     };
   }
+}
+
+export type RewardedAdGateResult =
+  | { ok: true; adId: string | null }
+  | { ok: false; reason: string };
+
+// Ad-gate for rewarded actions (check-in, mystery box, combo claim) — the web
+// equivalent of the Android app's RewardedAdModal. Runs the full rewarded-ad
+// flow; the returned adId is verified server-side by the calling mutation. When
+// the ad network is unavailable (e.g. dev outside the Pi Browser) we proceed
+// without an adId so the flow stays testable, mirroring the spin page.
+export async function requireRewardedAd(
+  sandbox = getPiSandbox(),
+): Promise<RewardedAdGateResult> {
+  const ad = await showPiRewardedAd(sandbox);
+  if (ad.supported && ad.rewarded) {
+    return { ok: true, adId: ad.adId };
+  }
+  if (ad.supported) {
+    return { ok: false, reason: `Ad not completed — ${ad.reason}` };
+  }
+  return { ok: true, adId: null };
 }

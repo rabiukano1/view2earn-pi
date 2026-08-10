@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAction, useQuery } from "convex/react";
-import { useConvexAuth } from "@convex-dev/auth/react";
+import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
 import {
@@ -23,21 +23,28 @@ const MENU = [
     label: "Referral Program",
     sub: "Invite friends & earn",
     tint: "#10B981",
-    emoji: "👥",
-    href: "/rewards-redemption",
+    emoji: "🤝",
+    href: "/referral",
+  },
+  {
+    label: "Promote Hub",
+    sub: "Promote your channels",
+    tint: "#8B5CF6",
+    emoji: "🚀",
+    href: "/promote",
+  },
+  {
+    label: "Badges & Levels",
+    sub: "Level progress & badges",
+    tint: "#F59E0B",
+    emoji: "🏆",
+    href: "/achievements",
   },
   {
     label: "Payout Wallet",
     sub: "Pi wallet & withdraw",
     tint: "#627EEA",
     emoji: "👛",
-    href: "/wallet",
-  },
-  {
-    label: "Points History",
-    sub: "Full ledger records",
-    tint: "#8B8894",
-    emoji: "🕘",
     href: "/wallet",
   },
   {
@@ -48,11 +55,56 @@ const MENU = [
     href: "/spin",
   },
   {
+    label: "Daily Quiz",
+    sub: "Knowledge challenge",
+    tint: "#6366F1",
+    emoji: "🧠",
+    href: "/quiz",
+  },
+  {
     label: "Learn Pi",
     sub: "Guided lessons",
     tint: "#F59E0B",
     emoji: "🎓",
     href: "/learn",
+  },
+];
+
+const LEGAL_MENU = [
+  {
+    label: "Privacy Policy",
+    sub: "Data collection & encryption",
+    tint: "#3B82F6",
+    emoji: "🛡️",
+    href: "/privacy",
+  },
+  {
+    label: "Cookie Policy",
+    sub: "Storage & session management",
+    tint: "#F59E0B",
+    emoji: "🍪",
+    href: "/cookies",
+  },
+  {
+    label: "Anti-Fraud Policy",
+    sub: "Security & anti-bot rules",
+    tint: "#EF4444",
+    emoji: "🚨",
+    href: "/anti-fraud",
+  },
+  {
+    label: "Terms of Service",
+    sub: "Platform terms & guidelines",
+    tint: "#8B5CF6",
+    emoji: "📜",
+    href: "/terms",
+  },
+  {
+    label: "Rewards Policy",
+    sub: "Redemption & payout rules",
+    tint: "#10B981",
+    emoji: "🎁",
+    href: "/rewards-redemption",
   },
 ];
 
@@ -63,15 +115,23 @@ export default function PiProfile() {
   const userId = (me?._id ?? null) as Id<"users"> | null;
   const data = useQuery(api.profile.smartDashboard, userId ? { userId } : "skip");
   const generatePdf = useAction(api.reports.generatePdf);
+  const { signOut } = useAuthActions();
+
   const [pdfBusy, setPdfBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.replace("/");
   }, [isLoading, isAuthenticated, router]);
 
   if (!userId) {
-    return <div className="pi-centered"><div className="pi-spinner" /></div>;
+    return (
+      <div className="pi-centered">
+        <div className="pi-spinner" />
+      </div>
+    );
   }
 
   const d = (data ?? null) as SmartDashboard | null;
@@ -84,7 +144,6 @@ export default function PiProfile() {
 
   const displayName = d?.user.name || d?.user.username || "View2Earn Member";
   const displayContact = d?.user.telegramUserId ? `@${d.user.telegramUserId}` : "";
-  const ecosystemTag = d?.user.ecosystem === "PI" ? "Pi Network" : "Sidra Chain";
 
   const downloadReport = async () => {
     if (pdfBusy) return;
@@ -106,7 +165,17 @@ export default function PiProfile() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard unavailable — ignore
+      // clipboard unavailable
+    }
+  };
+
+  const handleConfirmSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      router.replace("/");
+    } catch {
+      setSigningOut(false);
     }
   };
 
@@ -118,62 +187,22 @@ export default function PiProfile() {
         <p className="pi-profile-name">{displayName}</p>
         {displayContact ? <p className="pi-muted">{displayContact}</p> : null}
         {lvl ? (
-          <span className="pi-badge pi-badge-accent pi-profile-lvl">
-            ⚡ Lv {lvl.level} · {lvl.title}
+          <span className="pi-profile-level">
+            Level {lvl.level} · {lvl.title}
           </span>
         ) : null}
-        {lvl ? (
-          <div className="pi-profile-xp">
-            <div className="pi-progress-track">
-              <div className="pi-progress-fill" style={{ width: `${Math.round(lvl.progress * 100)}%` }} />
-            </div>
-            <p className="pi-muted">
-              {formatPts(lvl.xp)} XP · {formatPts(lvl.next - lvl.xp)} to Level {lvl.level + 1}
-            </p>
-          </div>
-        ) : null}
-        <div className="pi-profile-badges">
-          <span className="pi-badge pi-badge-accent">{ecosystemTag}</span>
-          <span className="pi-badge pi-badge-live">✅ Verified Account</span>
-        </div>
       </div>
 
-      {/* Stats strip */}
-      <div className="pi-profile-stats">
-        <div className="pi-stat-tile">
-          <span className="pi-stat-value pi-stat-accent">{d ? formatPts(d.stats.balance) : "…"}</span>
-          <span className="pi-stat-label">Balance</span>
-        </div>
-        <div className="pi-stat-tile">
-          <span className="pi-stat-value pi-stat-ok">{d ? formatPts(d.stats.totalEarned) : "…"}</span>
-          <span className="pi-stat-label">Earned</span>
-        </div>
-        <div className="pi-stat-tile">
-          <span className="pi-stat-value pi-stat-blue">{d ? formatPts(d.stats.tasksCompleted) : "…"}</span>
-          <span className="pi-stat-label">Tasks</span>
-        </div>
-        <div className="pi-stat-tile">
-          <span className="pi-stat-value pi-stat-gold">{d ? (d.rank.rank ? `#${d.rank.rank}` : "—") : "…"}</span>
-          <span className="pi-stat-label">Rank</span>
-        </div>
-      </div>
-
-      {/* Referral code */}
+      {/* Referral card */}
       {d?.referral.code ? (
-        <div className="pi-card pi-referral-card">
-          <div className="pi-row">
-            <span className="pi-gift">🎟️</span>
-            <div className="pi-grow">
-              <p className="pi-card-title-sm">Your referral code</p>
-              <p className="pi-muted">
-                {d.referral.count} invited · {d.referral.qualifiedCount} qualified · +{d.referral.totalEarned} pts earned
-              </p>
-            </div>
-            <button className="pi-btn-mini pi-btn-mini-on" onClick={copyCode}>
-              {copied ? "Copied!" : "Copy"}
-            </button>
+        <div className="pi-card pi-ref-card">
+          <div>
+            <p className="pi-card-title-sm">Invite Pioneers &amp; Earn</p>
+            <p className="pi-ref-code">{d.referral.code}</p>
           </div>
-          <p className="pi-referral-code">{d.referral.code}</p>
+          <button className="btn btn-secondary btn-sm" onClick={copyCode}>
+            {copied ? "Copied! ✓" : "Copy Code"}
+          </button>
         </div>
       ) : null}
 
@@ -196,7 +225,10 @@ export default function PiProfile() {
             const href = i.action ? coachHref(i.action) : null;
             const inner = (
               <>
-                <span className="pi-insight-icon" style={{ backgroundColor: `${i.tint}1f`, color: i.tint }}>
+                <span
+                  className="pi-insight-icon"
+                  style={{ backgroundColor: `${i.tint}1f`, color: i.tint }}
+                >
                   {iconEmoji(i.icon)}
                 </span>
                 <div className="pi-grow">
@@ -219,33 +251,8 @@ export default function PiProfile() {
         </div>
       </div>
 
-      {/* Achievements preview */}
-      <div className="pi-section-title">Achievements</div>
-      <div className="pi-achv-row">
-        {achv.length === 0 ? (
-          <p className="pi-muted">Complete tasks to unlock badges</p>
-        ) : (
-          <>
-            {unlocked.slice(0, 3).map((a) => (
-              <div key={a.id} className="pi-achv-tile">
-                <span className="pi-achv-icon" style={{ backgroundColor: `${a.tint}1f` }}>
-                  {iconEmoji(a.icon)}
-                </span>
-                <p className="pi-achv-title">{a.title}</p>
-              </div>
-            ))}
-            {locked.map((a) => (
-              <div key={a.id} className="pi-achv-tile pi-achv-tile-locked">
-                <span className="pi-achv-icon pi-achv-icon-locked">🔒</span>
-                <p className="pi-achv-title-locked">Locked</p>
-              </div>
-            ))}
-          </>
-        )}
-      </div>
-
-      {/* Menu */}
-      <div className="pi-section-title">More</div>
+      {/* Quick Menu */}
+      <div className="pi-section-title">Quick Features</div>
       <div className="pi-menu">
         {MENU.map((m) => (
           <Link key={m.label} href={m.href} className="pi-menu-row">
@@ -270,6 +277,89 @@ export default function PiProfile() {
           <span className="pi-insight-arrow">→</span>
         </button>
       </div>
+
+      {/* Legal & Security Center */}
+      <div className="pi-section-title">Legal &amp; Compliance Center</div>
+      <div className="pi-menu">
+        {LEGAL_MENU.map((m) => (
+          <Link key={m.label} href={m.href} className="pi-menu-row">
+            <span className="pi-menu-icon" style={{ backgroundColor: `${m.tint}1e` }}>
+              {m.emoji}
+            </span>
+            <div className="pi-grow">
+              <p className="pi-menu-label">{m.label}</p>
+              <p className="pi-muted">{m.sub}</p>
+            </div>
+            <span className="pi-insight-arrow">→</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Account Security & Sign Out */}
+      <div className="pi-section-title">Account Security</div>
+      <div className="pi-card pi-card-glass" style={{ padding: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <p className="pi-card-title-sm" style={{ fontSize: 15 }}>
+              Sign Out of Pi Session
+            </p>
+            <p className="pi-muted" style={{ fontSize: 12 }}>
+              Securely sign out of your Pi Browser session on this device.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            style={{ color: "#EF4444", borderColor: "#EF4444", fontWeight: 800 }}
+            onClick={() => setShowSignOutConfirm(true)}
+          >
+            🚪 Sign Out
+          </button>
+        </div>
+      </div>
+
+      {/* Sign Out Confirmation Modal */}
+      {showSignOutConfirm && (
+        <div className="pi-modal-overlay" onClick={() => setShowSignOutConfirm(false)}>
+          <div className="pi-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pi-modal-head">
+              <h3>Confirm Sign Out</h3>
+              <button
+                type="button"
+                className="pi-modal-x"
+                onClick={() => setShowSignOutConfirm(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="pi-modal-body">
+              <p className="pi-muted" style={{ fontSize: 14 }}>
+                Are you sure you want to sign out of your account? You can sign back in anytime using your Pi Browser identity.
+              </p>
+
+              <div className="pi-modal-actions" style={{ marginTop: 18 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowSignOutConfirm(false)}
+                  disabled={signingOut}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ backgroundColor: "#EF4444", borderColor: "#EF4444" }}
+                  onClick={handleConfirmSignOut}
+                  disabled={signingOut}
+                >
+                  {signingOut ? "Signing Out…" : "Yes, Sign Out"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

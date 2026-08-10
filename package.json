@@ -39,7 +39,6 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-native": "0.86.0",
-    "react-native-app-auth": "^8.4.1",
     "react-native-biometrics": "^3.0.1",
     "react-native-code-push": "^9.0.1",
     "react-native-get-random-values": "^2.0.0",
@@ -47,6 +46,7 @@
     "react-native-image-picker": "^8.2.1",
     "react-native-safe-area-context": "^5.8.0",
     "react-native-screens": "^4.26.0",
+    "react-native-svg": "^15.15.5",
     "react-native-vector-icons": "^10.3.0",
     "resend": "^6.17.2"
   },

@@ -22,6 +22,7 @@ const ICONS = {
   rewards: "M12 8c-3 0-5 2-5 5s2 5 5 5 5-2 5-5-2-5-5-5z M12 2v2 M12 20v2 M4.22 4.22l1.42 1.42 M18.36 18.36l1.42 1.42 M2 12h2 M20 12h2 M4.22 19.78l1.42-1.42 M18.36 5.64l1.42-1.42",
   achievements: "M12 2l2.4 4.8L20 8l-3.5 4.5L18 19l-6-3-6 3 1.5-6.5L4 8l5.6-1.2z",
   exchange: "M17 1l4 4-4 4 M3 11V9a4 4 0 0 1 4-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 0 1-4 4H3",
+  visitors: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
 };
 
 const links = [
@@ -35,6 +36,7 @@ const links = [
   { href: "/exchange", label: "Exchange", icon: ICONS.exchange },
   { href: "/redemptions", label: "Redemptions", icon: ICONS.redemptions },
   { href: "/inquiries", label: "Inquiries", icon: ICONS.exchange },
+  { href: "/visitors", label: "Visitors", icon: ICONS.visitors },
   { href: "/fraud", label: "Fraud", icon: ICONS.fraud },
 ];
 

@@ -8,6 +8,11 @@ const config = {
   watchFolders: [path.resolve(__dirname, 'packages')],
   resolver: {
     nodeModulesPaths: [path.resolve(__dirname, 'node_modules')],
+    blockList: [
+      /.*[/\\]android[/\\]build[/\\]\.*/,
+      /.*[/\\]\.react-native-.*[/\\]\.*/,
+      /.*[/\\]build[/\\]generated[/\\]\.*/,
+    ],
   },
   transformer: {
     getTransformOptions: async () => ({

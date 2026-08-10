@@ -2,7 +2,7 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
-// Identity is via Convex Auth (email/password now; Google + Sidra KYC later).
+// Identity is via Convex Auth (email/password now; Sidra KYC later).
 
 // The currently signed-in user, or null. The client reads this for its session.
 export const me = query({

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -9,6 +8,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import { smartOpenUrl } from '../lib/openUrl';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -100,13 +100,13 @@ export default function PolicyScreen({ route }: { route: { params: { policy: Pol
           </Text>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => Linking.openURL(`mailto:privacy@view2earn.org?subject=${encodeURIComponent(`${doc.title} Inquiry`)}`)}>
+            onPress={() => smartOpenUrl(`mailto:privacy@view2earn.org?subject=${encodeURIComponent(`${doc.title} Inquiry`)}`)}>
             <Icon name="envelope" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>privacy@view2earn.org</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => Linking.openURL('https://view2earn.org/support')}>
+            onPress={() => smartOpenUrl('https://view2earn.org/support')}>
             <Icon name="globe" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>https://view2earn.org/support</Text>
           </TouchableOpacity>

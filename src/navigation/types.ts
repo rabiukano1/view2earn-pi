@@ -28,5 +28,6 @@ export type RootStackParamList = {
   Achievements: undefined;
   Stats: undefined;
   PayoutSettings: undefined;
+  Donate: undefined;
 };
 

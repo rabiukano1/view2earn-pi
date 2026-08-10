@@ -1,5 +1,7 @@
 "use client";
 
+import { PiRewardedAdButton } from "@/pi/components/PiRewardedAdButton";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -7,6 +9,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
+import { requireRewardedAd } from "../../pi/pi";
 
 // Pi home (mobile-first) — modernized mirror of the Android app: animated
 // gradient hero with balance, quick actions, daily streak, mystery box,
@@ -20,12 +23,15 @@ export default function PiHome() {
   const balance = useQuery(api.points.balance, userId ? { userId } : "skip");
   const streak = useQuery(api.streaks.getStreak, userId ? { userId } : "skip");
   const box = useQuery(api.bonus.getBoxStatus, userId ? { userId } : "skip");
+  const combo = useQuery(api.combos.getComboStatus, userId ? { userId } : "skip");
   const progress = useQuery(api.rewards.progressToNext, userId ? { userId } : "skip");
   const history = useQuery(api.points.history, userId ? { userId, limit: 5 } : "skip");
   const checkIn = useMutation(api.streaks.checkIn);
   const openBox = useMutation(api.bonus.openBox);
+  const claimCombo = useMutation(api.combos.claimCombo);
 
   const [boxWon, setBoxWon] = useState<number | null>(null);
+  const [comboWon, setComboWon] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -48,7 +54,11 @@ export default function PiHome() {
     if (busy || !streak?.canCheckIn) return;
     setBusy(true);
     try {
-      await checkIn({ userId });
+      // Rewarded-ad gate (mirrors Android's StreakCard): watch the Pi ad, then
+      // verify it server-side as part of the check-in transaction.
+      const gate = await requireRewardedAd();
+      if (!gate.ok) throw new Error(gate.reason);
+      await checkIn({ userId, adId: gate.adId ?? undefined });
     } catch (e) {
       alert(String(e).replace("[CONVEX] ", ""));
     } finally {
@@ -60,8 +70,27 @@ export default function PiHome() {
     if (busy || !box?.eligible) return;
     setBusy(true);
     try {
-      const res = await openBox({ userId });
+      // Rewarded-ad gate (mirrors Android's DailyBox).
+      const gate = await requireRewardedAd();
+      if (!gate.ok) throw new Error(gate.reason);
+      const res = await openBox({ userId, adId: gate.adId ?? undefined });
       setBoxWon(res.reward);
+    } catch (e) {
+      alert(String(e).replace("[CONVEX] ", ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doClaimCombo = async () => {
+    if (busy || !combo?.canClaim) return;
+    setBusy(true);
+    try {
+      // Rewarded-ad gate (mirrors Android's ComboTracker).
+      const gate = await requireRewardedAd();
+      if (!gate.ok) throw new Error(gate.reason);
+      const res = await claimCombo({ userId, adId: gate.adId ?? undefined });
+      setComboWon(res.reward);
     } catch (e) {
       alert(String(e).replace("[CONVEX] ", ""));
     } finally {
@@ -71,8 +100,13 @@ export default function PiHome() {
 
   const quickActions = [
     { href: "/tasks", label: "Tasks", emoji: "✅", tint: "#7C3AED" },
+    { href: "/promote", label: "Promote", emoji: "🚀", tint: "#8B5CF6" },
+    { href: "/quiz", label: "Daily Quiz", emoji: "🧠", tint: "#6366F1" },
+    { href: "/referral", label: "Referral", emoji: "🤝", tint: "#10B981" },
+    { href: "/achievements", label: "Badges", emoji: "🏆", tint: "#F59E0B" },
     { href: "/spin", label: "Spin", emoji: "🎰", tint: "#EC4899" },
     { href: "/redeem", label: "Rewards", emoji: "🎁", tint: "#10B981" },
+    { href: "/donate", label: "Donate π", emoji: "💜", tint: "#EC4899" },
     { href: "/learn", label: "Learn", emoji: "🎓", tint: "#F59E0B" },
     { href: "/surveys", label: "Surveys", emoji: "📝", tint: "#F97316" },
     { href: "/wallet", label: "Wallet", emoji: "👛", tint: "#0EA5E9" },
@@ -215,6 +249,60 @@ export default function PiHome() {
             </div>
           )}
         </section>
+
+        {/* Featured Pi Rewarded Ad */}
+        {userId && (
+          <PiRewardedAdButton
+            userId={userId}
+            label="Daily Pi Rewarded Ad"
+            sublabel="Watch a quick Pi Browser video ad to claim instant +50 PTS"
+            bonusPoints={50}
+          />
+        )}
+
+        {/* Daily combo (mirrors Android's ComboTracker) */}
+        {combo && !combo.claimedToday && (combo.social || combo.telegram || combo.quiz) ? (
+          <section className="pi-card pi-card-glass pi-combo-card">
+            <div className="pi-row pi-combo-head">
+              <span className="pi-flame pi-combo-flame">⚡</span>
+              <div className="pi-grow">
+                <p className="pi-card-title">Daily Combo</p>
+                <p className="pi-muted pi-muted-accent">+{combo.reward} pts when all 3 are done</p>
+              </div>
+              {combo.canClaim ? (
+                <button
+                  className="pi-btn-mini pi-btn-mini-on"
+                  onClick={doClaimCombo}
+                  disabled={busy}>
+                  {busy ? "…" : "Claim"}
+                </button>
+              ) : (
+                <span className="pi-combo-count">
+                  {[combo.social, combo.telegram, combo.quiz].filter(Boolean).length}/3
+                </span>
+              )}
+            </div>
+            <div className="pi-combo-legs">
+              {[
+                { key: "social", icon: "🔗", label: "Follow", done: combo.social },
+                { key: "telegram", icon: "✈️", label: "Telegram", done: combo.telegram },
+                { key: "quiz", icon: "🧠", label: "Quiz", done: combo.quiz },
+              ].map((leg) => (
+                <div key={leg.key} className="pi-combo-leg">
+                  <div className={`pi-combo-dot ${leg.done ? "pi-combo-dot-done" : ""}`}>
+                    {leg.done ? "✓" : leg.icon}
+                  </div>
+                  <span className={`pi-combo-label ${leg.done ? "pi-combo-label-done" : ""}`}>
+                    {leg.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {comboWon !== null ? (
+              <p className="pi-muted pi-mt pi-muted-accent">+{comboWon} pts earned! ⚡</p>
+            ) : null}
+          </section>
+        ) : null}
 
         {/* Explore */}
         <p className="pi-section-title">Explore</p>

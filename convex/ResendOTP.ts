@@ -3,6 +3,9 @@ import { Email } from "@convex-dev/auth/providers/Email";
 // Email OTP via Resend (free tier). Sends a 6-digit code; Convex Auth stores +
 // verifies it. Delivery uses Resend's REST API directly (no SDK dependency).
 // Set the key: npx convex env set AUTH_RESEND_KEY <resend-api-key>
+// Set a verified sender: npx convex env set AUTH_RESEND_FROM "View2Earn <no-reply@view2earn.org>"
+// (defaults to the sandbox onboarding@resend.dev, which only delivers to the
+// Resend account owner's own email).
 export const ResendOTP = Email({
   id: "resend-otp",
   maxAge: 60 * 15, // code valid for 15 minutes
@@ -22,8 +25,7 @@ export const ResendOTP = Email({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // onboarding@resend.dev works for testing; use a verified domain for prod.
-        from: "View2Earn <onboarding@resend.dev>",
+        from: process.env.AUTH_RESEND_FROM ?? "View2Earn <onboarding@resend.dev>",
         to: [email],
         subject: "Your View2Earn sign-in code",
         text: `Your sign-in code is ${token}\n\nIt expires in 15 minutes.`,

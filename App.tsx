@@ -27,10 +27,36 @@ const tokenStorage: TokenStorage = {
   removeItem: (key) => AsyncStorage.removeItem(key),
 };
 
+import SplashScreen, { ONBOARDING_STORAGE_KEY } from './src/screens/SplashScreen';
+
 // Show the app once signed in, the login screen otherwise. Every screen reads
 // the user from useAuth(), so inside AppNavigator a signed-in user always exists.
 function Gate() {
   const { userId, ready } = useAuth();
+  const [showSplash, setShowSplash] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_STORAGE_KEY)
+      .then((seen) => {
+        setShowSplash(seen !== 'true');
+      })
+      .catch(() => {
+        setShowSplash(false);
+      });
+  }, []);
+
+  if (showSplash === null) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
   if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
@@ -43,7 +69,7 @@ function Gate() {
       <AppNavigator />
     </BiometricGate>
   ) : (
-    <LoginScreen />
+    <LoginScreen onShowSplash={() => setShowSplash(true)} />
   );
 }
 

@@ -67,8 +67,8 @@ def crop_emblem_tight(img):
     return square_img
 
 def crop_full_logo_tight(img):
-    # Full logo tight box: x=270..755, y=103..495
-    crop_box = (270, 103, 755, 495)
+    # Crop ONLY emblem graphic without text name: x=278..745, y=103..429
+    crop_box = (278, 103, 745, 429)
     full_logo = img.crop(crop_box)
     
     pad_w = int(full_logo.width * 0.05)
@@ -91,16 +91,21 @@ def main():
     src_img = make_transparent_background(raw_img)
     print("Converted image background to TRANSPARENT (clear background)")
     
-    # 1. Full logo (transparent)
+    # 1. Full logo emblem only (transparent)
     full_logo = crop_full_logo_tight(src_img)
     full_logo_crisp = enhance_sharpness(full_logo)
     
     full_logo_path = os.path.join(PROJECT_ROOT, "src", "assets", "logo.png")
     full_logo_crisp.save(full_logo_path, "PNG")
-    print(f"Saved transparent full logo to {full_logo_path}")
+    print(f"Saved transparent emblem logo to {full_logo_path}")
     
     pipro_logo_path = os.path.join(PROJECT_ROOT, "src", "assets", "pipro_logo.png")
     full_logo_crisp.save(pipro_logo_path, "PNG")
+    
+    pipro_jpg_path = os.path.join(PROJECT_ROOT, "src", "assets", "pipro_logo.jpg")
+    jpg_bg = Image.new('RGB', full_logo_crisp.size, (255, 255, 255))
+    jpg_bg.paste(full_logo_crisp, (0, 0), full_logo_crisp)
+    jpg_bg.save(pipro_jpg_path, "JPEG")
     
     # 2. Square emblem icon (transparent)
     icon_square = crop_emblem_tight(src_img)

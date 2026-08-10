@@ -21,9 +21,53 @@ import StreakCard from '../components/StreakCard';
 import DailyBox from '../components/DailyBox';
 import ProgressToReward from '../components/ProgressToReward';
 import Icon from '../components/Icon';
+import { achievements, levelInfo, formatPts, type SmartDashboard } from '../profile/smart';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Home'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
+
+function HomeScreenAchievementsCard({ userId, onPress }: { userId: string; onPress: () => void }) {
+  const dark = useColorScheme() === 'dark';
+  const data = useQuery(api.profile.smartDashboard, { userId: userId as any });
+
+  if (!data) return null;
+
+  const d = data as SmartDashboard;
+  const lvl = levelInfo(d.stats.totalEarned);
+  const all = achievements(d);
+  const unlocked = all.filter((a) => a.unlocked).length;
+
+  return (
+    <TouchableOpacity
+      style={[styles.achievementsCard, dark && styles.cardDark]}
+      onPress={onPress}
+      activeOpacity={0.88}>
+      <View style={styles.achievementsHeader}>
+        <View style={styles.levelBadge}>
+          <Icon name="medal" iconStyle="solid" size={15} color="#F59E0B" />
+          <Text style={styles.levelBadgeText}>Level {lvl.level}</Text>
+        </View>
+        <View style={styles.unlockedBadge}>
+          <Icon name="award" iconStyle="solid" size={12} color="#10B981" />
+          <Text style={styles.unlockedCountText}>{unlocked}/{all.length} Unlocked</Text>
+        </View>
+      </View>
+
+      <Text style={[styles.levelTitleText, dark && styles.textLight]}>{lvl.title}</Text>
+
+      <View style={styles.xpTrack}>
+        <View style={[styles.xpFill, { width: `${Math.round(lvl.progress * 100)}%` }]} />
+      </View>
+
+      <View style={styles.achievementsFooter}>
+        <Text style={styles.xpProgressText}>
+          {formatPts(d.stats.totalEarned)} XP lifetime · {formatPts(lvl.next - lvl.xp)} to Lvl {lvl.level + 1}
+        </Text>
+        <Text style={styles.viewBadgesText}>View Badges →</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function HomeScreen() {
   const dark = useColorScheme() === 'dark';
@@ -35,17 +79,15 @@ export default function HomeScreen() {
   const recordSignals = useMutation(api.deviceSignals.record);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
 
-  // Layer 2 fingerprint: record device signals once the user is known (no-op on
-  // repeat opens — the server dedups by fingerprint).
   useEffect(() => {
     if (!userId) return;
     recordSignals({ userId, ...collectDeviceSignals() }).catch(() => {});
   }, [userId, recordSignals]);
 
-  // Each shortcut carries its own navigation so tabs and pushed screens mix freely.
   const shortcuts: { icon: string; label: string; tint: string; go: () => void }[] = [
+    { icon: 'medal', label: 'Achievements', tint: '#F59E0B', go: () => stackNav.navigate('Achievements') },
     { icon: 'list-check', label: 'Tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') },
-    { icon: 'store', label: 'Market', tint: '#0EA5E9', go: () => stackNav.navigate('Marketplace') },
+    { icon: 'rocket', label: 'Promote Hub', tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') },
     {
       icon: 'graduation-cap',
       label: 'Learn',
@@ -70,8 +112,8 @@ export default function HomeScreen() {
       tint: '#F97316',
       go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined),
     },
+    { icon: 'heart', label: 'Donate π', tint: '#EC4899', go: () => stackNav.navigate('Donate') },
     { icon: 'gift', label: 'Rewards', tint: '#10B981', go: () => tabNav.navigate('Rewards') },
-    { icon: 'trophy', label: 'Leaderboard', tint: '#EF4444', go: () => tabNav.navigate('Leaderboard') },
   ];
 
   return (
@@ -79,7 +121,7 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}
         showsVerticalScrollIndicator={false}>
-        {/* Hero */}
+        {/* Hero Header */}
         <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
           <Text style={styles.heroHi}>Welcome back 👋</Text>
           <Text style={styles.heroLabel}>Points Balance</Text>
@@ -95,6 +137,7 @@ export default function HomeScreen() {
           {userId && (
             <>
               <StreakCard userId={userId} />
+              <HomeScreenAchievementsCard userId={userId} onPress={() => stackNav.navigate('Achievements')} />
               <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
               <DailyBox userId={userId} />
             </>
@@ -138,53 +181,139 @@ const styles = StyleSheet.create({
   heroLabel: { color: '#EDE9FE', fontSize: 13, fontWeight: '600', opacity: 0.9 },
   heroBalance: {
     color: colors.white,
-    fontSize: 44,
-    fontWeight: '800',
-    letterSpacing: -1,
-    marginTop: 2,
+    fontSize: 42,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    marginVertical: spacing.xs,
   },
   historyChip: {
     alignSelf: 'flex-start',
-    marginTop: spacing.md,
-    backgroundColor: '#FFFFFF22',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.pill,
+    marginTop: spacing.xs,
+  },
+  historyChipText: { color: colors.white, fontSize: 12, fontWeight: '700' },
+  body: {
+    paddingHorizontal: spacing.xl,
+    marginTop: -spacing.lg,
+    gap: spacing.md,
+  },
+  achievementsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.xs,
+    ...shadow.card,
+  },
+  achievementsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.pill,
   },
-  historyChipText: { color: colors.white, fontWeight: '700', fontSize: 13 },
-  body: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
+  levelBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#D97706',
+  },
+  unlockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  unlockedCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  levelTitleText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.text,
+    marginTop: 2,
+  },
+  xpTrack: {
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.surfaceAlt,
+    overflow: 'hidden',
+    marginVertical: 4,
+  },
+  xpFill: {
+    height: '100%',
+    borderRadius: 3.5,
+    backgroundColor: '#F59E0B',
+  },
+  achievementsFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  xpProgressText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  viewBadgesText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: colors.primary,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: spacing.xs,
   },
-  textLight: { color: colors.textDark },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: CARD_GAP,
+    gap: CARD_GAP,
   },
   card: {
-    width: '31%',
-    aspectRatio: 1,
+    width: `calc(50% - ${CARD_GAP / 2}px)` as any,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...shadow.card,
   },
-  cardDark: { backgroundColor: colors.surfaceDark },
+  cardDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
   cardIcon: {
     width: 48,
     height: 48,
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardEmoji: { fontSize: 24 },
-  cardLabel: { fontSize: 13, fontWeight: '700', color: colors.text },
+  cardLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  textLight: { color: colors.textDark },
 });

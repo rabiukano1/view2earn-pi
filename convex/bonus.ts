@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
+import { consumeRewardedAd } from "./piAds";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000);
@@ -52,8 +53,11 @@ export const getBoxStatus = query({
 });
 
 export const openBox = mutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
+  args: {
+    userId: v.id("users"),
+    adId: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, adId }) => {
     await requireUser(ctx, userId);
     const today = dayNumber(Date.now());
 
@@ -68,6 +72,10 @@ export const openBox = mutation({
     if ((await tasksToday(ctx, userId)) < needed) {
       throw new Error(`Complete ${needed} tasks today to unlock the box.`);
     }
+
+    // Rewarded-ad gate (mirrors Android's DailyBox): verify the ad server-side
+    // before granting the box prize.
+    if (adId) await consumeRewardedAd(ctx, userId, adId);
 
     const prizes = await getJSON<{ pts: number; weight: number }[]>(ctx, "mysteryBoxPrizes");
     const reward = pickPrize(prizes);

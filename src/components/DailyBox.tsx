@@ -5,14 +5,12 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
 import RewardedAdModal from './RewardedAdModal';
-import AdPromptModal from './AdPromptModal';
 
 export default function DailyBox({ userId }: { userId: Id<'users'> }) {
   const dark = useColorScheme() === 'dark';
   const [busy, setBusy] = useState(false);
   const [won, setWon] = useState<number | null>(null);
   const [adVisible, setAdVisible] = useState(false);
-  const [promptVisible, setPromptVisible] = useState(false);
   const status = useQuery(api.bonus.getBoxStatus, { userId });
   const openBox = useMutation(api.bonus.openBox);
 
@@ -33,7 +31,7 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
 
   const handleOpenPress = () => {
     if (busy || !status.eligible) return;
-    setPromptVisible(true);
+    setAdVisible(true);
   };
 
   const handleAdSuccess = () => doOpenBox();
@@ -94,17 +92,6 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
           </View>
         )}
       </TouchableOpacity>
-      <AdPromptModal
-        visible={promptVisible}
-        onClose={() => {
-          setPromptVisible(false);
-          doOpenBox();
-        }}
-        onConfirm={() => {
-          setPromptVisible(false);
-          setAdVisible(true);
-        }}
-      />
       <RewardedAdModal
         visible={adVisible}
         onClose={() => setAdVisible(false)}

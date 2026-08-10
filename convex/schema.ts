@@ -262,6 +262,18 @@ export default defineSchema({
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
 
+  piDonations: defineTable({
+    userId: v.id("users"),
+    amount: v.number(),
+    memo: v.string(),
+    paymentId: v.optional(v.string()),
+    txid: v.optional(v.string()),
+    status: v.string(), // "pending" | "completed" | "failed" | "cancelled"
+    displayName: v.optional(v.string()),
+  }).index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_paymentId", ["paymentId"]),
+
   referrals: defineTable({
     referrerId: v.id("users"),
     refereeId: v.id("users"),
@@ -379,6 +391,21 @@ export default defineSchema({
     ip: v.optional(v.string()), // for spam/abuse triage
   }).index("by_status", ["status"])
     .index("by_kind", ["kind"]),
+
+  // Anonymous website (apps/website) visit analytics, consent-gated by the
+  // cookie banner. Written by unauthenticated visitors via convex/visitors.ts;
+  // `vid` is the random v2e_vid cookie, never a user id.
+  visitorEvents: defineTable({
+    vid: v.string(),            // anonymous visitor id (uuid from v2e_vid)
+    path: v.string(),           // page path viewed, e.g. "/", "/privacy"
+    isNewVisit: v.boolean(),    // true when this page view starts a new visit (>30 min gap)
+    visitNumber: v.number(),    // Nth visit for this visitor id
+    firstVisitAt: v.number(),   // epoch ms of the visitor's first visit
+    referrer: v.optional(v.string()), // document.referrer (may be empty)
+    screen: v.optional(v.string()),   // "WxH" viewport from the browser
+    lang: v.optional(v.string()),     // navigator.language
+  }).index("by_vid", ["vid"])
+    .index("by_path", ["path"]),
 
   // Videos and zero-cost watch-to-earn logs
   videos: defineTable({
