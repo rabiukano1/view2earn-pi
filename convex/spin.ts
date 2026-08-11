@@ -53,6 +53,10 @@ export const getSpinStatus = query({
       nextRefillMs,
       nextRefillAt,
       windowTotalMs: windowMs,
+      // Additive fields so the Achievements hub can render real spin progress
+      // (window spins used vs the window budget) without re-deriving it.
+      spinsUsedInWindow,
+      baseSpinsPerWindow: baseSpins,
     };
   },
 });

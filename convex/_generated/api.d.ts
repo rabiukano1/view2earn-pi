@@ -13,6 +13,7 @@ import type * as ResendOTP from "../ResendOTP.js";
 import type * as TelegramProvider from "../TelegramProvider.js";
 import type * as academy from "../academy.js";
 import type * as achievements from "../achievements.js";
+import type * as activities from "../activities.js";
 import type * as admin from "../admin.js";
 import type * as ads from "../ads.js";
 import type * as auth from "../auth.js";
@@ -72,6 +73,7 @@ declare const fullApi: ApiFromModules<{
   TelegramProvider: typeof TelegramProvider;
   academy: typeof academy;
   achievements: typeof achievements;
+  activities: typeof activities;
   admin: typeof admin;
   ads: typeof ads;
   auth: typeof auth;

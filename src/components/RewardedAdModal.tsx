@@ -20,6 +20,10 @@ interface RewardedAdModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess?: (newBalance: number) => void;
+  /** Override the reward amount (e.g. spin double-reward = spin winnings). */
+  rewardAmount?: number;
+  /** Ledger reason suffix recorded server-side (e.g. SPIN_DOUBLE_BONUS). */
+  adType?: string;
 }
 
 type AdPhase = 'loading' | 'ready' | 'error';
@@ -35,7 +39,13 @@ function sanitize(msg: string, adUnitId: string): string {
     .trim();
 }
 
-export default function RewardedAdModal({ visible, onClose, onSuccess }: RewardedAdModalProps) {
+export default function RewardedAdModal({
+  visible,
+  onClose,
+  onSuccess,
+  rewardAmount,
+  adType,
+}: RewardedAdModalProps) {
   const { userId } = useAuth();
   const [phase, setPhase] = useState<AdPhase>('loading');
   const [adError, setAdError] = useState('');
@@ -55,6 +65,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
   }
 
   const rewardPoints = adConfig?.rewardPoints ?? 50;
+  const displayReward = rewardAmount ?? rewardPoints;
   const adUnitId =
     Platform.OS === 'ios'
       ? (parsedConfig.adMobIosUnitId || ADMOB_AD_UNITS.ios)
@@ -73,7 +84,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
       try {
         load();
       } catch (err: any) {
-        setAdError(sanitize(err?.message || 'Failed to load ad', adUnitId));
+        setAdError(sanitize(err?.message || 'Failed to load video', adUnitId));
         setPhase('error');
       }
     }
@@ -87,7 +98,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
     }
   }, [error, adUnitId]);
 
-  // Ad became ready → flip to the "Watch Ad" CTA.
+  // Ad became ready → flip to the "Claim" CTA.
   useEffect(() => {
     if (isLoaded) {
       setPhase('ready');
@@ -101,7 +112,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
       try {
         show();
       } catch (err: any) {
-        setAdError(sanitize(err?.message || 'Failed to play ad', adUnitId));
+        setAdError(sanitize(err?.message || 'Failed to play video', adUnitId));
         setPhase('error');
       }
     }
@@ -116,8 +127,8 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
       const newBalance = await rewardForAd({
         userId,
         provider: adUnitId,
-        adType: 'rewarded_video',
-        rewardAmount: rewardPoints,
+        adType: adType ?? 'rewarded_video',
+        rewardAmount: rewardAmount ?? rewardPoints,
       });
       if (onSuccess) {
         onSuccess(newBalance);
@@ -127,7 +138,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
     } finally {
       setClaiming(false);
     }
-  }, [userId, rewardForAd, adUnitId, rewardPoints, onSuccess]);
+  }, [userId, rewardForAd, adUnitId, rewardAmount, rewardPoints, adType, onSuccess]);
 
   useEffect(() => {
     if (isEarnedReward) {
@@ -152,10 +163,10 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.adCard}>
-          {/* Rewarded Ad Header Badge */}
+          {/* Rewarded Video Header Badge */}
           <View style={styles.testBadgeHeader}>
             <Icon name="shield-halved" iconStyle="solid" size={12} color="#F59E0B" />
-            <Text style={styles.testBadgeText}>REWARDED AD ({Platform.OS.toUpperCase()})</Text>
+            <Text style={styles.testBadgeText}>REWARDED VIDEO ({Platform.OS.toUpperCase()})</Text>
           </View>
 
           {/* Ad Status Area */}
@@ -163,8 +174,8 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
             {phase === 'loading' && (
               <>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.adTitle}>Loading ad…</Text>
-                <Text style={styles.adSubtitle}>Fetching an ad for your device</Text>
+                <Text style={styles.adTitle}>Loading video…</Text>
+                <Text style={styles.adSubtitle}>Fetching a video for your device</Text>
               </>
             )}
 
@@ -175,9 +186,8 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
                 </View>
                 <Text style={styles.adTitle}>Ready to watch</Text>
                 <Text style={styles.adSubtitle}>
-                  Earn +{rewardPoints} PTS by watching a short rewarded video
-                </Text>
-              </>
+                  Earn +{displayReward} PTS by watching a short rewarded video
+                </Text>              </>
             )}
 
             {phase === 'error' && (
@@ -185,9 +195,9 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
                 <View style={styles.playIconContainer}>
                   <Icon name="circle-exclamation" iconStyle="solid" size={48} color="#F43F5E" />
                 </View>
-                <Text style={styles.adTitle}>Could not load ad</Text>
+                <Text style={styles.adTitle}>Could not load video</Text>
                 <Text style={styles.adSubtitle} numberOfLines={3}>
-                  {adError || 'No ads available right now'}
+                  {adError || 'No videos available right now'}
                 </Text>
               </>
             )}
@@ -201,7 +211,7 @@ export default function RewardedAdModal({ visible, onClose, onSuccess }: Rewarde
                 onPress={() => show()}
                 activeOpacity={0.85}>
                 <Icon name="gift" iconStyle="solid" size={14} color={colors.white} />
-                <Text style={styles.claimText}>Watch Ad (+{rewardPoints} PTS)</Text>
+                <Text style={styles.claimText}>Claim (+{displayReward} PTS)</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>

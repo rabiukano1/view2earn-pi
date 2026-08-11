@@ -20,6 +20,41 @@ import {
 
 const MENU = [
   {
+    label: "Leaderboard & Rankings",
+    sub: "Top weekly earners",
+    tint: "#F59E0B",
+    emoji: "🥇",
+    href: "/leaderboard",
+  },
+  {
+    label: "Earning Analytics",
+    sub: "Performance stats & summary",
+    tint: "#3B82F6",
+    emoji: "📊",
+    href: "/stats",
+  },
+  {
+    label: "Payout Settings",
+    sub: "Pi memo & receiving address",
+    tint: "#10B981",
+    emoji: "⚙️",
+    href: "/payout-settings",
+  },
+  {
+    label: "Linked Accounts",
+    sub: "Telegram & social links",
+    tint: "#229ED9",
+    emoji: "✈️",
+    href: "/linked-accounts",
+  },
+  {
+    label: "Security Center",
+    sub: "Anti-fraud & trust score",
+    tint: "#8B5CF6",
+    emoji: "🔐",
+    href: "/security",
+  },
+  {
     label: "Referral Program",
     sub: "Invite friends & earn",
     tint: "#10B981",
@@ -46,27 +81,6 @@ const MENU = [
     tint: "#627EEA",
     emoji: "👛",
     href: "/wallet",
-  },
-  {
-    label: "Spin & Win",
-    sub: "Lucky wheel",
-    tint: "#EC4899",
-    emoji: "🎰",
-    href: "/spin",
-  },
-  {
-    label: "Daily Quiz",
-    sub: "Knowledge challenge",
-    tint: "#6366F1",
-    emoji: "🧠",
-    href: "/quiz",
-  },
-  {
-    label: "Learn Pi",
-    sub: "Guided lessons",
-    tint: "#F59E0B",
-    emoji: "🎓",
-    href: "/learn",
   },
 ];
 

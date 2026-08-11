@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
-import { PiRewardedAdButton } from "@/pi/components/PiRewardedAdButton";
 
 type PlatformFilter = "all" | "telegram" | "youtube" | "tiktok" | "facebook" | "instagram" | "x";
 
@@ -138,50 +137,55 @@ export default function PiTasks() {
           </section>
         )}
 
-        {/* Featured Pi Rewarded Ad Task */}
-        <PiRewardedAdButton
-          userId={userId}
-          label="Watch Pi Rewarded Video Ad"
-          sublabel="Earn +50 PTS instantly by watching a short video ad in Pi Browser"
-          bonusPoints={50}
-        />
-
-        {/* Filter Chips & Search Bar */}
-        <div className="pi-task-controls">
-          <div className="pi-filter-scroll">
-            {platformsList.map((pf) => {
-              const cfg = PLATFORM_CONFIG[pf];
-              const isSelected = activeFilter === pf;
-              const count =
-                pf === "all"
-                  ? tasks?.length ?? 0
-                  : tasks?.filter((t) => t.platform?.toLowerCase() === pf).length ?? 0;
-
-              return (
-                <button
-                  key={pf}
-                  type="button"
-                  className={`pi-filter-chip ${isSelected ? "pi-filter-active" : ""}`}
-                  onClick={() => setActiveFilter(pf)}
-                  style={{
-                    borderColor: isSelected ? cfg.color : "var(--border)",
-                    backgroundColor: isSelected ? cfg.bg : "var(--surface)",
-                    color: isSelected ? cfg.color : "var(--text)",
-                  }}
-                >
-                  <span>{cfg.emoji}</span>
-                  <span>{cfg.label}</span>
-                  <span className="pi-filter-count">{count}</span>
-                </button>
-              );
-            })}
+        {/* Platform Dropdown Selector & Search Bar */}
+        <div className="pi-task-controls" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+            <select
+              className="pi-input"
+              value={activeFilter}
+              onChange={(e) => setActiveFilter(e.target.value as PlatformFilter)}
+              style={{
+                marginBottom: 0,
+                paddingLeft: 38,
+                fontWeight: 700,
+                backgroundColor: PLATFORM_CONFIG[activeFilter]?.bg ?? "var(--surface)",
+                borderColor: PLATFORM_CONFIG[activeFilter]?.color ?? "var(--border)",
+                color: "var(--text)",
+                cursor: "pointer",
+              }}
+            >
+              {platformsList.map((pf) => {
+                const cfg = PLATFORM_CONFIG[pf];
+                const count =
+                  pf === "all"
+                    ? tasks?.length ?? 0
+                    : tasks?.filter((t) => t.platform?.toLowerCase() === pf).length ?? 0;
+                return (
+                  <option key={pf} value={pf} style={{ backgroundColor: "#1e1b4b", color: "#FFF" }}>
+                    {cfg.emoji} {cfg.label} ({count} tasks)
+                  </option>
+                );
+              })}
+            </select>
+            <span
+              style={{
+                position: "absolute",
+                left: 12,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: 16,
+                pointerEvents: "none",
+              }}
+            >
+              {PLATFORM_CONFIG[activeFilter]?.emoji}
+            </span>
           </div>
 
-          <div style={{ marginTop: 10 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
             <input
               type="text"
               className="pi-input"
-              placeholder="Search tasks by name, type, or platform…"
+              placeholder="Search tasks by name, type, platform…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ marginBottom: 0 }}

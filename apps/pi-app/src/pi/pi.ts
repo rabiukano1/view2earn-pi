@@ -280,7 +280,7 @@ export async function isPiAdsSupported(
 }
 
 export type PiRewardedAdResult =
-  | { supported: true; rewarded: true; adId: string }
+  | { supported: true; rewarded: true; adId?: string }
   | { supported: true; rewarded: false; reason: string }
   | { supported: false; reason: string };
 
@@ -305,19 +305,21 @@ export async function showPiRewardedAd(
     const ready = await Pi.Ads.isAdReady("rewarded");
     if (!ready.ready) {
       const request = await Pi.Ads.requestAd("rewarded");
-      if (request.result !== "AD_LOADED") {
+      if (request.result !== "AD_LOADED" && request.result !== "AD_REWARDED") {
         return { supported: true, rewarded: false, reason: request.result };
       }
     }
 
     const shown = await Pi.Ads.showAd("rewarded");
-    if (shown.type !== "rewarded") {
-      return { supported: true, rewarded: false, reason: "AD_ERROR" };
-    }
-    if (shown.result === "AD_REWARDED" && shown.adId) {
+    const resultStr = String(shown?.result || "").toUpperCase();
+
+    if (resultStr === "AD_REWARDED" || resultStr === "REWARDED") {
       return { supported: true, rewarded: true, adId: shown.adId };
     }
-    return { supported: true, rewarded: false, reason: shown.result };
+    if (resultStr === "AD_CLOSED") {
+      return { supported: true, rewarded: false, reason: "AD_CLOSED" };
+    }
+    return { supported: true, rewarded: false, reason: shown?.result || "AD_ERROR" };
   } catch (e) {
     return {
       supported: false,
@@ -330,20 +332,21 @@ export type RewardedAdGateResult =
   | { ok: true; adId: string | null }
   | { ok: false; reason: string };
 
-// Ad-gate for rewarded actions (check-in, mystery box, combo claim) — the web
-// equivalent of the Android app's RewardedAdModal. Runs the full rewarded-ad
-// flow; the returned adId is verified server-side by the calling mutation. When
-// the ad network is unavailable (e.g. dev outside the Pi Browser) we proceed
-// without an adId so the flow stays testable, mirroring the spin page.
 export async function requireRewardedAd(
   sandbox = getPiSandbox(),
 ): Promise<RewardedAdGateResult> {
   const ad = await showPiRewardedAd(sandbox);
-  if (ad.supported && ad.rewarded) {
-    return { ok: true, adId: ad.adId };
+  const isRewarded = ad.rewarded || ad.reason === "AD_REWARDED" || ad.reason === "REWARDED";
+
+  if (ad.supported && isRewarded) {
+    return { ok: true, adId: ad.adId ?? null };
   }
   if (ad.supported) {
-    return { ok: false, reason: `Ad not completed — ${ad.reason}` };
+    const isClosed = ad.reason.includes("CLOSED") || ad.reason.includes("cancel");
+    return {
+      ok: false,
+      reason: isClosed ? "Video closed early. Watch the full ad to continue." : `Ad not completed (${ad.reason})`,
+    };
   }
   return { ok: true, adId: null };
 }

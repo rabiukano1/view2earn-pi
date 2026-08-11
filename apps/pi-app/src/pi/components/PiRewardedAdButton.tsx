@@ -40,7 +40,9 @@ export function PiRewardedAdButton({
 
     try {
       const ad = await showPiRewardedAd();
-      if (ad.supported && ad.rewarded) {
+      const isRewarded = ad.rewarded || ad.reason === "AD_REWARDED" || ad.reason === "REWARDED";
+
+      if (isRewarded) {
         const newBal = await rewardForAd({
           userId,
           provider: ad.adId,
@@ -50,7 +52,13 @@ export function PiRewardedAdButton({
         setMsg({ ok: true, text: `🎉 Success! +${pointsToAward} PTS credited to your wallet.` });
         if (onSuccess) onSuccess(newBal);
       } else if (ad.supported) {
-        setMsg({ ok: false, text: `Ad not completed: ${ad.reason}` });
+        const isClosed = ad.reason.includes("CLOSED") || ad.reason.includes("cancel");
+        setMsg({
+          ok: false,
+          text: isClosed
+            ? "Video closed early. Watch full ad to claim points."
+            : `Ad not completed: ${ad.reason}`,
+        });
       } else {
         // Fallback for dev / browser testing outside Pi Browser
         const newBal = await rewardForAd({

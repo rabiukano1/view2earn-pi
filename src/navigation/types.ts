@@ -1,5 +1,6 @@
 import type { Id } from '../../convex/_generated/dataModel';
 import type { PolicyKey } from '@view2earn/core';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 
 export type RootTabParamList = {
   Home: undefined;
@@ -11,7 +12,7 @@ export type RootTabParamList = {
 };
 
 export type RootStackParamList = {
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Marketplace: undefined;
   CreateListing: { userId: Id<'users'> };
   PointsHistory: undefined;

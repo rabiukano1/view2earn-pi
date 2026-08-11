@@ -4,6 +4,7 @@ import {
   Alert,
   AppState,
   FlatList,
+  Modal,
   ScrollView,
   Share,
   StyleSheet,
@@ -301,6 +302,7 @@ export default function TasksScreen() {
   const [uploading, setUploading] = useState(false);
   const [activePlatform, setActivePlatform] = useState<PlatformFilter>('all');
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('all');
+  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
   const [showRewardsDrawer, setShowRewardsDrawer] = useState(true);
 
   const [uploadTarget, setUploadTarget] = useState<Verification | null>(null);
@@ -488,30 +490,82 @@ export default function TasksScreen() {
               </View>
             )}
 
-            {/* Platform Horizontal Filter Bar */}
+            {/* Platform Dropdown Selector */}
             <View style={styles.filterSection}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-                {(['all', 'telegram', 'youtube', 'tiktok', 'facebook', 'x'] as PlatformFilter[]).map((p) => {
-                  const meta = PLATFORM_META[p];
-                  const isActive = activePlatform === p;
-                  return (
-                    <TouchableOpacity
-                      key={p}
-                      style={[
-                        styles.filterChip,
-                        dark && styles.filterChipDark,
-                        isActive && { backgroundColor: meta.color },
-                      ]}
-                      onPress={() => setActivePlatform(p)}>
-                      <PlatformIcon platform={p === 'all' ? 'app' : p} size={14} color={isActive ? '#FFF' : dark ? '#A7F3D0' : colors.textMuted} />
-                      <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                        {meta.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+              <TouchableOpacity
+                style={[styles.platformDropdownBtn, dark && styles.platformDropdownBtnDark]}
+                onPress={() => setShowPlatformDropdown(true)}
+                activeOpacity={0.8}>
+                <View style={styles.platformDropdownLeft}>
+                  <PlatformIcon
+                    platform={activePlatform === 'all' ? 'app' : activePlatform}
+                    size={18}
+                    color={PLATFORM_META[activePlatform]?.color ?? colors.primary}
+                  />
+                  <Text style={[styles.platformDropdownLabel, dark && styles.textLight]}>
+                    {PLATFORM_META[activePlatform]?.label ?? 'All Platforms'}
+                  </Text>
+                </View>
+                <View style={styles.platformDropdownRight}>
+                  <Text style={styles.platformDropdownCount}>
+                    {activePlatform === 'all'
+                      ? (tasks?.length ?? 0)
+                      : (tasks?.filter((t) => t.platform === activePlatform).length ?? 0)}{' '}
+                    tasks
+                  </Text>
+                  <Icon name="chevron-down" iconStyle="solid" size={13} color={dark ? '#C4B5FD' : colors.textMuted} />
+                </View>
+              </TouchableOpacity>
             </View>
+
+            {/* Platform Dropdown Modal */}
+            <Modal
+              visible={showPlatformDropdown}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowPlatformDropdown(false)}>
+              <TouchableOpacity
+                style={styles.dropdownModalOverlay}
+                activeOpacity={1}
+                onPress={() => setShowPlatformDropdown(false)}>
+                <View style={[styles.dropdownCard, dark && styles.dropdownCardDark]}>
+                  <Text style={[styles.dropdownTitle, dark && styles.textLight]}>Select Platform</Text>
+                  <View style={styles.dropdownDivider} />
+                  {(['all', 'telegram', 'youtube', 'tiktok', 'facebook', 'x'] as PlatformFilter[]).map((p) => {
+                    const meta = PLATFORM_META[p];
+                    const isSelected = activePlatform === p;
+                    const count =
+                      p === 'all'
+                        ? tasks?.length ?? 0
+                        : tasks?.filter((t) => t.platform === p).length ?? 0;
+                    return (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.dropdownOptionRow,
+                          dark && styles.dropdownOptionRowDark,
+                          isSelected && styles.dropdownOptionSelected,
+                        ]}
+                        onPress={() => {
+                          setActivePlatform(p);
+                          setShowPlatformDropdown(false);
+                        }}>
+                        <View style={styles.dropdownOptionLeft}>
+                          <PlatformIcon platform={p === 'all' ? 'app' : p} size={18} color={meta.color} />
+                          <Text style={[styles.dropdownOptionLabel, dark && styles.textLight, isSelected && { color: meta.color, fontWeight: '800' }]}>
+                            {meta.label}
+                          </Text>
+                        </View>
+                        <View style={styles.dropdownOptionRight}>
+                          <Text style={styles.dropdownOptionCount}>{count}</Text>
+                          {isSelected && <Icon name="check" iconStyle="solid" size={14} color={meta.color} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </TouchableOpacity>
+            </Modal>
 
             {/* Status Filter Chips */}
             <View style={styles.statusRow}>
@@ -908,5 +962,108 @@ const styles = StyleSheet.create({
   },
   textLight: {
     color: colors.textDark,
+  },
+  platformDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    ...shadow.card,
+  },
+  platformDropdownBtnDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
+  platformDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  platformDropdownLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  platformDropdownRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  platformDropdownCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  dropdownModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  dropdownCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 20,
+    ...shadow.float,
+  },
+  dropdownCardDark: {
+    backgroundColor: '#1E1B4B',
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+    borderWidth: 1,
+  },
+  dropdownTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 12,
+    opacity: 0.5,
+  },
+  dropdownOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    marginBottom: 4,
+  },
+  dropdownOptionRowDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  dropdownOptionSelected: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  },
+  dropdownOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dropdownOptionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  dropdownOptionRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dropdownOptionCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
 });

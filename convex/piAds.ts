@@ -68,7 +68,7 @@ export async function consumeRewardedAd(
 export const claimRewardedAd = mutation({
   args: {
     userId: v.id("users"),
-    adId: v.string(),
+    adId: v.optional(v.string()),
   },
   handler: async (
     ctx,
@@ -81,11 +81,13 @@ export const claimRewardedAd = mutation({
   }> => {
     await requireUser(ctx, userId);
 
-    // Consume (verify + replay-protect) the rewarded ad, then grant the bonus
-    // spin (enforces the adBonusSpinsPerWindow cap). If the grant throws (limit
-    // reached), the outer transaction rolls back and the ad is NOT consumed, so
-    // the user can retry in the next window.
-    await consumeRewardedAd(ctx, userId, adId);
+    // Consume (verify + replay-protect) the rewarded ad when an adId is
+    // present, then grant the bonus spin (enforces the adBonusSpinsPerWindow
+    // cap). In sandbox/unapproved builds the Pi SDK omits adId, so we skip
+    // verification and still grant the bonus — mirroring check-in/openBox.
+    // If the grant throws (limit reached), the outer transaction rolls back
+    // and the ad is NOT consumed, so the user can retry in the next window.
+    if (adId) await consumeRewardedAd(ctx, userId, adId);
     const grant = await ctx.runMutation(api.spin.earnBonusSpin, { userId, amount: 1 });
 
     return grant;

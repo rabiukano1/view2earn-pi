@@ -3,8 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "predev": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\"",
-    "dev": "next dev --turbo",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "deploy": "next build && wrangler pages deploy --branch production",

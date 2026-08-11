@@ -73,7 +73,9 @@ export default function SpinScreen() {
 
   const [adVisible, setAdVisible] = useState(false);
   const [refillMs, setRefillMs] = useState(0);
-  const pendingAdAction = useRef<'spin' | 'bonusSpin' | null>(null);
+  const pendingAdAction = useRef<'spin' | 'bonusSpin' | 'doubleReward' | null>(null);
+  const pendingResultAction = useRef<'spinAgain' | 'claimReward' | null>(null);
+  const [doubleClaimed, setDoubleClaimed] = useState(false);
 
   const popScale = useRef(new Animated.Value(0)).current;
   const shine = useRef(new Animated.Value(-1)).current;
@@ -187,10 +189,11 @@ export default function SpinScreen() {
   }, [disabled, shine]);
 
   // Execute Exact Mathematical Rotation around center
-  const executeSpin = async () => {
-    if (!userId || spinning || spinsRemaining <= 0 || result !== null) return;
+  const executeSpin = async (force = false) => {
+    if (!userId || spinning || spinsRemaining <= 0 || (!force && result !== null)) return;
     setSpinning(true);
     setResult(null);
+    setDoubleClaimed(false);
     try {
       const { pts } = await doSpin({ userId });
       const targetIndex = indexForPts(pts);
@@ -236,11 +239,37 @@ export default function SpinScreen() {
     setAdVisible(true);
   };
 
+  const handleResultPress = () => {
+    if (result === null) return;
+    if (result > 0 && !doubleClaimed) {
+      pendingAdAction.current = 'doubleReward';
+      pendingResultAction.current = spinsRemaining > 0 ? 'spinAgain' : 'claimReward';
+      setAdVisible(true);
+      return;
+    }
+    if (spinsRemaining > 0) {
+      setResult(null);
+      executeSpin();
+    } else {
+      setResult(null);
+    }
+  };
+
   const handleAdSuccess = async () => {
     if (!userId) return;
     try {
-      if (pendingAdAction.current === 'bonusSpin') {
+      const action = pendingAdAction.current;
+      if (action === 'bonusSpin') {
         await earnBonusSpin({ userId, amount: 1 });
+      } else if (action === 'doubleReward') {
+        setDoubleClaimed(true);
+        const next = pendingResultAction.current;
+        pendingResultAction.current = null;
+        if (next === 'spinAgain') {
+          await executeSpin(true);
+        } else {
+          setResult(null);
+        }
       } else {
         await executeSpin();
       }
@@ -369,7 +398,7 @@ export default function SpinScreen() {
               {result > 0 ? `+${result} PTS` : 'TRY AGAIN'}
             </Animated.Text>
 
-            <TouchableOpacity style={styles.resultBtn} onPress={() => setResult(null)} activeOpacity={0.88}>
+            <TouchableOpacity style={styles.resultBtn} onPress={handleResultPress} activeOpacity={0.88}>
               <Text style={styles.resultBtnText}>{spinsRemaining > 0 ? 'SPIN AGAIN' : 'CLAIM REWARD'}</Text>
             </TouchableOpacity>
           </View>
@@ -407,7 +436,7 @@ export default function SpinScreen() {
               />
               <Text style={[styles.bonusAdText, adBonusRemaining <= 0 && { color: '#64748B' }]}>
                 {adBonusRemaining > 0
-                  ? `Watch Ad for +1 Bonus Spin (${adBonusRemaining}/${adBonusLimit} left)`
+                  ? `Free Bonus Spin (${adBonusRemaining}/${adBonusLimit} left)`
                   : 'Daily bonus spin limit reached'}
               </Text>
             </TouchableOpacity>
@@ -419,6 +448,8 @@ export default function SpinScreen() {
         visible={adVisible}
         onClose={() => setAdVisible(false)}
         onSuccess={handleAdSuccess}
+        rewardAmount={pendingAdAction.current === 'doubleReward' ? result ?? undefined : undefined}
+        adType={pendingAdAction.current === 'doubleReward' ? 'spin_double_bonus' : undefined}
       />
     </View>
   );
