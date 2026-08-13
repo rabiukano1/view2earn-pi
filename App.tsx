@@ -69,7 +69,7 @@ function Gate() {
       <AppNavigator />
     </BiometricGate>
   ) : (
-    <LoginScreen onShowSplash={() => setShowSplash(true)} />
+    <AppNavigator onShowSplash={() => setShowSplash(true)} />
   );
 }
 

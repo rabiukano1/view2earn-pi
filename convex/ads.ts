@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 
 /** Query active ad config including admin-configured reward points. */
 export const getAdRewardConfig = query({
@@ -94,7 +94,25 @@ export const rewardForAd = mutation({
     rewardAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireUser(ctx, args.userId);
+    const { economy } = await requireUserAndEconomy(ctx, args.userId);
+
+    // ponytail: basic per-user rate limit — prevents malicious clients from
+    // spamming rewardForAd. 30s cooldown is a conservative heuristic;
+    // calibrate against real ad SDK callback timing in production.
+    const recentReward = await ctx.db
+      .query("pointsLedger")
+      .withIndex("by_user_economy", (q) =>
+        q.eq("userId", args.userId).eq("economy", economy),
+      )
+      .order("desc")
+      .first();
+    if (
+      recentReward &&
+      recentReward.reason.startsWith("AD_REWARD_") &&
+      Date.now() - recentReward._creationTime < 30_000
+    ) {
+      throw new Error("Please wait before claiming another ad reward.");
+    }
 
     let rewardPoints: number | null = null;
 
@@ -138,7 +156,9 @@ export const rewardForAd = mutation({
 
     const last = await ctx.db
       .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_economy", (q) =>
+        q.eq("userId", args.userId).eq("economy", economy),
+      )
       .order("desc")
       .first();
 
@@ -146,30 +166,38 @@ export const rewardForAd = mutation({
 
     await ctx.db.insert("pointsLedger", {
       userId: args.userId,
+      economy,
       delta: finalReward,
       reason: `AD_REWARD_${(args.adType ?? "REWARDED_VIDEO").toUpperCase()}`,
       refId: args.provider ?? "admob",
       balanceAfter,
     });
 
-    // Also update user's app wallet points balance
+    // Also update the user's app wallet balance for THIS economy. Android
+    // economy → wallets.pointsBalance; pi-browser economy → its own mirror so
+    // the two balances never mix.
     let wallet = await ctx.db
       .query("wallets")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .unique();
 
     if (wallet) {
-      const newPoints = wallet.pointsBalance + finalReward;
-      await ctx.db.patch(wallet._id, { pointsBalance: newPoints });
+      if (economy === "pi-browser") {
+        const piBrowserPoints = (wallet.piBrowserPointsBalance ?? 0) + finalReward;
+        await ctx.db.patch(wallet._id, { piBrowserPointsBalance: piBrowserPoints });
+      } else {
+        const newPoints = wallet.pointsBalance + finalReward;
+        await ctx.db.patch(wallet._id, { pointsBalance: newPoints });
+      }
 
       await ctx.db.insert("walletTransactions", {
         userId: args.userId,
         type: "earn_points",
         pointsDelta: finalReward,
         piproDelta: 0,
-        pointsBalanceAfter: newPoints,
+        pointsBalanceAfter: economy === "pi-browser" ? (wallet.piBrowserPointsBalance ?? 0) + finalReward : wallet.pointsBalance + finalReward,
         piproBalanceAfter: wallet.piproBalance,
-        note: `Watched Ad Reward (+${finalReward} PTS)`,
+        note: `Watched Ad Reward (+${finalReward} PTS, ${economy})`,
       });
     }
 

@@ -9,6 +9,69 @@ export function normalizeUrl(url: string): string {
     .replace(/\/+$/, "");
 }
 
+// Allowed profile hosts for each social platform. Used both for linking a
+// user's own profile and for marketplace follow-task URLs (AdMob §3
+// content-moderation hardening — no off-platform or exfil URLs).
+export const PROFILE_HOST_ALLOWLIST: Record<string, string[]> = {
+  facebook: ["facebook.com", "fb.com", "m.facebook.com"],
+  tiktok: ["tiktok.com", "vm.tiktok.com"],
+  telegram: ["t.me", "telegram.me"],
+  instagram: ["instagram.com"],
+  youtube: ["youtube.com", "youtu.be"],
+  x: ["x.com", "twitter.com"],
+};
+
+export interface SanitizedProfileUrl {
+  /** Canonical, reset URL (no query/hash/fragment, trailing slash stripped). */
+  url: string;
+  /** Host the URL points at, e.g. "tiktok.com". */
+  host: string;
+  /** Optional handle/path segment extracted from the URL. */
+  handle?: string;
+}
+
+/** Validate + normalize a profile URL against a platform allowlist. */
+export function sanitizeProfileUrl(platform: string, rawUrl: string): SanitizedProfileUrl {
+  const trimmed = (rawUrl ?? "").trim();
+  if (!trimmed) throw new Error("Profile URL is required.");
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid URL. Paste the full https:// link to your profile.");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("Only http(s) profile links are allowed.");
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  const allowed = PROFILE_HOST_ALLOWLIST[platform];
+  if (!allowed || allowed.length === 0) {
+    throw new Error(`Unsupported platform: ${platform}`);
+  }
+  if (!allowed.some((h) => host === h || host.endsWith(`.${h}`))) {
+    throw new Error(
+      `That link isn't a ${platform} profile. Use one of: ${allowed.join(", ")}.`,
+    );
+  }
+
+  parsed.hash = "";
+  parsed.search = "";
+  const url = normalizeUrl(parsed.toString());
+  const handle = url.split("/").filter(Boolean)[1]?.replace(/^@/, "");
+  return { url, host, handle };
+}
+
+/** Host name for a profile URL, or null when it's JavaScript/docs/shortlinks. */
+export function profileHost(platform: string, rawUrl: string): string | null {
+  try {
+    return sanitizeProfileUrl(platform, rawUrl).host;
+  } catch {
+    return null;
+  }
+}
+
 export function generateBioCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const arr = new Uint8Array(6);

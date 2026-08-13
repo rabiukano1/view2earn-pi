@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireEconomy, requireUserAndEconomy } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
+import { appendLedger, lastBalance, economyOfUser } from "./lib/ledger";
 
 // User-facing rewards catalog + redemption flow (plan §6).
 // Points are debited through the append-only pointsLedger, same as credits.
@@ -61,7 +62,9 @@ export const redeem = mutation({
     clientIp: v.optional(v.string()),
   },
   handler: async (ctx, { userId, catalogId, phoneNumber, paidWith = "POINTS", clientIp }) => {
-    await requireUser(ctx, userId);
+    // Airtime & Data redemption is a Pi-Browser-economy privilege ONLY.
+    // The Android economy has no cash-out path (no cross-redemption).
+    await requireEconomy(ctx, userId, "pi-browser");
     await enforceRateLimit(ctx, userId, "redeem");
 
     // IP Reputation & VPN Restriction Check (Fraud Layer 3)
@@ -99,6 +102,7 @@ export const redeem = mutation({
 
       redemptionId = await ctx.db.insert("redemptions", {
         userId,
+        economy: "pi-browser",
         catalogId,
         paidWith: "PIPRO",
         amount: coinPrice,
@@ -129,20 +133,17 @@ export const redeem = mutation({
 
       balanceAfter = newPiproBal;
     } else {
-      // Paid with POINTS
+      // Paid with POINTS — points are drawn ONLY from the pi-browser economy
+      // ledger (requireEconomy above already asserted pi-browser).
       const price = item.pointsPrice;
       if (price === undefined) throw new Error("Reward not redeemable with points");
 
-      const last = await ctx.db
-        .query("pointsLedger")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .first();
-      const balance = last?.balanceAfter ?? 0;
+      const balance = await lastBalance(ctx, userId, "pi-browser");
       if (balance < price) throw new Error("Insufficient points");
 
       redemptionId = await ctx.db.insert("redemptions", {
         userId,
+        economy: "pi-browser",
         catalogId,
         paidWith: "POINTS",
         amount: price,
@@ -150,14 +151,14 @@ export const redeem = mutation({
         status: "processing",
       });
 
-      balanceAfter = balance - price;
-      await ctx.db.insert("pointsLedger", {
+      balanceAfter = await appendLedger(
+        ctx,
         userId,
-        delta: -price,
-        reason: "REDEEM",
-        refId: redemptionId,
-        balanceAfter,
-      });
+        "pi-browser",
+        -price,
+        "REDEEM",
+        redemptionId,
+      );
     }
 
     // Schedule automated VAS Airtime & Data fulfillment
@@ -206,6 +207,7 @@ export const refundRedemption = internalMutation({
     } else {
       await ctx.runMutation(internal.points.creditHelper, {
         userId: r.userId,
+        economy: r.economy ?? "pi-browser",
         delta: r.amount,
         reason: reason ?? "REFUND_REDEMPTION_FAILED",
         refId: `refund:${redemptionId}`,
@@ -235,15 +237,9 @@ export const markFulfilled = internalMutation({
 export const progressToNext = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    const user = await ctx.db.get(userId);
-    if (!user) return null;
+    const { user, economy } = await requireUserAndEconomy(ctx, userId);
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const balance = last?.balanceAfter ?? 0;
+    const balance = await lastBalance(ctx, userId, economy);
 
     const items = (
       await ctx.db
@@ -302,7 +298,7 @@ export const applyReferralCode = mutation({
     code: v.string(),
   },
   handler: async (ctx, { userId, code }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
     if (user.referredBy) {
@@ -337,35 +333,18 @@ export const applyReferralCode = mutation({
 
     await ctx.db.patch(userId, { referredBy: referrer._id });
 
-    // Credit referee bonus (+100 PTS)
-    const refereeLast = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const refereeBalanceAfter = (refereeLast?.balanceAfter ?? 0) + 100;
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: 100,
-      reason: "REFERRAL_WELCOME_BONUS",
-      refId: referralId,
-      balanceAfter: refereeBalanceAfter,
-    });
+    // Credit referee bonus (+100 PTS) into the referee's own economy.
+    await appendLedger(ctx, userId, economy, 100, "REFERRAL_WELCOME_BONUS", referralId);
 
-    // Credit referrer bonus (+250 PTS)
-    const referrerLast = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", referrer._id))
-      .order("desc")
-      .first();
-    const referrerBalanceAfter = (referrerLast?.balanceAfter ?? 0) + 250;
-    await ctx.db.insert("pointsLedger", {
-      userId: referrer._id,
-      delta: 250,
-      reason: "REFERRAL_QUALIFIED_BONUS",
-      refId: referralId,
-      balanceAfter: referrerBalanceAfter,
-    });
+    // Credit referrer bonus (+250 PTS) into the referrer's own economy.
+    await appendLedger(
+      ctx,
+      referrer._id,
+      await economyOfUser(ctx, referrer._id),
+      250,
+      "REFERRAL_QUALIFIED_BONUS",
+      referralId,
+    );
 
     return {
       success: true,

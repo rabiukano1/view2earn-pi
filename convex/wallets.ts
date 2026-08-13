@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { isEvmAddress, isSolanaAddress } from "@view2earn/core";
+import { lastBalance, appendLedger } from "./lib/ledger";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -63,20 +64,17 @@ async function recordWalletTx(
 export const getOrCreateWallet = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const existing = await ctx.db
       .query("wallets")
       .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .unique();
 
-    const lastLedger = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-
-    const ledgerPoints = lastLedger?.balanceAfter ?? 0;
-    const walletPoints = existing?.pointsBalance ?? 0;
+    const ledgerPoints = await lastBalance(ctx, userId, economy);
+    const walletPoints =
+      economy === "pi-browser"
+        ? existing?.piBrowserPointsBalance ?? 0
+        : existing?.pointsBalance ?? 0;
     const pointsBalance = Math.max(ledgerPoints, walletPoints);
 
     return {
@@ -85,6 +83,7 @@ export const getOrCreateWallet = query({
       piproBalance: existing?.piproBalance ?? 0,
       vintaBalance: existing?.vintaBalance ?? 100,
       sidraBalance: existing?.sidraBalance ?? 10,
+      economy,
     };
   },
 });
@@ -145,22 +144,14 @@ export const getDepositHistory = query({
 export const swapPointsToPipro = mutation({
   args: { userId: v.id("users"), pointsAmount: v.number() },
   handler: async (ctx, { userId, pointsAmount }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     if (pointsAmount <= 0) throw new Error("Amount must be positive");
 
     const rate = await getCurrentRate(ctx);
     const piproReceived = pointsAmount / rate;
 
-    // `pointsLedger` is the authoritative balance; `wallets.pointsBalance` is
-    // a mirror that lags it (most earning paths credit only the ledger). Use
-    // the max so users with ledger points aren't wrongly blocked.
     const wallet = await getOrCreateWalletDoc(ctx, userId);
-    const lastLedger = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const availablePoints = Math.max(wallet.pointsBalance, lastLedger?.balanceAfter ?? 0);
+    const availablePoints = await lastBalance(ctx, userId, economy);
 
     if (availablePoints < pointsAmount) {
       throw new Error("Insufficient points balance");
@@ -170,18 +161,14 @@ export const swapPointsToPipro = mutation({
     const newPipro = wallet.piproBalance + piproReceived;
 
     await ctx.db.patch(wallet._id, {
-      pointsBalance: newPoints,
+      ...(economy === "pi-browser"
+        ? { piBrowserPointsBalance: newPoints }
+        : { pointsBalance: newPoints }),
       piproBalance: newPipro,
     });
 
     // Keep the ledger in sync so the two never drift again.
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: -pointsAmount,
-      reason: "SWAP_POINTS_TO_PIPRO",
-      refId: "wallet",
-      balanceAfter: newPoints,
-    });
+    await appendLedger(ctx, userId, economy, -pointsAmount, "SWAP_POINTS_TO_PIPRO", "wallet");
 
     await recordWalletTx(
       ctx, userId, "swap_points_to_pipro",
@@ -197,7 +184,7 @@ export const swapPointsToPipro = mutation({
 export const swapPiproToPoints = mutation({
   args: { userId: v.id("users"), piproAmount: v.number() },
   handler: async (ctx, { userId, piproAmount }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     if (piproAmount <= 0) throw new Error("Amount must be positive");
 
     const rate = await getCurrentRate(ctx);
@@ -208,29 +195,20 @@ export const swapPiproToPoints = mutation({
       throw new Error("Insufficient PIPRO balance");
     }
 
-    const lastLedger = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q: any) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const availablePoints = Math.max(wallet.pointsBalance, lastLedger?.balanceAfter ?? 0);
+    const availablePoints = await lastBalance(ctx, userId, economy);
 
     const newPoints = availablePoints + pointsReceived;
     const newPipro = wallet.piproBalance - piproAmount;
 
     await ctx.db.patch(wallet._id, {
-      pointsBalance: newPoints,
+      ...(economy === "pi-browser"
+        ? { piBrowserPointsBalance: newPoints }
+        : { pointsBalance: newPoints }),
       piproBalance: newPipro,
     });
 
     // Keep the ledger in sync so the two never drift again.
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: pointsReceived,
-      reason: "SWAP_PIPRO_TO_POINTS",
-      refId: "wallet",
-      balanceAfter: newPoints,
-    });
+    await appendLedger(ctx, userId, economy, pointsReceived, "SWAP_PIPRO_TO_POINTS", "wallet");
 
     await recordWalletTx(
       ctx, userId, "swap_pipro_to_points",

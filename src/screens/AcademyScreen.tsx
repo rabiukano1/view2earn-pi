@@ -216,7 +216,7 @@ export default function AcademyScreen() {
                     </TouchableOpacity>
                   );
                 })}
-                {rev && (
+                {rev ? (
                   <View style={styles.explanation}>
                     <Text style={styles.explanationText}>
                       <Text style={styles.explanationLabel}>
@@ -225,7 +225,7 @@ export default function AcademyScreen() {
                       {rev.explanation}
                     </Text>
                   </View>
-                )}
+                ) : null}
               </View>
             );
           })}
@@ -239,9 +239,9 @@ export default function AcademyScreen() {
               <Text style={[styles.resultScore, result.passed && styles.resultScorePass]}>
                 {result.score} of {result.total} correct
               </Text>
-              {result.pointsEarned > 0 && (
+              {Boolean(result.pointsEarned > 0) ? (
                 <Text style={styles.resultPoints}>+{result.pointsEarned} pts</Text>
-              )}
+              ) : null}
               <TouchableOpacity
                 style={styles.primaryBtn}
                 onPress={result.passed ? closeLesson : () => setResult(null)}>

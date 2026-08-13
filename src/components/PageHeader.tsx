@@ -49,7 +49,7 @@ export default function PageHeader({ title, subtitle, right, actions, back, onBa
         { paddingTop: topInset + 12 },
       ]}>
       <View style={styles.topRow}>
-        {showBack && (
+        {showBack ? (
           <TouchableOpacity
             onPress={handleBack}
             activeOpacity={0.75}
@@ -59,22 +59,30 @@ export default function PageHeader({ title, subtitle, right, actions, back, onBa
             accessibilityLabel="Go back">
             <Icon name="arrow-left" iconStyle="solid" size={16} color={colors.white} />
           </TouchableOpacity>
-        )}
+        ) : null}
         <View style={styles.titleCol}>
           <Text style={styles.title}>{title}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          {Boolean(subtitle) ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
         </View>
-        {right && <View style={styles.rightCol}>{right}</View>}
+        {Boolean(right) ? (
+          <View style={styles.rightCol}>
+            {typeof right === 'string' || typeof right === 'number' ? (
+              <Text style={styles.subtitle}>{right}</Text>
+            ) : (
+              right
+            )}
+          </View>
+        ) : null}
       </View>
-      {actions && actions.length > 0 && (
+      {Boolean(actions && actions.length > 0) ? (
         <View style={styles.actionRow}>
-          {actions.map((a, i) => (
+          {actions!.map((a, i) => (
             <TouchableOpacity key={i} style={styles.actionChip} onPress={a.onPress} activeOpacity={0.75}>
               <Text style={styles.actionText}>{a.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

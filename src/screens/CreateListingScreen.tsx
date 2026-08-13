@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,19 +16,24 @@ import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { colors, radius, shadow } from '../theme';
+import Icon from '../components/Icon';
 
 type RouteParams = {
   CreateListing: { userId: Id<'users'> };
 };
 
 const PLATFORMS = [
-  { value: 'facebook', label: 'Facebook', icon: '📘', color: '#1877F2', placeholder: 'https://facebook.com/yourpage' },
-  { value: 'tiktok', label: 'TikTok', icon: '🎵', color: '#010101', placeholder: 'https://tiktok.com/@yourhandle' },
-  { value: 'telegram', label: 'Telegram', icon: '✈️', color: '#229ED9', placeholder: 'https://t.me/yourhandle' },
-  { value: 'youtube', label: 'YouTube', icon: '▶️', color: '#FF0000', placeholder: 'https://youtube.com/@yourchannel' },
-  { value: 'x', label: 'X (Twitter)', icon: '𝕏', color: '#000000', placeholder: 'https://x.com/yourhandle' },
-  { value: 'instagram', label: 'Instagram', icon: '📸', color: '#E4405F', placeholder: 'https://instagram.com/yourhandle' },
+  { value: 'facebook', label: 'Facebook', icon: 'facebook', iconStyle: 'brands', color: '#1877F2', bg: '#EFF6FF', placeholder: 'https://facebook.com/yourpage' },
+  { value: 'tiktok', label: 'TikTok', icon: 'tiktok', iconStyle: 'brands', color: '#010101', bg: '#F4F4F5', placeholder: 'https://tiktok.com/@yourhandle' },
+  { value: 'telegram', label: 'Telegram', icon: 'telegram', iconStyle: 'brands', color: '#229ED9', bg: '#F0F9FF', placeholder: 'https://t.me/yourhandle' },
+  { value: 'youtube', label: 'YouTube', icon: 'youtube', iconStyle: 'brands', color: '#FF0000', bg: '#FEF2F2', placeholder: 'https://youtube.com/@yourchannel' },
+  { value: 'x', label: 'X (Twitter)', icon: 'x-twitter', iconStyle: 'brands', color: '#0F172A', bg: '#F8FAFC', placeholder: 'https://x.com/yourhandle' },
+  { value: 'instagram', label: 'Instagram', icon: 'instagram', iconStyle: 'brands', color: '#E4405F', bg: '#FDF2F8', placeholder: 'https://instagram.com/yourhandle' },
 ];
+
+const PTS_PRESETS = [10, 25, 50, 100];
+const QTY_PRESETS = [10, 25, 50, 100];
 
 export default function CreateListingScreen() {
   const dark = useColorScheme() === 'dark';
@@ -41,18 +44,17 @@ export default function CreateListingScreen() {
 
   const createListing = useMutation(api.marketplace.createListing);
 
-  const [platform, setPlatform] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [platform, setPlatform] = useState('facebook');
   const [targetUrl, setTargetUrl] = useState('');
-  const [pointsReward, setPointsReward] = useState('');
-  const [maxCompletions, setMaxCompletions] = useState('');
+  const [pointsReward, setPointsReward] = useState('10');
+  const [maxCompletions, setMaxCompletions] = useState('10');
   const [submitting, setSubmitting] = useState(false);
 
   const reward = parseInt(pointsReward, 10) || 0;
   const completions = parseInt(maxCompletions, 10) || 0;
   const totalCost = reward * completions;
 
-  const selected = PLATFORMS.find((p) => p.value === platform);
+  const selected = PLATFORMS.find((p) => p.value === platform) ?? PLATFORMS[0];
 
   const canSubmit =
     platform && targetUrl.trim() && reward >= 10 && completions >= 1 && completions <= 100 && !submitting;
@@ -68,8 +70,11 @@ export default function CreateListingScreen() {
         pointsReward: reward,
         maxCompletions: completions,
       });
-      Alert.alert('Listed!', `Your profile is now in the marketplace. Balance: ${balanceAfter} pts`);
-      navigation.goBack();
+      Alert.alert(
+        'Submitted for Admin Review 🛡️',
+        `Your social handle has been submitted for admin moderation. Once approved, it will go live for active users!\n\nPoints escrowed: ${totalCost.toLocaleString()} pts\nRemaining balance: ${balanceAfter.toLocaleString()} pts`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
     } catch (e) {
       Alert.alert('Error', String(e).replace('[CONVEX] ', ''));
     } finally {
@@ -82,252 +87,349 @@ export default function CreateListingScreen() {
       style={[styles.container, dark && styles.containerDark]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
+
+        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.backButton}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Go back">
-              <Text style={[styles.backText, dark && styles.textLight]}>← Back</Text>
-            </TouchableOpacity>
-            <View style={styles.headerText}>
-              <Text style={[styles.title, dark && styles.textLight]}>Create listing</Text>
-              <Text style={styles.sub}>List your social profile as a follow task</Text>
-            </View>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={[styles.backBtn, dark && styles.backBtnDark]}
+            activeOpacity={0.8}>
+            <Icon name="arrow-left" iconStyle="solid" size={16} color={dark ? colors.textDark : colors.text} />
+          </TouchableOpacity>
+          <View style={styles.headerTitleWrap}>
+            <Text style={[styles.headerTitle, dark && styles.textLight]}>Promote Social Handle</Text>
+            <Text style={styles.headerSub}>List your channel to gain real active followers</Text>
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={[styles.label, dark && styles.textLight]}>Platform</Text>
-          <TouchableOpacity
-            style={[styles.dropdown, dark && styles.dropdownDark]}
-            onPress={() => setPickerOpen(true)}
-            activeOpacity={0.7}>
-            {selected ? (
-              <View style={styles.dropdownSelected}>
-                <Text style={styles.dropdownIcon}>{selected.icon}</Text>
-                <Text style={[styles.dropdownText, dark && styles.textLight]}>{selected.label}</Text>
-              </View>
-            ) : (
-              <Text style={styles.dropdownPlaceholder}>Select a platform</Text>
-            )}
-            <Text style={styles.dropdownArrow}>▼</Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.label, dark && styles.textLight]}>Profile URL</Text>
-          <TextInput
-            style={[styles.input, dark && styles.inputDark]}
-            placeholder={selected?.placeholder ?? 'https://facebook.com/yourpage'}
-            placeholderTextColor="#A1A1AA"
-            value={targetUrl}
-            onChangeText={setTargetUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-          />
-          <Text style={[styles.hint, dark && styles.textMuted]}>
-            The URL of the profile you want others to follow
-          </Text>
-
-          <View style={styles.row}>
-            <View style={styles.rowHalf}>
-              <Text style={[styles.label, dark && styles.textLight]}>Reward per follow</Text>
-              <TextInput
-                style={[styles.input, dark && styles.inputDark]}
-                placeholder="10"
-                placeholderTextColor="#A1A1AA"
-                value={pointsReward}
-                onChangeText={setPointsReward}
-                keyboardType="number-pad"
-              />
-              <Text style={[styles.hint, dark && styles.textMuted]}>Min 10 pts</Text>
-            </View>
-            <View style={styles.rowHalf}>
-              <Text style={[styles.label, dark && styles.textLight]}>Max followers</Text>
-              <TextInput
-                style={[styles.input, dark && styles.inputDark]}
-                placeholder="10"
-                placeholderTextColor="#A1A1AA"
-                value={maxCompletions}
-                onChangeText={setMaxCompletions}
-                keyboardType="number-pad"
-              />
-              <Text style={[styles.hint, dark && styles.textMuted]}>1–100</Text>
-            </View>
-          </View>
-
-          {totalCost > 0 && (
-            <View style={styles.costCard}>
-              <Text style={styles.costLabel}>Total cost</Text>
-              <Text style={styles.costAmount}>{totalCost.toLocaleString()} pts</Text>
-              <Text style={styles.costBreakdown}>
-                {reward} pts × {completions} followers
-              </Text>
-              <View style={styles.costBar}>
-                <View style={[styles.costBarFill, { width: `${Math.min(100, (totalCost / 5000) * 100)}%` }]} />
-              </View>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
-            disabled={!canSubmit}
-            onPress={handleSubmit}>
-            <Text style={styles.submitBtnText}>
-              {submitting ? 'Creating…' : `Spend ${totalCost.toLocaleString()} pts — List profile`}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      <Modal
-        visible={pickerOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPickerOpen(false)}>
-        <Pressable style={styles.pickerOverlay} onPress={() => setPickerOpen(false)}>
-          <View style={[styles.pickerCard, dark && styles.pickerCardDark]}>
-            <Text style={[styles.pickerTitle, dark && styles.textLight]}>Select platform</Text>
+        {/* Section 1: Platform Selection Grid */}
+        <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
+          <Text style={[styles.sectionHeading, dark && styles.textLight]}>1. Choose Platform</Text>
+          <View style={styles.platformGrid}>
             {PLATFORMS.map((p) => {
               const active = platform === p.value;
               return (
                 <TouchableOpacity
                   key={p.value}
                   style={[
-                    styles.pickerOption,
-                    active && { backgroundColor: p.color + '18', borderColor: p.color },
-                    dark && styles.pickerOptionDark,
+                    styles.platformCard,
+                    dark && styles.platformCardDark,
+                    active && { borderColor: p.color, backgroundColor: dark ? '#1E293B' : p.bg, borderWidth: 2 },
                   ]}
-                  onPress={() => {
-                    setPlatform(p.value);
-                    setPickerOpen(false);
-                  }}>
-                  <Text style={styles.pickerIcon}>{p.icon}</Text>
-                  <Text style={[styles.pickerLabel, dark && styles.textLight]}>{p.label}</Text>
-                  {active && <Text style={styles.pickerCheck}>✓</Text>}
+                  onPress={() => setPlatform(p.value)}
+                  activeOpacity={0.85}>
+                  <View style={[styles.platformIconWrap, { backgroundColor: p.color + '15' }]}>
+                    <Icon name={p.icon} iconStyle={p.iconStyle as any} size={20} color={p.color} />
+                  </View>
+                  <Text style={[styles.platformLabel, dark && styles.textLight, active && { fontWeight: '800', color: p.color }]}>
+                    {p.label}
+                  </Text>
+                  {Boolean(active) ? (
+                    <View style={[styles.activeCheck, { backgroundColor: p.color }]}>
+                      <Icon name="check" iconStyle="solid" size={10} color="#FFF" />
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
               );
             })}
-            <TouchableOpacity
-              style={styles.pickerCancel}
-              onPress={() => setPickerOpen(false)}>
-              <Text style={styles.pickerCancelText}>Cancel</Text>
-            </TouchableOpacity>
           </View>
-        </Pressable>
-      </Modal>
+        </View>
+
+        {/* Section 2: Target Link / Handle */}
+        <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
+          <Text style={[styles.sectionHeading, dark && styles.textLight]}>2. Target Profile URL</Text>
+          <View style={[styles.inputWrapper, dark && styles.inputWrapperDark]}>
+            <Icon name={selected.icon} iconStyle={selected.iconStyle as any} size={18} color={selected.color} />
+            <TextInput
+              style={[styles.input, dark && styles.inputDark]}
+              placeholder={selected.placeholder}
+              placeholderTextColor="#94A3B8"
+              value={targetUrl}
+              onChangeText={setTargetUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+          </View>
+          <Text style={[styles.hintText, dark && styles.textMuted]}>
+            Direct URL of the page or channel you want users to follow
+          </Text>
+        </View>
+
+        {/* Section 3: Reward & Followers Setup */}
+        <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
+          <Text style={[styles.sectionHeading, dark && styles.textLight]}>3. Reward & Quantity</Text>
+
+          {/* Reward PTS */}
+          <Text style={[styles.fieldLabel, dark && styles.textLight]}>Reward per follow (PTS)</Text>
+          <View style={styles.presetRow}>
+            {PTS_PRESETS.map((pts) => (
+              <TouchableOpacity
+                key={pts}
+                style={[
+                  styles.presetChip,
+                  reward === pts && styles.presetChipActive,
+                  dark && styles.presetChipDark,
+                ]}
+                onPress={() => setPointsReward(String(pts))}>
+                <Text style={[styles.presetText, reward === pts && styles.presetTextActive]}>
+                  {pts} PTS
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={[styles.input, styles.inputMarginTop, dark && styles.inputDark]}
+            placeholder="Custom points reward (min 10)"
+            placeholderTextColor="#94A3B8"
+            value={pointsReward}
+            onChangeText={setPointsReward}
+            keyboardType="number-pad"
+          />
+
+          {/* Quantity */}
+          <Text style={[styles.fieldLabel, styles.fieldLabelMargin, dark && styles.textLight]}>Target followers (Max 100)</Text>
+          <View style={styles.presetRow}>
+            {QTY_PRESETS.map((qty) => (
+              <TouchableOpacity
+                key={qty}
+                style={[
+                  styles.presetChip,
+                  completions === qty && styles.presetChipActive,
+                  dark && styles.presetChipDark,
+                ]}
+                onPress={() => setMaxCompletions(String(qty))}>
+                <Text style={[styles.presetText, completions === qty && styles.presetTextActive]}>
+                  {qty} Users
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={[styles.input, styles.inputMarginTop, dark && styles.inputDark]}
+            placeholder="Custom max users (1-100)"
+            placeholderTextColor="#94A3B8"
+            value={maxCompletions}
+            onChangeText={setMaxCompletions}
+            keyboardType="number-pad"
+          />
+        </View>
+
+        {/* Live Marketplace Card Preview */}
+        {Boolean(targetUrl.trim() || reward > 0) ? (
+          <View style={[styles.previewCard, dark && styles.previewCardDark]}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTag}>LIVE MARKETPLACE PREVIEW</Text>
+              <Text style={styles.previewPts}>+{reward} PTS</Text>
+            </View>
+            <View style={styles.previewBody}>
+              <View style={[styles.previewIcon, { backgroundColor: selected.color + '15' }]}>
+                <Icon name={selected.icon} iconStyle={selected.iconStyle as any} size={22} color={selected.color} />
+              </View>
+              <View style={styles.previewMeta}>
+                <Text style={[styles.previewTitle, dark && styles.textLight]} numberOfLines={1}>
+                  Follow {selected.label} Profile
+                </Text>
+                <Text style={styles.previewLink} numberOfLines={1}>
+                  {targetUrl.trim() || selected.placeholder}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Escrow & Cost Summary */}
+        <View style={[styles.summaryCard, dark && styles.summaryCardDark]}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Total Escrow Cost</Text>
+            <Text style={styles.summaryCost}>{totalCost.toLocaleString()} PTS</Text>
+          </View>
+
+          <View style={styles.summaryBar}>
+            <View style={[styles.summaryFill, { width: `${Math.min(100, (totalCost / 5000) * 100)}%` }]} />
+          </View>
+
+          <View style={styles.escrowNotice}>
+            <Icon name="shield-halved" iconStyle="solid" size={14} color="#7C3AED" />
+            <Text style={styles.escrowNoticeText}>
+              Submitted for Admin Approval. Points auto-refunded if rejected.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+            disabled={!canSubmit}
+            onPress={handleSubmit}
+            activeOpacity={0.88}>
+            <Text style={styles.submitBtnText}>
+              {submitting ? 'Submitting for Review…' : `Spend ${totalCost.toLocaleString()} PTS — List Handle`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F4F5' },
-  containerDark: { backgroundColor: '#18181B' },
-  header: { paddingHorizontal: 20, marginBottom: 12 },
-  headerRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  headerText: { flex: 1 },
-  backButton: { marginRight: 12, marginTop: 4 },
-  backText: { fontSize: 16, fontWeight: '700', color: '#7C3AED' },
-  title: { fontSize: 28, fontWeight: '700', color: '#18181B' },
-  sub: { fontSize: 14, color: '#71717A', marginTop: 4 },
-  textLight: { color: '#FAFAFA' },
-  textMuted: { color: '#A1A1AA' },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginHorizontal: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  label: { fontSize: 13, fontWeight: '700', color: '#18181B', marginBottom: 6, marginTop: 16, letterSpacing: 0.2 },
-  dropdown: {
+  container: { flex: 1, backgroundColor: colors.bg },
+  containerDark: { backgroundColor: colors.bgDark },
+
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4F4F5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1.5,
-    borderColor: '#E4E4E7',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    gap: 12,
   },
-  dropdownDark: { backgroundColor: '#1F1F23', borderColor: '#3F3F46' },
-  dropdownSelected: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 },
-  dropdownIcon: { fontSize: 18 },
-  dropdownText: { fontSize: 15, fontWeight: '600', color: '#18181B' },
-  dropdownPlaceholder: { flex: 1, fontSize: 15, color: '#A1A1AA' },
-  dropdownArrow: { fontSize: 10, color: '#A1A1AA' },
-  input: {
-    backgroundColor: '#F4F4F5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#18181B',
-    borderWidth: 1.5,
-    borderColor: '#E4E4E7',
-  },
-  inputDark: { backgroundColor: '#1F1F23', color: '#FAFAFA', borderColor: '#3F3F46' },
-  hint: { fontSize: 12, color: '#71717A', marginTop: 5 },
-  row: { flexDirection: 'row', gap: 12 },
-  rowHalf: { flex: 1 },
-  costCard: {
-    backgroundColor: '#F5F3FF',
-    borderRadius: 14,
-    padding: 18,
-    marginTop: 20,
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#EDE9FE',
+    justifyContent: 'center',
   },
-  costLabel: { fontSize: 12, color: '#6D28D9', fontWeight: '600', letterSpacing: 0.5, textTransform: 'uppercase' },
-  costAmount: { fontSize: 34, fontWeight: '800', color: '#7C3AED', marginTop: 4, letterSpacing: -0.5 },
-  costBreakdown: { fontSize: 13, color: '#6D28D9', marginTop: 2 },
-  costBar: { height: 4, backgroundColor: '#DDD6FE', borderRadius: 2, marginTop: 12, width: '100%' },
-  costBarFill: { height: 4, backgroundColor: '#7C3AED', borderRadius: 2 },
+  backBtnDark: { backgroundColor: '#1E293B' },
+  headerTitleWrap: { flex: 1 },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: colors.text },
+  headerSub: { fontSize: 13, color: colors.textMuted, marginTop: 2, fontWeight: '500' },
+  textLight: { color: colors.textDark },
+  textMuted: { color: colors.textMuted },
+
+  sectionCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 18,
+    marginHorizontal: 18,
+    marginBottom: 14,
+    ...shadow.card,
+  },
+  sectionCardDark: { backgroundColor: colors.surfaceDark },
+  sectionHeading: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 14 },
+
+  /* Platform Grid */
+  platformGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  platformCard: {
+    width: '31%',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  platformCardDark: { backgroundColor: '#1E293B', borderColor: '#334155' },
+  platformIconWrap: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  platformLabel: { fontSize: 12, fontWeight: '700', color: colors.text },
+  activeCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* Inputs & Presets */
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  inputWrapperDark: { backgroundColor: '#1E293B', borderColor: '#334155' },
+  input: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  inputDark: { color: colors.textDark },
+  inputMarginTop: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.lg,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  hintText: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
+
+  fieldLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  fieldLabelMargin: { marginTop: 14 },
+  presetRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  presetChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  presetChipDark: { backgroundColor: '#1E293B', borderColor: '#334155' },
+  presetChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  presetText: { fontSize: 12.5, fontWeight: '700', color: colors.text },
+  presetTextActive: { color: colors.white },
+
+  /* Live Preview Card */
+  previewCard: {
+    backgroundColor: '#F5F3FF',
+    borderRadius: radius.xl,
+    padding: 16,
+    marginHorizontal: 18,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: '#DDD6FE',
+  },
+  previewCardDark: { backgroundColor: '#1E1B4B', borderColor: '#4C1D95' },
+  previewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  previewTag: { fontSize: 10, fontWeight: '800', color: '#7C3AED', letterSpacing: 0.5 },
+  previewPts: { fontSize: 14, fontWeight: '800', color: '#16A34A' },
+  previewBody: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  previewIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  previewMeta: { flex: 1 },
+  previewTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
+  previewLink: { fontSize: 12, color: '#6D28D9', marginTop: 2, fontWeight: '600' },
+
+  /* Escrow Summary */
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 20,
+    marginHorizontal: 18,
+    ...shadow.card,
+  },
+  summaryCardDark: { backgroundColor: colors.surfaceDark },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  summaryLabel: { fontSize: 14, fontWeight: '700', color: colors.textMuted },
+  summaryCost: { fontSize: 26, fontWeight: '800', color: colors.primary },
+  summaryBar: { height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginTop: 12, width: '100%', overflow: 'hidden' },
+  summaryFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 3 },
+  escrowNotice: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, backgroundColor: '#F3E8FF', padding: 10, borderRadius: radius.md },
+  escrowNoticeText: { fontSize: 12, color: '#6B21A8', fontWeight: '700', flex: 1 },
+
   submitBtn: {
-    backgroundColor: '#7C3AED',
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 16,
+    ...shadow.raised,
   },
   submitBtnDisabled: { opacity: 0.5 },
-  submitBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(10,10,18,0.5)',
-    justifyContent: 'flex-end',
-  },
-  pickerCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 40,
-  },
-  pickerCardDark: { backgroundColor: '#18181B' },
-  pickerTitle: { fontSize: 18, fontWeight: '700', color: '#18181B', marginBottom: 16, textAlign: 'center' },
-  pickerOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 6,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  pickerOptionDark: { backgroundColor: '#27272A' },
-  pickerIcon: { fontSize: 20, marginRight: 14 },
-  pickerLabel: { fontSize: 16, fontWeight: '600', color: '#18181B', flex: 1 },
-  pickerCheck: { fontSize: 16, fontWeight: '800', color: '#7C3AED' },
-  pickerCancel: { marginTop: 8, padding: 14, alignItems: 'center' },
-  pickerCancelText: { fontSize: 15, color: '#71717A', fontWeight: '600' },
+  submitBtnText: { color: colors.white, fontSize: 15, fontWeight: '800' },
 });

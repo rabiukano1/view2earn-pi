@@ -220,6 +220,7 @@ async function failAndRefund(
 
   await ctx.runMutation(internal.points.creditHelper, {
     userId: withdrawal.userId,
+    economy: "pi-browser",
     delta: withdrawal.pointsSpent,
     reason: `REFUND_PI_WITHDRAWAL_FAILED: ${reason}`,
   });

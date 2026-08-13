@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -51,6 +53,7 @@ export default function MarketplaceScreen() {
 
   const [activeTab, setActiveTab] = useState<ViewTab>('all');
   const [activePlatform, setActivePlatform] = useState<PlatformFilter>('all');
+  const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false);
 
   const listings = useQuery(api.marketplace.listListings);
   const myListings = useQuery(api.marketplace.myListings, userId ? { userId } : 'skip');
@@ -79,6 +82,7 @@ export default function MarketplaceScreen() {
     if (activePlatform !== 'all' && l.platform !== activePlatform) return false;
     return true;
   });
+  const activeMeta = PLATFORM_COLORS[activePlatform] ?? { label: 'All Platforms', color: colors.primary };
 
   const renderListingCard = ({ item }: { item: any }) => {
     const meta = PLATFORM_COLORS[item.platform] ?? { label: item.platform, color: colors.primary };
@@ -122,12 +126,12 @@ export default function MarketplaceScreen() {
         </View>
 
         {/* Action Button for Owner */}
-        {isOwner && item.status === 'active' && (
+        {Boolean(isOwner && item.status === 'active') ? (
           <TouchableOpacity style={styles.cancelBtn} onPress={() => handleCancel(item._id)}>
             <Icon name="rotate-left" iconStyle="solid" size={12} color="#DC2626" />
             <Text style={styles.cancelBtnText}>Cancel & Refund Points</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
     );
   };
@@ -188,28 +192,22 @@ export default function MarketplaceScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Platform Horizontal Filter Pills */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-              {(['all', 'telegram', 'youtube', 'tiktok', 'facebook', 'x'] as PlatformFilter[]).map((p) => {
-                const isActive = activePlatform === p;
-                const meta = PLATFORM_COLORS[p] ?? { label: 'All', color: colors.primary };
-                return (
-                  <TouchableOpacity
-                    key={p}
-                    style={[
-                      styles.filterChip,
-                      dark && styles.filterChipDark,
-                      isActive && { backgroundColor: meta.color },
-                    ]}
-                    onPress={() => setActivePlatform(p)}>
-                    <PlatformIcon platform={p === 'all' ? 'app' : p} size={14} color={isActive ? '#FFF' : dark ? '#A7F3D0' : colors.textMuted} />
-                    <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
-                      {p === 'all' ? 'All Platforms' : meta.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {/* Platform Dropdown Selector */}
+            <TouchableOpacity
+              style={[styles.platformDropdownBtn, dark && styles.platformDropdownBtnDark]}
+              onPress={() => setPlatformDropdownOpen(true)}
+              activeOpacity={0.8}>
+              <View style={styles.platformDropdownLeft}>
+                <PlatformIcon platform={activePlatform === 'all' ? 'app' : activePlatform} size={18} color={activeMeta.color} />
+                <Text style={[styles.platformDropdownLabel, dark && styles.textLight]}>
+                  {activePlatform === 'all' ? 'All Platforms' : activeMeta.label}
+                </Text>
+              </View>
+              <View style={styles.platformDropdownRight}>
+                <Text style={styles.platformDropdownCount}>{filteredListings.length} items</Text>
+                <Text style={styles.platformDropdownArrow}>▼</Text>
+              </View>
+            </TouchableOpacity>
           </View>
         }
         ListEmptyComponent={
@@ -233,6 +231,47 @@ export default function MarketplaceScreen() {
           )
         }
       />
+
+      {/* Platform Dropdown Modal */}
+      <Modal
+        visible={platformDropdownOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlatformDropdownOpen(false)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setPlatformDropdownOpen(false)}>
+          <View style={[styles.pickerCard, dark && styles.pickerCardDark]}>
+            <Text style={[styles.pickerTitle, dark && styles.textLight]}>Filter by Platform</Text>
+            {(['all', 'telegram', 'youtube', 'tiktok', 'facebook', 'x'] as PlatformFilter[]).map((p) => {
+              const active = activePlatform === p;
+              const meta = PLATFORM_COLORS[p] ?? { label: 'All Platforms', color: colors.primary };
+              return (
+                <TouchableOpacity
+                  key={p}
+                  style={[
+                    styles.pickerOption,
+                    active && { backgroundColor: meta.color + '15', borderColor: meta.color },
+                    dark && styles.pickerOptionDark,
+                  ]}
+                  onPress={() => {
+                    setActivePlatform(p);
+                    setPlatformDropdownOpen(false);
+                  }}>
+                  <PlatformIcon platform={p === 'all' ? 'app' : p} size={18} color={meta.color} />
+                  <Text style={[styles.pickerLabel, dark && styles.textLight, active && { fontWeight: '800', color: meta.color }]}>
+                    {p === 'all' ? 'All Platforms' : meta.label}
+                  </Text>
+                  {Boolean(active) ? <Text style={[styles.pickerCheck, { color: meta.color }]}>✓</Text> : null}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={styles.pickerCancel}
+              onPress={() => setPlatformDropdownOpen(false)}>
+              <Text style={styles.pickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -504,5 +543,104 @@ const styles = StyleSheet.create({
   },
   textLight: {
     color: colors.textDark,
+  },
+  platformDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radius.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  platformDropdownBtnDark: {
+    backgroundColor: '#1E293B',
+    borderColor: '#334155',
+  },
+  platformDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  platformDropdownLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  platformDropdownRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  platformDropdownCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  platformDropdownArrow: {
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  pickerCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.xl,
+    padding: 20,
+    gap: 10,
+    ...shadow.raised,
+  },
+  pickerCardDark: {
+    backgroundColor: '#1E293B',
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    gap: 12,
+  },
+  pickerOptionDark: {
+    backgroundColor: 'transparent',
+  },
+  pickerLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  pickerCheck: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  pickerCancel: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  pickerCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
 });

@@ -234,7 +234,7 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
         )}
 
         {/* Referral code — only visible in sign-up flow */}
-        {method === 'password' && flow === 'signUp' && (
+        {(method === 'password' && flow === 'signUp') ? (
           <View style={styles.inputRow}>
             <Icon name="gift" iconStyle="solid" size={15} color={colors.textFaint} />
             <TextInput
@@ -247,9 +247,9 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
               maxLength={10}
             />
           </View>
-        )}
+        ) : null}
 
-        {method === 'otp' && otpStep === 'code' && (
+        {(method === 'otp' && otpStep === 'code') ? (
           <View style={styles.inputRow}>
             <Icon name="key" iconStyle="solid" size={15} color={colors.textFaint} />
             <TextInput
@@ -262,7 +262,7 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
               maxLength={6}
             />
           </View>
-        )}
+        ) : null}
 
         {/* Terms & Privacy Agreement Checkbox */}
         <View style={styles.termsRow}>
@@ -273,14 +273,16 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
               if (error.includes('Terms')) setError('');
             }}
             activeOpacity={0.8}>
-            {acceptedTerms && <Icon name="check" iconStyle="solid" size={12} color="#FFFFFF" />}
+            {Boolean(acceptedTerms) ? (
+              <Icon name="check" iconStyle="solid" size={12} color="#FFFFFF" />
+            ) : null}
           </TouchableOpacity>
           <Text style={styles.termsText}>
             I agree to the{' '}
             <Text
               style={styles.termsLink}
               onPress={() => navigation.navigate('Terms')}>
-              Terms &amp; Conditions
+              Terms & Conditions
             </Text>
             ,{' '}
             <Text
@@ -311,11 +313,11 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {suggestSignup && method === 'password' && (
+        {(suggestSignup && method === 'password') ? (
           <TouchableOpacity style={styles.suggestBtn} onPress={createAccount} activeOpacity={0.85}>
             <Text style={styles.suggestText}>Create an account with this email</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
 
         <TouchableOpacity
           style={[styles.btn, (busy || !acceptedTerms) && styles.btnDisabled]}

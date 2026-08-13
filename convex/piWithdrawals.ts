@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireEconomy } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
+import { appendLedger } from "./lib/ledger";
 
 // Points-to-Pi A2U (App-to-User) withdrawal system.
 // Converts earned user points into real Pi sent directly to the user's linked Pi wallet.
@@ -53,7 +54,9 @@ export const requestPiWithdrawal = mutation({
     pointsToRedeem: v.number(),
   },
   handler: async (ctx, { userId, pointsToRedeem }) => {
-    await requireUser(ctx, userId);
+    // Pi cash-out is a Pi-Browser-economy privilege ONLY. The Android economy
+    // has no Pi withdrawal path (no cross-redemption).
+    await requireEconomy(ctx, userId, "pi-browser");
     await enforceRateLimit(ctx, userId, "withdraw");
 
     const user = await ctx.db.get(userId);
@@ -78,15 +81,13 @@ export const requestPiWithdrawal = mutation({
     const pointsPerPi = setting ? parseFloat(setting.value) : DEFAULT_POINTS_PER_PI;
     const piAmount = Math.round((pointsToRedeem / pointsPerPi) * 10000) / 10000;
 
-    // Deduct points from ledger
-    await ctx.runMutation(internal.points.creditHelper, {
-      userId,
-      delta: -pointsToRedeem,
-      reason: `PI_WITHDRAWAL: ${piAmount} Pi to ${user.piWalletAddress.slice(0, 6)}…`,
-    });
+    // Deduct points from the pi-browser economy ledger (appendLedger throws if
+    // the balance would go negative, blocking overspend / cross-economy abuse).
+    await appendLedger(ctx, userId, "pi-browser", -pointsToRedeem, `PI_WITHDRAWAL: ${piAmount} Pi to ${user.piWalletAddress.slice(0, 6)}…`);
 
     const withdrawalId = await ctx.db.insert("piWithdrawals", {
       userId,
+      economy: "pi-browser",
       pointsSpent: pointsToRedeem,
       piAmount,
       walletAddress: user.piWalletAddress,

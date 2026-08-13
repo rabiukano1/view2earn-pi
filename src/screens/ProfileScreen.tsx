@@ -166,17 +166,17 @@ export default function ProfileScreen() {
                 <Icon name="user" iconStyle="solid" size={28} color={colors.white} />
               </View>
             </View>
-            {lvl && (
+            {lvl ? (
               <View style={[styles.levelBadge, { backgroundColor: colors.primarySoft }]}>
                 <Icon name="bolt" iconStyle="solid" size={11} color={colors.primaryDeep} />
                 <Text style={styles.levelBadgeText}>Lv {lvl.level} · {lvl.title}</Text>
               </View>
-            )}
+            ) : null}
           </View>
           <Text style={[styles.nameText, dark && styles.textLight]}>{displayName}</Text>
           {displayContact ? <Text style={styles.contactText}>{displayContact}</Text> : null}
 
-          {lvl && (
+          {lvl ? (
             <View style={styles.xpSection}>
               <View style={styles.xpBar}>
                 <View style={[styles.xpFill, { width: `${Math.round(lvl.progress * 100)}%` }]} />
@@ -185,7 +185,7 @@ export default function ProfileScreen() {
                 {formatPts(lvl.xp)} XP · {formatPts(lvl.next - lvl.xp)} to Level {lvl.level + 1}
               </Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.badgesRow}>
             <View style={styles.ecoBadge}>
@@ -231,7 +231,7 @@ export default function ProfileScreen() {
         <View style={styles.sectionContainer}>
           <SectionHeader icon="wand-magic-sparkles" tint={colors.primary} title="Smart Coach" />
           <View style={[styles.coachCard, dark && styles.cardDark]}>
-            {score && (
+            {score ? (
               <View style={styles.scoreRow}>
                 <View style={styles.scoreRing}>
                   <Text style={[styles.scoreValue, { color: colors.primary }]}>{score.score}</Text>
@@ -243,7 +243,7 @@ export default function ProfileScreen() {
                   <Text style={styles.scoreHint}>Based on today's activity so far</Text>
                 </View>
               </View>
-            )}
+            ) : null}
 
             <View style={styles.insightList}>
               {insights.map((i) => (
@@ -260,11 +260,11 @@ export default function ProfileScreen() {
                     <Text style={[styles.insightTitle, dark && styles.textLight]}>{i.title}</Text>
                     <Text style={styles.insightBody}>{i.body}</Text>
                   </View>
-                  {i.action && (
+                  {Boolean(i.action) ? (
                     <View style={[styles.insightArrow, { backgroundColor: i.tint + '1F' }]}>
                       <Icon name="arrow-right" iconStyle="solid" size={11} color={i.tint} />
                     </View>
-                  )}
+                  ) : null}
                 </TouchableOpacity>
               ))}
             </View>

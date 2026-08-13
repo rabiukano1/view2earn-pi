@@ -116,28 +116,28 @@ export default function AchievementsScreen() {
         </View>
       </View>
 
-      {(summary.availableCount > 0 || summary.claimableCount > 0) && (
+      {Boolean(summary.availableCount > 0 || summary.claimableCount > 0) ? (
         <View style={styles.alertRow}>
-          {summary.availableCount > 0 && (
+          {Boolean(summary.availableCount > 0) ? (
             <View style={[styles.alertChip, { backgroundColor: colors.primarySoft }]}>
               <Text style={styles.alertEmoji}>🔥</Text>
               <Text style={styles.alertText}>
                 {summary.availableCount} available now
               </Text>
             </View>
-          )}
-          {summary.claimableCount > 0 && (
+          ) : null}
+          {Boolean(summary.claimableCount > 0) ? (
             <View style={[styles.alertChip, { backgroundColor: colors.successSoft }]}>
               <Text style={styles.alertEmoji}>🎁</Text>
               <Text style={styles.alertText}>
                 {summary.claimableCount} reward{summary.claimableCount === 1 ? '' : 's'} ready
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
 
-      {earnings.length > 0 && (
+      {Boolean(earnings.length > 0) ? (
         <View style={[styles.earningsCard, dark && styles.cardDark]}>
           <Text style={[styles.sectionLabel, dark && styles.textLight]}>Today's Earnings</Text>
           {earnings.map((e) => (
@@ -156,7 +156,7 @@ export default function AchievementsScreen() {
             </Text>
           </View>
         </View>
-      )}
+      ) : null}
 
       <Text style={[styles.sectionLabel, dark && styles.textLight]}>Activities</Text>
       <View style={styles.filterRow}>
@@ -265,7 +265,9 @@ export default function AchievementsScreen() {
                 {item.unlocked ? ' · Unlocked' : ''}
               </Text>
             </View>
-            {item.unlocked && <Icon name="circle-check" iconStyle="solid" size={18} color={colors.success} />}
+            {Boolean(item.unlocked) ? (
+              <Icon name="circle-check" iconStyle="solid" size={18} color={colors.success} />
+            ) : null}
           </View>
         );
       })}

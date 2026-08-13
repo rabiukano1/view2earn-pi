@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { getNum } from "./rewardsConfig";
 import { consumeRewardedAd } from "./piAds";
+import { appendLedger } from "./lib/ledger";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000);
@@ -60,7 +61,7 @@ export const claimCombo = mutation({
     adId: v.optional(v.string()),
   },
   handler: async (ctx, { userId, adId }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const today = dayNumber(Date.now());
 
     const combo = await ctx.db
@@ -87,19 +88,7 @@ export const claimCombo = mutation({
       await ctx.db.insert("combos", { userId, lastDay: today });
     }
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const balanceAfter = (last?.balanceAfter ?? 0) + reward;
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: reward,
-      reason: "COMBO_BONUS",
-      refId: `combo-${today}`,
-      balanceAfter,
-    });
+    await appendLedger(ctx, userId, economy, reward, "COMBO_BONUS", `combo-${today}`);
 
     return { reward };
   },

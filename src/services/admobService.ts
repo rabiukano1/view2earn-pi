@@ -51,11 +51,13 @@ export async function initializeAdMob(): Promise<void> {
       console.warn('[AdMob] UMP Consent update warning (non-fatal):', consentErr);
     }
 
-    // 2. Safely set test device configuration
+    // 2. Safely set test device configuration & COPPA regulatory flags
     try {
       await mobileAds().setRequestConfiguration({
         testDeviceIdentifiers: [...ADMOB_TEST_DEVICE_IDS],
         maxAdContentRating: MaxAdContentRating.T,
+        tagForChildDirectedTreatment: false,
+        tagForUnderAgeOfConsent: false,
       });
     } catch (configError) {
       console.warn('[AdMob] setRequestConfiguration warning:', configError);

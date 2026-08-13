@@ -32,6 +32,9 @@ import DonateScreen from '../screens/DonateScreen';
 import StatsScreen from '../screens/StatsScreen';
 import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
 
+import LoginScreen from '../screens/LoginScreen';
+import { useAuth } from '../auth/AuthContext';
+
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -95,11 +98,11 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
                     : colors.textFaint
                 }
               />
-              {focused && (
+              {focused ? (
                 <Text style={[styles.pillLabel, dark && styles.pillLabelDark]}>
                   {meta.label}
                 </Text>
-              )}
+              ) : null}
             </View>
           </TouchableOpacity>
         );
@@ -123,31 +126,49 @@ function MainTabs() {
   );
 }
 
-export default function AppNavigator() {
+interface AppNavigatorProps {
+  onShowSplash?: () => void;
+}
+
+export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
+  const { userId } = useAuth();
+
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
-      <Stack.Screen
-        name="CreateListing"
-        component={CreateListingScreen}
-        options={{ presentation: 'modal' }}
-      />
-      <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
-      <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
-      <Stack.Screen name="Academy" component={AcademyScreen} />
-      <Stack.Screen name="Quiz" component={QuizScreen} />
-      <Stack.Screen name="Spin" component={SpinScreen} />
-      <Stack.Screen name="Surveys" component={SurveysScreen} />
-      <Stack.Screen name="Terms" component={TermsScreen} />
-      <Stack.Screen name="Policy" component={PolicyScreen} />
-      <Stack.Screen name="Referral" component={ReferralScreen} />
-      <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen} />
-      <Stack.Screen name="Security" component={SecurityScreen} />
-      <Stack.Screen name="Achievements" component={AchievementsScreen} />
-      <Stack.Screen name="Stats" component={StatsScreen} />
-      <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
-      <Stack.Screen name="Donate" component={DonateScreen} />
+      {userId ? (
+        <>
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
+          <Stack.Screen
+            name="CreateListing"
+            component={CreateListingScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
+          <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
+          <Stack.Screen name="Academy" component={AcademyScreen} />
+          <Stack.Screen name="Quiz" component={QuizScreen} />
+          <Stack.Screen name="Spin" component={SpinScreen} />
+          <Stack.Screen name="Surveys" component={SurveysScreen} />
+          <Stack.Screen name="Terms" component={TermsScreen} />
+          <Stack.Screen name="Policy" component={PolicyScreen} />
+          <Stack.Screen name="Referral" component={ReferralScreen} />
+          <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen} />
+          <Stack.Screen name="Security" component={SecurityScreen} />
+          <Stack.Screen name="Achievements" component={AchievementsScreen} />
+          <Stack.Screen name="Stats" component={StatsScreen} />
+          <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
+          <Stack.Screen name="Donate" component={DonateScreen} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Login">
+            {(props) => <LoginScreen {...props} onShowSplash={onShowSplash} />}
+          </Stack.Screen>
+          <Stack.Screen name="Terms" component={TermsScreen} />
+          <Stack.Screen name="Policy" component={PolicyScreen} />
+        </>
+      )}
     </Stack.Navigator>
   );
 }

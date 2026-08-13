@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { requireAuth, requireUser } from "./lib/guards";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { getNum } from "./rewardsConfig";
+import { economyOfUser } from "./lib/ledger";
 
 // Qualified referral flow (plan §7.7):
 //   1. User A signs up → gets deterministic referral code V2E-XXXXXX
@@ -157,6 +158,7 @@ export const checkQualification = internalMutation({
     // Referrer gets referralQualifiedBonus points.
     await ctx.runMutation(internal.points.creditHelper, {
       userId: referral.referrerId,
+      economy: await economyOfUser(ctx, referral.referrerId),
       delta: referrerBonus,
       reason: "Qualified referral reward",
       refId: `referral:${referral._id}:referrer`,
@@ -165,6 +167,7 @@ export const checkQualification = internalMutation({
     // Referee gets a smaller bonus.
     await ctx.runMutation(internal.points.creditHelper, {
       userId,
+      economy: await economyOfUser(ctx, userId),
       delta: refereeBonus,
       reason: "Referral welcome bonus",
       refId: `referral:${referral._id}:referee`,

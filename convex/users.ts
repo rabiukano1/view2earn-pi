@@ -1,6 +1,7 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { requireUserAndEconomy } from "./lib/guards";
 
 // Identity is via Convex Auth (email/password now; Sidra KYC later).
 
@@ -14,13 +15,16 @@ export const me = query({
   },
 });
 
-// Live points balance = balanceAfter of the latest ledger entry.
+// Live points balance for the caller's OWN economy (derived server-side).
 export const balance = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    const { economy } = await requireUserAndEconomy(ctx, args.userId);
     const last = await ctx.db
       .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_economy", (q) =>
+        q.eq("userId", args.userId).eq("economy", economy),
+      )
       .order("desc")
       .first();
     return last?.balanceAfter ?? 0;

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action, internalMutation, mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 
 // Pi web-app wallet (plan §7): a points wallet + the user's Pi blockchain
 // wallet. Points are the app balance (pointsLedger is authoritative); Pi is the
@@ -26,13 +26,13 @@ function networkLabel(): string {
 export const getMyWallet = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
-    const user = await ctx.db.get(userId);
-    if (!user) throw new Error("User not found");
+    const { user, economy } = await requireUserAndEconomy(ctx, userId);
 
     const last = await ctx.db
       .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user_economy", (q) =>
+        q.eq("userId", userId).eq("economy", economy),
+      )
       .order("desc")
       .first();
 
@@ -40,6 +40,7 @@ export const getMyWallet = query({
       pointsBalance: last?.balanceAfter ?? 0,
       piWalletAddress: user.piWalletAddress ?? null,
       network: networkLabel(),
+      economy,
     };
   },
 });

@@ -312,11 +312,11 @@ export default function WalletScreen() {
               <Text style={styles.heroTitle}>{active.label}</Text>
               <Text style={styles.heroSub}>View2Earn Wallet</Text>
             </View>
-            {rate && (
+            {Boolean(rate) ? (
               <View style={styles.heroRateBadge}>
                 <Text style={styles.heroRateText}>1 PIPRO = {pointsPerPipro.toLocaleString()} PTS</Text>
               </View>
-            )}
+            ) : null}
           </View>
 
           {/* Balance Switcher */}
@@ -344,11 +344,11 @@ export default function WalletScreen() {
               <Text style={styles.balanceValue}>{activeBalance.display}</Text>
               <Text style={styles.balanceUnit}>{active.code}</Text>
             </View>
-            {activeAsset === 'POINTS' && pointsPerPipro > 0 && wallet && (
+            {Boolean(activeAsset === 'POINTS' && pointsPerPipro > 0 && wallet) ? (
               <Text style={styles.balanceHint}>
-                ≈ {(wallet.pointsBalance / pointsPerPipro).toFixed(4)} PIPRO at current rate
+                ≈ {(wallet!.pointsBalance / pointsPerPipro).toFixed(4)} PIPRO at current rate
               </Text>
-            )}
+            ) : null}
           </View>
 
           {/* Activity Bar Chart */}
@@ -591,11 +591,11 @@ export default function WalletScreen() {
               </Text>
             </View>
 
-            {rate && (
+            {Boolean(rate) ? (
               <Text style={styles.swapRateHint}>
                 Current Rate: 1 PIPRO = {pointsPerPipro.toLocaleString()} PTS
               </Text>
-            )}
+            ) : null}
 
             <TouchableOpacity
               style={[styles.swapConfirmBtn, swapLoading && styles.btnDisabled]}

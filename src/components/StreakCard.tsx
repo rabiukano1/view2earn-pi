@@ -11,6 +11,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
+import Icon from './Icon';
 import RewardedAdModal from './RewardedAdModal';
 
 export default function StreakCard({ userId }: { userId: Id<'users'> }) {
@@ -55,16 +56,21 @@ export default function StreakCard({ userId }: { userId: Id<'users'> }) {
           <Text style={styles.streakLabel}>
             {streak.checkedInToday
               ? 'Checked in today · come back tomorrow'
-              : `Check in for +${streak.todayReward} pts`}
+              : `Watch video to check in (+${streak.todayReward} pts)`}
           </Text>
         </View>
         <TouchableOpacity
           style={[styles.btn, (!streak.canCheckIn || busy) && styles.btnOff]}
           disabled={!streak.canCheckIn || busy}
           onPress={onCheckInPress}>
-          <Text style={[styles.btnText, (!streak.canCheckIn || busy) && styles.btnTextOff]}>
-            {streak.checkedInToday ? '✓ Done' : busy ? '…' : 'Check in'}
-          </Text>
+          <View style={styles.btnRow}>
+            {Boolean(streak.canCheckIn && !busy && !streak.checkedInToday) ? (
+              <Icon name="circle-play" iconStyle="solid" size={12} color={colors.white} />
+            ) : null}
+            <Text style={[styles.btnText, (!streak.canCheckIn || busy) && styles.btnTextOff]}>
+              {streak.checkedInToday ? '✓ Done' : busy ? '…' : 'Check in'}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
       <View style={styles.dots}>
@@ -135,6 +141,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     ...shadow.raised,
   },
+  btnRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   btnOff: { backgroundColor: colors.surfaceAlt, shadowOpacity: 0, elevation: 0 },
   btnText: { color: colors.white, fontWeight: '800', fontSize: 13 },
   btnTextOff: { color: colors.textFaint },

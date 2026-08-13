@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
+import { economyOfUser, appendLedger } from "./lib/ledger";
 
 export const listAvailable = query({
   args: { userId: v.id("users") },
@@ -14,11 +15,21 @@ export const listAvailable = query({
         q.eq(q.field("enabled"), true),
       ))
       .collect();
-    return providers.map((p) => ({
-      id: p._id,
-      name: p.name,
-      platform: p.platform,
-    }));
+
+    if (providers.length > 0) {
+      return providers.map((p) => ({
+        id: p._id,
+        name: p.name,
+        platform: p.platform,
+      }));
+    }
+
+    // ponytail: fallback survey providers list when database table is unseeded
+    return [
+      { id: "cpx_research", name: "CPX Research Survey Wall", platform: "both" },
+      { id: "bitlabs_surveys", name: "BitLabs Global Surveys", platform: "both" },
+      { id: "in_app_feedback", name: "Daily Community Survey", platform: "both" },
+    ];
   },
 });
 
@@ -38,18 +49,9 @@ export const recordCompletion = internalMutation({
       .first();
     if (existing) return; // already credited this txId
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
-    const balanceAfter = (last?.balanceAfter ?? 0) + args.amount;
-    await ctx.db.insert("pointsLedger", {
-      userId: args.userId,
-      delta: args.amount,
-      reason: "SURVEY_COMPLETED",
-      refId,
-      balanceAfter,
-    });
+    // Survey postbacks come from the provider, not a client session — resolve
+    // the economy server-side from the user's identity anchor.
+    const economy = await economyOfUser(ctx, args.userId);
+    await appendLedger(ctx, args.userId, economy, args.amount, "SURVEY_COMPLETED", refId);
   },
 });

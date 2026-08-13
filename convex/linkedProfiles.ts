@@ -2,20 +2,10 @@ import { v } from "convex/values";
 import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
+import { PROFILE_HOST_ALLOWLIST, sanitizeProfileUrl } from "@view2earn/core";
 
 const PROFILE_LOCK_DAYS = 30;
 const BIO_CODE_EXPIRY_MS = 15 * 60 * 1000;
-
-// Which hosts a given platform's profile link must live on (plan §7.2 —
-// one profile per platform, real link required).
-const PLATFORM_HOSTS: Record<string, string[]> = {
-  facebook: ["facebook.com", "fb.com", "m.facebook.com"],
-  tiktok: ["tiktok.com", "vm.tiktok.com"],
-  telegram: ["t.me", "telegram.me"],
-  instagram: ["instagram.com"],
-  youtube: ["youtube.com", "youtu.be"],
-  x: ["x.com", "twitter.com"],
-};
 
 function normalizeUrl(url: string): string {
   return url
@@ -26,7 +16,7 @@ function normalizeUrl(url: string): string {
 }
 
 function hostMatchesPlatform(url: string, platform: string): boolean {
-  const allowed = PLATFORM_HOSTS[platform];
+  const allowed = PROFILE_HOST_ALLOWLIST[platform];
   if (!allowed) return false;
   const host = normalizeUrl(url).split("/")[0];
   return allowed.some((h) => host === h || host.endsWith(`.${h}`));
@@ -85,7 +75,7 @@ export const verifyBioCode = action({
 
     // 1. The link must actually belong to the chosen platform.
     if (!hostMatchesPlatform(args.url, args.platform)) {
-      const hosts = (PLATFORM_HOSTS[args.platform] ?? []).join(", ");
+      const hosts = (PROFILE_HOST_ALLOWLIST[args.platform] ?? []).join(", ");
       throw new Error(
         `That link isn't a ${args.platform} profile. Paste your ${args.platform} link (${hosts}).`,
       );
@@ -160,7 +150,8 @@ export const finalizeLink = internalMutation({
     }
     await ctx.db.delete(record._id);
 
-    const normalizedUrl = normalizeUrl(args.url);
+    const { url: cleanUrl } = sanitizeProfileUrl(args.platform, args.url);
+    const normalizedUrl = normalizeUrl(cleanUrl);
     const existing = await ctx.db
       .query("linkedProfiles")
       .withIndex("by_normalizedUrl", (q) => q.eq("normalizedUrl", normalizedUrl))
@@ -173,7 +164,7 @@ export const finalizeLink = internalMutation({
     const id = await ctx.db.insert("linkedProfiles", {
       userId: args.userId,
       platform: args.platform,
-      url: args.url,
+      url: cleanUrl,
       usernameSnapshot: args.usernameSnapshot,
       verifiedAt: Date.now(),
       lockedUntil,

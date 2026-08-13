@@ -73,7 +73,7 @@ export default function SecurityScreen() {
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader title="Security & Settings" subtitle="Lock, privacy and your account" back />
       <View style={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}>
-        {bioAvailable && (
+        {Boolean(bioAvailable) ? (
           <View style={[styles.settingRowCard, dark && styles.cardDark]}>
             <View style={[styles.settingIconBg, { backgroundColor: colors.primary + '1F' }]}>
               <Icon name="fingerprint" iconStyle="solid" size={18} color={colors.primary} />
@@ -89,7 +89,7 @@ export default function SecurityScreen() {
               thumbColor={colors.white}
             />
           </View>
-        )}
+        ) : null}
 
         <Text style={[styles.sectionLabel, dark && styles.textLight]}>Privacy & Policy</Text>
         {policyRows.map((row) => (

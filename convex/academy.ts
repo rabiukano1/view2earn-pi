@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { ACADEMY, getLesson, scoreGate } from "@view2earn/core";
 import { getNum } from "./rewardsConfig";
+import { appendLedger } from "./lib/ledger";
 
 const ecosystemArg = v.union(v.literal("PI"), v.literal("SIDRA"));
 
@@ -52,7 +53,7 @@ export const submitLevel = mutation({
     answers: v.array(v.number()), // selected option index per question, in order
   },
   handler: async (ctx, { userId, ecosystem, level, answers }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const lesson = getLesson(ecosystem, level);
     if (!lesson) throw new Error("Unknown lesson");
 
@@ -70,18 +71,14 @@ export const submitLevel = mutation({
         passedAt: Date.now(),
       });
       pointsEarned = await getNum(ctx, "academyLevelPoints");
-      const last = await ctx.db
-        .query("pointsLedger")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .first();
-      await ctx.db.insert("pointsLedger", {
+      await appendLedger(
+        ctx,
         userId,
-        delta: pointsEarned,
-        reason: "ACADEMY_LEVEL",
-        refId: `${ecosystem}:${level}`,
-        balanceAfter: (last?.balanceAfter ?? 0) + pointsEarned,
-      });
+        economy,
+        pointsEarned,
+        "ACADEMY_LEVEL",
+        `${ecosystem}:${level}`,
+      );
     }
 
     return {

@@ -18,6 +18,8 @@ import type { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import PageHeader from '../components/PageHeader';
+import { openInPiBrowser } from '../lib/openUrl';
+import { PI_APP_URL } from '../config';
 
 type CatalogItem = {
   _id: Id<'catalog'>;
@@ -41,7 +43,10 @@ export default function RewardsScreen() {
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const me = useQuery(api.users.me);
+  const isPiLinked = me?.ecosystem === 'PI';
   const redeem = useMutation(api.rewards.redeem);
+  const createLinkToken = useMutation(api.piLink.createLinkToken);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const catalog = useQuery(api.rewards.listCatalog, userId ? { userId } : 'skip');
   const redemptions = useQuery(
@@ -69,6 +74,16 @@ export default function RewardsScreen() {
     }
   };
 
+  const linkPi = async () => {
+    try {
+      const token = await createLinkToken();
+      const url = `${PI_APP_URL}/link?token=${encodeURIComponent(token)}`;
+      await openInPiBrowser(url);
+    } catch (e) {
+      Alert.alert('Could not start verification', String(e).replace('[CONVEX] ', ''));
+    }
+  };
+
   const bal = balance ?? 0;
 
   return (
@@ -84,6 +99,19 @@ export default function RewardsScreen() {
           </View>
         }
       />
+
+      {!isPiLinked && (
+        <View style={styles.linkBanner}>
+          <Text style={styles.linkBannerTitle}>Link Pi to redeem</Text>
+          <Text style={styles.linkBannerText}>
+            Airtime & data redemptions require a verified Pi account. Sign in
+            with Pi inside the Pi Browser to unlock the redeemable balance.
+          </Text>
+          <TouchableOpacity style={styles.linkBtn} onPress={linkPi} activeOpacity={0.85}>
+            <Text style={styles.linkBtnText}>Open Pi Browser to verify</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {catalog === undefined ? (
         <View style={styles.center}>
@@ -128,12 +156,12 @@ export default function RewardsScreen() {
                 <TouchableOpacity
                   style={[styles.redeemBtn, !affordable && styles.redeemBtnOff]}
                   disabled={!affordable}
-                  onPress={() => openRedeem(item)}>
+                  onPress={() => (isPiLinked ? openRedeem(item) : linkPi())}>
                   <Text style={[styles.redeemBtnText, !affordable && styles.redeemBtnTextOff]}>
                     {affordable ? `${price} pts` : `${price} pts`}
                   </Text>
                   <Text style={[styles.redeemBtnSub, !affordable && styles.redeemBtnTextOff]}>
-                    {affordable ? 'Redeem' : 'Locked'}
+                    {isPiLinked ? (affordable ? 'Redeem' : 'Locked') : 'Link Pi'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -348,4 +376,24 @@ const styles = StyleSheet.create({
     ...shadow.raised,
   },
   modalConfirmText: { color: colors.white, fontWeight: '800', fontSize: 14 },
+  linkBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#2A2210',
+    borderRadius: radius.md,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#3A3A20',
+  },
+  linkBannerTitle: { color: '#F59E0B', fontWeight: '800', fontSize: 15 },
+  linkBannerText: { color: '#8A8A9E', fontSize: 12.5, marginTop: 4, lineHeight: 18 },
+  linkBtn: {
+    marginTop: 12,
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingVertical: 12,
+    alignItems: 'center',
+    ...shadow.raised,
+  },
+  linkBtnText: { color: colors.white, fontWeight: '800', fontSize: 14 },
 });

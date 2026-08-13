@@ -399,7 +399,16 @@ export default function SpinScreen() {
             </Animated.Text>
 
             <TouchableOpacity style={styles.resultBtn} onPress={handleResultPress} activeOpacity={0.88}>
-              <Text style={styles.resultBtnText}>{spinsRemaining > 0 ? 'SPIN AGAIN' : 'CLAIM REWARD'}</Text>
+              {Boolean(result && result > 0 && !doubleClaimed) ? (
+                <Icon name="circle-play" iconStyle="solid" size={14} color="#FFF" />
+              ) : null}
+              <Text style={styles.resultBtnText}>
+                {result > 0 && !doubleClaimed
+                  ? 'WATCH VIDEO TO DOUBLE'
+                  : spinsRemaining > 0
+                  ? 'SPIN AGAIN'
+                  : 'CLAIM REWARD'}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -436,7 +445,7 @@ export default function SpinScreen() {
               />
               <Text style={[styles.bonusAdText, adBonusRemaining <= 0 && { color: '#64748B' }]}>
                 {adBonusRemaining > 0
-                  ? `Free Bonus Spin (${adBonusRemaining}/${adBonusLimit} left)`
+                  ? `Watch Video for Bonus Spin (${adBonusRemaining}/${adBonusLimit} left)`
                   : 'Daily bonus spin limit reached'}
               </Text>
             </TouchableOpacity>
@@ -684,7 +693,10 @@ const styles = StyleSheet.create({
   },
   resultBtn: {
     alignSelf: 'stretch',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     marginTop: 10,
     paddingVertical: 14,
     borderRadius: radius.pill,

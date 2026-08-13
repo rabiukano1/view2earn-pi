@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, internalQuery, action, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireUser } from "./lib/guards";
+import { requireUser, deriveEconomy } from "./lib/guards";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { Id } from "./_generated/dataModel";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
@@ -65,9 +65,12 @@ async function getActivityDataHelper(ctx: QueryCtx, userId: Id<"users">): Promis
   const user = await ctx.db.get(userId);
   if (!user) throw new Error("User not found");
 
+  // Only report the caller's own economy — the two economies never mix.
+  const economy = deriveEconomy(user);
+
   const ledger = await ctx.db
     .query("pointsLedger")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .withIndex("by_user_economy", (q) => q.eq("userId", userId).eq("economy", economy))
     .order("desc")
     .take(200);
 

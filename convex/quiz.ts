@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query, internalAction, internalMutation, internalQuery, action } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { getNum } from "./rewardsConfig";
+import { appendLedger } from "./lib/ledger";
 
 // ─── Built-In High Quality Question Banks (Fallback & Seed) ─────────────────────
 
@@ -264,7 +265,7 @@ export const submitQuiz = mutation({
     })),
   },
   handler: async (ctx, args) => {
-    await requireUser(ctx, args.userId);
+    const { economy } = await requireUserAndEconomy(ctx, args.userId);
     await enforceRateLimit(ctx, args.userId, "quiz");
     let score = 0;
     const questionIds: string[] = [];
@@ -305,19 +306,7 @@ export const submitQuiz = mutation({
     });
 
     if (pointsEarned > 0) {
-      const last = await ctx.db
-        .query("pointsLedger")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .order("desc")
-        .first();
-      const balanceAfter = (last?.balanceAfter ?? 0) + pointsEarned;
-      
-      await ctx.db.insert("pointsLedger", {
-        userId: args.userId,
-        delta: pointsEarned,
-        reason: "QUIZ_CORRECT",
-        balanceAfter,
-      });
+      await appendLedger(ctx, args.userId, economy, pointsEarned, "QUIZ_CORRECT");
 
       // Sync points with user's app wallet
       let wallet = await ctx.db
@@ -326,8 +315,16 @@ export const submitQuiz = mutation({
         .unique();
 
       if (wallet) {
-        const newPoints = wallet.pointsBalance + pointsEarned;
-        await ctx.db.patch(wallet._id, { pointsBalance: newPoints });
+        const newPoints =
+          economy === "pi-browser"
+            ? (wallet.piBrowserPointsBalance ?? 0) + pointsEarned
+            : wallet.pointsBalance + pointsEarned;
+        await ctx.db.patch(
+          wallet._id,
+          economy === "pi-browser"
+            ? { piBrowserPointsBalance: newPoints }
+            : { pointsBalance: newPoints },
+        );
 
         await ctx.db.insert("walletTransactions", {
           userId: args.userId,

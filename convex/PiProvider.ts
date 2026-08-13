@@ -1,5 +1,5 @@
 import { ConvexCredentials } from "@convex-dev/auth/providers/ConvexCredentials";
-import { createAccount, retrieveAccount } from "@convex-dev/auth/server";
+import { createAccount, retrieveAccount, getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
@@ -27,6 +27,23 @@ export const PiProvider = ConvexCredentials({
     const existing = await retrieveAccount(ctx, { provider: "pi", account }).catch(
       () => null,
     );
+
+    // DUPLICATE-PI PROTECTION (plan §17): if this Pi is already linked to an
+    // existing V2E account, and the CURRENT session is a DIFFERENT account,
+    // that means a second account is trying to connect an already-linked Pi.
+    // Flag the offending second account as DUPLICATE/FRAUD and reject the link.
+    // The original verified account is never touched.
+    const currentUserId = await getAuthUserId(ctx);
+    if (existing && currentUserId && existing.user._id !== currentUserId) {
+      await ctx.runMutation(internal.fraud.flagDuplicatePiLink, {
+        userId: currentUserId as Id<"users">,
+        piUid: verified.uid,
+      });
+      throw new Error(
+        "This Pi account is already linked to another View2Earn account. Your account has been flagged for duplicate-identity review.",
+      );
+    }
+
     if (existing) {
       // Refresh the wallet address on re-login if the Pioneer has one.
       if (walletAddress && existing.user.piWalletAddress !== walletAddress) {

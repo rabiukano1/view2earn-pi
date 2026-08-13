@@ -205,28 +205,20 @@ export default function PromoteHubPage() {
               <label className="pi-muted" style={{ display: "block", marginBottom: 8, fontWeight: 700 }}>
                 1. Select Platform:
               </label>
-              <div className="pi-platform-selector">
+              <select
+                className="pi-input"
+                style={{ fontWeight: 700, fontSize: "1rem" }}
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value as PlatformOption)}>
                 {(Object.keys(PLATFORM_PRESETS) as PlatformOption[]).map((key) => {
                   const p = PLATFORM_PRESETS[key];
-                  const isSelected = platform === key;
                   return (
-                    <button
-                      key={key}
-                      type="button"
-                      className={`pi-platform-chip ${isSelected ? "pi-platform-selected" : ""}`}
-                      onClick={() => setPlatform(key)}
-                      style={{
-                        borderColor: isSelected ? p.color : "var(--border)",
-                        backgroundColor: isSelected ? `${p.color}18` : "var(--surface)",
-                        color: isSelected ? p.color : "var(--text)",
-                      }}
-                    >
-                      <span>{p.emoji}</span>
-                      <span>{p.label}</span>
-                    </button>
+                    <option key={key} value={key}>
+                      {p.emoji} {p.label}
+                    </option>
                   );
                 })}
-              </div>
+              </select>
 
               {/* Target Link URL */}
               <div style={{ marginTop: 14 }}>

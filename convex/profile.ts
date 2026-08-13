@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, getOptionalUser } from "./lib/guards";
 import { api } from "./_generated/api";
 
 type ReportData = {
@@ -36,70 +36,15 @@ type ActivityRow = {
 export type SmartDashboardData = {
   user: ReportData["user"];
   stats: ReportData["stats"];
-  recent: ActivityRow[];
-  streak: {
-    current: number;
-    longest: number;
-    checkedInToday: boolean;
-    canCheckIn: boolean;
-    cycleDay: number;
-    todayReward: number;
-    schedule: number[];
-  };
-  spin: {
-    spinsRemaining: number;
-    baseSpinsRemaining: number;
-    bonusSpins: number;
-    adBonusEarned: number;
-    adBonusLimit: number;
-    adBonusRemaining: number;
-    nextRefillMs: number;
-    nextRefillAt: number;
-    windowTotalMs: number;
-  };
-  box: {
-    tasksToday: number;
-    needed: number;
-    openedToday: boolean;
-    eligible: boolean;
-  };
-  combo: {
-    social: boolean;
-    telegram: boolean;
-    quiz: boolean;
-    allDone: boolean;
-    claimedToday: boolean;
-    canClaim: boolean;
-    reward: number;
-  };
-  progress: {
-    balance: number;
-    target: { name: string; pointsPrice: number } | null;
-    ready: boolean;
-  } | null;
-  referral: {
-    code: string;
-    count: number;
-    qualifiedCount: number;
-    totalEarned: number;
-    referredBy: string | null;
-  };
-  rank: {
-    rank: number | null;
-    total: number;
-    balance: number;
-  };
-  achievements: {
-    key: string;
-    metric: string;
-    target: number;
-    icon: string;
-    tint: string;
-    title: string;
-    desc: string;
-    enabled: boolean;
-    sortOrder: number;
-  }[];
+  recent: any[];
+  streak: any;
+  spin: any;
+  box: any;
+  combo: any;
+  progress: any;
+  referral: any;
+  rank: any;
+  achievements: any[];
 };
 
 // One round-trip dashboard for the smart Profile hub. Aggregates everything the
@@ -108,7 +53,37 @@ export type SmartDashboardData = {
 export const smartDashboard = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }): Promise<SmartDashboardData> => {
-    await requireUser(ctx, userId);
+    const user = await getOptionalUser(ctx, userId);
+    if (!user) {
+      return {
+        user: {
+          username: "pioneer",
+          name: "Pioneer",
+          ecosystem: "PI",
+          tier: 1,
+          country: "",
+          joinedAt: Date.now(),
+          payoutEvm: "",
+          payoutSolana: "",
+          telegramUserId: "",
+        },
+        stats: {
+          balance: 0,
+          totalEarned: 0,
+          totalSpent: 0,
+          tasksCompleted: 0,
+        },
+        recent: [],
+        streak: { current: 0, longest: 0, checkedInToday: false, canCheckIn: false, cycleDay: 1, todayReward: 10, schedule: [] },
+        spin: { spinsRemaining: 0, baseSpinsRemaining: 0, bonusSpins: 0, adBonusEarned: 0, adBonusLimit: 5, adBonusRemaining: 5, nextRefillMs: 0, nextRefillAt: 0, windowTotalMs: 86400000 },
+        box: { tasksToday: 0, needed: 3, openedToday: false, eligible: false },
+        combo: { active: null, completedCount: 0, totalCount: 0, allDone: false, claimedToday: false, canClaim: false, reward: 0 },
+        progress: null,
+        referral: { code: "", count: 0, qualifiedCount: 0, totalEarned: 0, referredBy: null },
+        rank: { rank: null, total: 0, balance: 0 },
+        achievements: [],
+      };
+    }
     const activity: ReportData = await ctx.runQuery(api.reports.myActivity, {
       userId,
     });

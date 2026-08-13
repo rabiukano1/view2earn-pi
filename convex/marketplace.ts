@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
+import { sanitizeProfileUrl } from "@view2earn/core";
+import { appendLedger, lastBalance } from "./lib/ledger";
 
 export const listListings = query({
   args: {},
@@ -35,20 +37,19 @@ export const createListing = mutation({
     maxCompletions: v.number(),
   },
   handler: async (ctx, args) => {
-    await requireUser(ctx, args.userId);
+    const { economy } = await requireUserAndEconomy(ctx, args.userId);
     if (args.pointsReward < 10) throw new Error("Minimum reward is 10 points");
     if (args.maxCompletions < 1 || args.maxCompletions > 100)
       throw new Error("Completions must be between 1–100");
-    if (!args.targetUrl) throw new Error("Profile URL is required");
+
+    // A1: sanitize + allowlist the target URL against the chosen platform's
+    // profile hosts (AdMob §3 content moderation). Rejects off-platform,
+    // non-http(s), or scriptable URLs before they ever reach the admin queue.
+    const { url: cleanTargetUrl, handle } = sanitizeProfileUrl(args.platform, args.targetUrl);
 
     const listingFee = args.pointsReward * args.maxCompletions;
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
-    const balance = last?.balanceAfter ?? 0;
+    const balance = await lastBalance(ctx, args.userId, economy);
     if (balance < listingFee)
       throw new Error(`Insufficient points. Need ${listingFee}, have ${balance}`);
 
@@ -57,12 +58,13 @@ export const createListing = mutation({
     const taskId = await ctx.db.insert("tasks", {
       type: "FOLLOW_PAGE",
       platform: args.platform,
-      targetUrl: args.targetUrl,
+      targetUrl: cleanTargetUrl,
+      name: handle,
       points: args.pointsReward,
       verifier: "screenshot-ai",
       maxCompletions: args.maxCompletions,
       creatorUserId: args.userId,
-      status: "active",
+      status: "pending_approval",
       expiresAt,
     });
 
@@ -70,23 +72,23 @@ export const createListing = mutation({
       userId: args.userId,
       taskId,
       platform: args.platform,
-      targetUrl: args.targetUrl,
+      targetUrl: cleanTargetUrl,
       pointsReward: args.pointsReward,
       listingFee,
       maxCompletions: args.maxCompletions,
       completionsSoFar: 0,
-      status: "active",
+      status: "pending_approval",
       expiresAt,
     });
 
-    const balanceAfter = balance - listingFee;
-    await ctx.db.insert("pointsLedger", {
-      userId: args.userId,
-      delta: -listingFee,
-      reason: "MARKETPLACE_LISTING",
-      refId: listingId,
-      balanceAfter,
-    });
+    const balanceAfter = await appendLedger(
+      ctx,
+      args.userId,
+      economy,
+      -listingFee,
+      "MARKETPLACE_LISTING",
+      listingId,
+    );
 
     return { listingId, taskId, balanceAfter };
   },
@@ -103,6 +105,7 @@ export const cancelListing = mutation({
     if (!listing) throw new Error("Listing not found");
     if (listing.userId !== args.userId) throw new Error("Not your listing");
 
+    const { economy } = await requireUserAndEconomy(ctx, args.userId);
     const unused = listing.maxCompletions - listing.completionsSoFar;
     const refund = unused * listing.pointsReward;
 
@@ -110,19 +113,7 @@ export const cancelListing = mutation({
     await ctx.db.patch(listing.taskId, { status: "expired" });
 
     if (refund > 0) {
-      const last = await ctx.db
-        .query("pointsLedger")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
-        .order("desc")
-        .first();
-      const balanceAfter = (last?.balanceAfter ?? 0) + refund;
-      await ctx.db.insert("pointsLedger", {
-        userId: args.userId,
-        delta: refund,
-        reason: "MARKETPLACE_REFUND",
-        refId: args.listingId,
-        balanceAfter,
-      });
+      await appendLedger(ctx, args.userId, economy, refund, "MARKETPLACE_REFUND", args.listingId);
     }
 
     return { refund };

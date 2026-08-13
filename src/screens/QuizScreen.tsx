@@ -119,9 +119,9 @@ export default function QuizScreen() {
           <Text style={styles.resultScore}>
             {result.score} / {result.total}
           </Text>
-          {result.pointsEarned > 0 && (
+          {Boolean(result.pointsEarned > 0) ? (
             <Text style={styles.resultPoints}>+{result.pointsEarned} Points Earned!</Text>
-          )}
+          ) : null}
           <TouchableOpacity
             style={styles.doneButton}
             onPress={() => navigation.goBack()}>

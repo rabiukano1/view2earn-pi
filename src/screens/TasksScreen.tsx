@@ -102,9 +102,9 @@ function targetName(url: string): string {
 // Delegates to smartOpenUrl which tries the native app deep-link scheme
 // first (tg://, vnd.youtube://, fb://, twitter://, etc.) and falls back to
 // the HTTPS URL — same WhatsApp-like behavior across all platforms.
-async function openUrl(_platform: string, url: string, _pageId?: string) {
+async function openUrl(platform: string, url: string, pageId?: string) {
   if (!url) return;
-  await smartOpenUrl(url);
+  await smartOpenUrl(url, platform, pageId);
 }
 
 async function openTask(task: Task, onQuizNav: () => void) {
@@ -231,7 +231,7 @@ function TaskCard({
       </TouchableOpacity>
 
       {/* Multi-Task Steps Section */}
-      {steps.length > 0 && (
+      {Boolean(steps.length > 0) ? (
         <View style={[styles.stepsBox, dark && styles.stepsBoxDark]}>
           <Text style={styles.stepsHeader}>Complete {steps.length} Steps to Claim:</Text>
           {steps.map((step, i) => {
@@ -254,10 +254,10 @@ function TaskCard({
             );
           })}
         </View>
-      )}
+      ) : null}
 
       {/* Action Footer */}
-      {showAction && (
+      {Boolean(showAction) ? (
         <View style={styles.actionFooter}>
           <TouchableOpacity
             style={[
@@ -284,13 +284,13 @@ function TaskCard({
             </Text>
           </TouchableOpacity>
 
-          {(task.targetUrl || multiAction) && action.kind === 'claim' && (
+          {Boolean(task.targetUrl || multiAction) && action.kind === 'claim' ? (
             <TouchableOpacity style={styles.shareBtn} onPress={handleCopyLink}>
               <Icon name="share-nodes" iconStyle="solid" size={14} color={colors.textFaint} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }
@@ -385,8 +385,23 @@ export default function TasksScreen() {
   const executeVerify = async (verification: Verification) => {
     try {
       await verifyTelegram({ verificationId: verification._id });
-    } catch (e) {
-      Alert.alert('Could not verify', String(e).replace('[CONVEX] ', ''));
+    } catch (e: any) {
+      const rawMsg = String(e?.message || e).replace('[CONVEX] ', '').replace(/Uncaught Error:\s*/, '');
+      if (rawMsg.includes('Telegram account') || rawMsg.includes('Link Telegram')) {
+        Alert.alert(
+          'Telegram Account Required',
+          'Link your Telegram account first to verify channel-join tasks automatically via the bot.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Link Telegram Now',
+              onPress: () => stackNav.navigate('LinkedAccounts'),
+            },
+          ],
+        );
+      } else {
+        Alert.alert('Could not verify', rawMsg);
+      }
     }
   };
 
@@ -441,7 +456,7 @@ export default function TasksScreen() {
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             {/* Daily Limits Summary Bar */}
-            {limits && limits.some((l) => l.used > 0 || l.remaining < l.limit) && (
+            {limits && limits.some((l) => l.used > 0 || l.remaining < l.limit) ? (
               <View style={styles.limitsContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.limitsScroll}>
                   {limits.map((l) => {
@@ -458,10 +473,10 @@ export default function TasksScreen() {
                   })}
                 </ScrollView>
               </View>
-            )}
+            ) : null}
 
             {/* Daily Rewards Expandable Card Header */}
-            {userId && (
+            {userId ? (
               <View style={[styles.rewardsSection, dark && styles.rewardsSectionDark]}>
                 <TouchableOpacity
                   style={styles.rewardsSectionHeader}
@@ -479,16 +494,16 @@ export default function TasksScreen() {
                   />
                 </TouchableOpacity>
 
-                {showRewardsDrawer && (
+                {showRewardsDrawer ? (
                   <View style={styles.cardsGrid}>
                     <StreakCard userId={userId} />
                     <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
                     <DailyBox userId={userId} />
                     <ComboTracker userId={userId} />
                   </View>
-                )}
+                ) : null}
               </View>
-            )}
+            ) : null}
 
             {/* Platform Dropdown Selector */}
             <View style={styles.filterSection}>
@@ -558,7 +573,9 @@ export default function TasksScreen() {
                         </View>
                         <View style={styles.dropdownOptionRight}>
                           <Text style={styles.dropdownOptionCount}>{count}</Text>
-                          {isSelected && <Icon name="check" iconStyle="solid" size={14} color={meta.color} />}
+                          {Boolean(isSelected) ? (
+                            <Icon name="check" iconStyle="solid" size={14} color={meta.color} />
+                          ) : null}
                         </View>
                       </TouchableOpacity>
                     );

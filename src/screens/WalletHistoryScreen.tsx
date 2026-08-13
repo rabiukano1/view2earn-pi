@@ -145,14 +145,14 @@ export default function WalletHistoryScreen() {
       )}
 
       {/* Pending Deposits Section */}
-      {deposits && deposits.filter((d) => d.status === 'pending').length > 0 && (
+      {Boolean(deposits && (deposits?.filter((d) => d.status === 'pending').length ?? 0) > 0) ? (
         <View style={[styles.pendingBanner, dark && styles.pendingBannerDark]}>
           <Icon name="hourglass-half" iconStyle="solid" size={14} color={colors.warn} />
           <Text style={styles.pendingText}>
-            {deposits.filter((d) => d.status === 'pending').length} deposit(s) pending verification
+            {deposits?.filter((d) => d.status === 'pending').length ?? 0} deposit(s) pending verification
           </Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

@@ -62,35 +62,35 @@ function HomeScreenActivityHubCard({ userId, onPress }: { userId: string; onPres
         <View style={styles.hubTitleWrap}>
           <Icon name="trophy" iconStyle="solid" size={17} color="#F59E0B" />
           <Text style={[styles.hubTitle, dark && styles.textLight]}>Achievements</Text>
-          {lvl && (
+          {lvl !== null && lvl !== undefined ? (
             <View style={styles.levelBadge}>
               <Icon name="medal" iconStyle="solid" size={13} color="#D97706" />
               <Text style={styles.levelBadgeText}>Lvl {lvl.level}</Text>
             </View>
-          )}
+          ) : null}
         </View>
         <Text style={styles.hubHeadline}>{headline}</Text>
       </View>
       <View style={styles.hubChips}>
-        {s.availableCount > 0 && (
+        {Boolean(s.availableCount > 0) ? (
           <View style={[styles.hubChip, { backgroundColor: colors.primarySoft }]}>
             <Text style={styles.hubChipText}>🔥 {s.availableCount} available now</Text>
           </View>
-        )}
-        {s.claimableCount > 0 && (
+        ) : null}
+        {Boolean(s.claimableCount > 0) ? (
           <View style={[styles.hubChip, { backgroundColor: colors.successSoft }]}>
             <Text style={styles.hubChipText}>
               🎁 {s.claimableCount} reward{s.claimableCount === 1 ? '' : 's'} ready
             </Text>
           </View>
-        )}
+        ) : null}
         <View style={[styles.hubChip, { backgroundColor: colors.surfaceAlt }]}>
           <Text style={styles.hubChipText}>
             {s.doneToday}/{s.totalToday} done today
           </Text>
         </View>
       </View>
-      {lvl && (
+      {lvl !== null && lvl !== undefined ? (
         <>
           <View style={styles.xpTrack}>
             <View style={[styles.xpFill, { width: `${Math.round(lvl.progress * 100)}%` }]} />
@@ -99,7 +99,7 @@ function HomeScreenActivityHubCard({ userId, onPress }: { userId: string; onPres
             {formatPts(lvl.xp)} XP · {formatPts(lvl.next - lvl.xp)} to Lvl {lvl.level + 1}
           </Text>
         </>
-      )}
+      ) : null}
       <View style={styles.hubBtn}>
         <Text style={styles.hubBtnText}>View achievements</Text>
         <Icon name="arrow-right" iconStyle="solid" size={12} color={colors.white} />
@@ -170,14 +170,14 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.body}>
-          {userId && (
+          {userId ? (
             <>
               <HomeScreenActivityHubCard userId={userId} onPress={() => stackNav.navigate('Achievements')} />
               <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
               <StreakCard userId={userId} />
               <DailyBox userId={userId} />
             </>
-          )}
+          ) : null}
 
           {/* Categorized Explore Sections */}
           <Text style={[styles.sectionTitle, dark && styles.textLight, { marginTop: spacing.md }]}>Explore Platform</Text>

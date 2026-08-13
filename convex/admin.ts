@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { recomputeUserScore } from "./fraud";
 import { fraudTier } from "@view2earn/core";
 import { REWARD_KEYS } from "./rewardsConfig";
+import { economyOfUser, appendLedger } from "./lib/ledger";
 
 // Every admin function requires the shared admin secret (ADMIN_PASSWORD) as a
 // `token` arg, checked by requireAdmin below. The Next.js panel gate is UI-only,
@@ -197,14 +198,16 @@ export const adjustPoints = mutation({
     userId: v.id("users"),
     delta: v.number(),
     reason: v.optional(v.string()),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
   },
-  handler: async (ctx, { token, userId, delta, reason }) => {
+  handler: async (ctx, { token, userId, delta, reason, economy }) => {
     requireAdmin(token);
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
 
     await ctx.runMutation(internal.points.creditHelper, {
       userId,
+      economy: economy ?? (await economyOfUser(ctx, userId)),
       delta,
       reason: reason || (delta >= 0 ? "ADMIN_CREDIT" : "ADMIN_DEBIT"),
       refId: `admin:${Date.now()}`,
@@ -884,6 +887,71 @@ export const updatePlatformLimit = mutation({
         cooldownMinutes: cooldownMinutes ?? 0,
         newProfileFactor: 1.0,
       });
+    }
+  },
+});
+
+/** Admin: List all user-submitted marketplace listings awaiting approval. */
+export const listPendingListings = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const listings = await ctx.db
+      .query("marketplaceListings")
+      .withIndex("by_status", (q) => q.eq("status", "pending_approval"))
+      .collect();
+    return Promise.all(
+      listings.map(async (l) => {
+        const creator = await ctx.db.get(l.userId);
+        return {
+          ...l,
+          username: creator?.username ?? creator?.name ?? "unknown",
+        };
+      }),
+    );
+  },
+});
+
+/** Admin: Approve a user-submitted listing so it goes live to app users. */
+export const approveListing = mutation({
+  args: { token: v.string(), listingId: v.id("marketplaceListings") },
+  handler: async (ctx, { token, listingId }) => {
+    requireAdmin(token);
+    const listing = await ctx.db.get(listingId);
+    if (!listing) throw new Error("Listing not found");
+    await ctx.db.patch(listingId, { status: "active" });
+    if (listing.taskId) {
+      await ctx.db.patch(listing.taskId, { status: "active" });
+    }
+  },
+});
+
+/** Admin: Reject a user-submitted listing and refund the points fee to the creator. */
+export const rejectListing = mutation({
+  args: { token: v.string(), listingId: v.id("marketplaceListings"), reason: v.optional(v.string()) },
+  handler: async (ctx, { token, listingId, reason }) => {
+    requireAdmin(token);
+    const listing = await ctx.db.get(listingId);
+    if (!listing) throw new Error("Listing not found");
+    if (listing.status === "rejected" || listing.status === "cancelled") return;
+
+    await ctx.db.patch(listingId, { status: "rejected" });
+    if (listing.taskId) {
+      await ctx.db.patch(listing.taskId, { status: "expired" });
+    }
+
+    // Refund listing fee back to user
+    const unused = listing.maxCompletions - listing.completionsSoFar;
+    const refund = unused * listing.pointsReward;
+    if (refund > 0) {
+      await appendLedger(
+        ctx,
+        listing.userId,
+        await economyOfUser(ctx, listing.userId),
+        refund,
+        "MARKETPLACE_REFUND",
+        listingId,
+      );
     }
   },
 });

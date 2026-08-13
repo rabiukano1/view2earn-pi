@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,7 +11,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-import { smartOpenUrl } from '../lib/openUrl';
+import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { useNavigation } from '@react-navigation/native';
@@ -33,13 +34,16 @@ export default function SurveysScreen() {
   const getOfferwallUrl = useMutation(api.cpx.getOfferwallUrl);
 
   const [busy, setBusy] = useState(false);
+  const [surveyUrl, setSurveyUrl] = useState<string | null>(null);
+  const [webLoading, setWebLoading] = useState(true);
 
   const openWall = async () => {
     if (!userId || busy) return;
     setBusy(true);
     try {
       const url = await getOfferwallUrl({ userId });
-      await smartOpenUrl(url);
+      setSurveyUrl(url);
+      setWebLoading(true);
     } catch (e) {
       Alert.alert(
         'Surveys unavailable',
@@ -108,7 +112,7 @@ export default function SurveysScreen() {
                   <Text style={[styles.providerTitle, dark && styles.textLight]}>{s.name}</Text>
                   <Text style={[styles.providerMeta, dark && styles.textMuted]}>
                     {s.platform === 'sidra-mobile' || s.platform === 'both'
-                      ? 'Available on mobile'
+                      ? 'Available in-app'
                       : 'Web survey'}
                   </Text>
                 </View>
@@ -125,12 +129,63 @@ export default function SurveysScreen() {
           <View style={styles.tipBody}>
             <Text style={[styles.tipTitle, dark && styles.textLight]}>How it works</Text>
             <Text style={[styles.tipText, dark && styles.textMuted]}>
-              Open the wall, pick a survey and finish it. Once the partner confirms completion, your
+              Open the wall in-app, pick a survey and finish it. Once the partner confirms completion, your
               points are added automatically — no need to send proof.
             </Text>
           </View>
         </View>
       </ScrollView>
+
+      {/* In-App Survey Browser Modal */}
+      <Modal
+        visible={Boolean(surveyUrl)}
+        animationType="slide"
+        onRequestClose={() => setSurveyUrl(null)}>
+        <View style={[styles.modalContainer, dark && styles.modalContainerDark, { paddingTop: insets.top }]}>
+          {/* Header Bar */}
+          <View style={[styles.modalHeader, dark && styles.modalHeaderDark]}>
+            <TouchableOpacity
+              onPress={() => setSurveyUrl(null)}
+              style={styles.modalCloseBtn}
+              activeOpacity={0.8}>
+              <Text style={styles.modalCloseText}>✕ Close</Text>
+            </TouchableOpacity>
+            <View style={styles.modalHeaderTitleArea}>
+              <Text style={[styles.modalHeaderTitle, dark && styles.textLight]}>Survey Wall 📝</Text>
+              <Text style={styles.modalHeaderSub}>In-App Survey Browser</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setWebLoading(true)}
+              style={styles.modalReloadBtn}
+              activeOpacity={0.8}>
+              <Text style={styles.modalReloadText}>↻ Reload</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* In-App WebView Container */}
+          <View style={{ flex: 1 }}>
+            {surveyUrl ? (
+              <WebView
+                source={{ uri: surveyUrl }}
+                onLoadStart={() => setWebLoading(true)}
+                onLoadEnd={() => setWebLoading(false)}
+                style={{ flex: 1 }}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                startInLoadingState={true}
+                renderLoading={() => (
+                  <View style={[styles.webViewLoader, dark && styles.webViewLoaderDark]}>
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={[styles.webViewLoaderText, dark && styles.textLight]}>
+                      Loading survey wall…
+                    </Text>
+                  </View>
+                )}
+              />
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -251,4 +306,52 @@ const styles = StyleSheet.create({
   tipText: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
   textLight: { color: colors.textDark },
   textMuted: { color: colors.textMuted },
+
+  /* In-App Browser Modal Styles */
+  modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  modalContainerDark: { backgroundColor: '#0F172A' },
+  modalHeader: {
+    height: 56,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+  },
+  modalHeaderDark: {
+    backgroundColor: '#1E293B',
+    borderBottomColor: '#334155',
+  },
+  modalCloseBtn: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  modalCloseText: { color: '#0F172A', fontWeight: '700', fontSize: 13 },
+  modalHeaderTitleArea: { alignItems: 'center' },
+  modalHeaderTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  modalHeaderSub: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  modalReloadBtn: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  modalReloadText: { color: colors.primaryDeep, fontWeight: '700', fontSize: 13 },
+  webViewLoader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  webViewLoaderDark: { backgroundColor: '#0F172A' },
+  webViewLoaderText: { marginTop: 12, fontSize: 14, fontWeight: '700', color: colors.text },
 });

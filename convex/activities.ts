@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, getOptionalUser, requireUserAndEconomy } from "./lib/guards";
 import { api } from "./_generated/api";
 import { getJSON, getNum } from "./rewardsConfig";
 
@@ -106,7 +106,7 @@ export type ActivitiesHubData = {
 export const getActivitiesHub = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }): Promise<ActivitiesHubData> => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -159,9 +159,12 @@ export const getActivitiesHub = query({
     ).length;
 
     // Today's earnings, grouped per ledger reason (real, append-only data).
+    // Filtered to the caller's own economy — the two economies never mix.
     const ledger = await ctx.db
       .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .withIndex("by_user_economy", (q) =>
+        q.eq("userId", userId).eq("economy", economy),
+      )
       .collect();
     const earnings = new Map<string, number>();
     let todayEarned = 0;

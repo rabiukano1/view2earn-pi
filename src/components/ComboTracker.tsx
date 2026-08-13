@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
+import Icon from './Icon';
 import RewardedAdModal from './RewardedAdModal';
 
 const LEGS = [
@@ -65,9 +66,14 @@ export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
             style={[styles.claimBtn, !status.canClaim && styles.claimBtnOff]}
             disabled={!status.canClaim || busy}
             onPress={onClaimPress}>
-            <Text style={[styles.claimText, !status.canClaim && styles.claimTextOff]}>
-              {busy ? '…' : status.canClaim ? 'Claim' : `${legDoneCount(status)}/3`}
-            </Text>
+            <View style={styles.btnRow}>
+              {Boolean(status.canClaim && !busy) ? (
+                <Icon name="circle-play" iconStyle="solid" size={12} color={colors.white} />
+              ) : null}
+              <Text style={[styles.claimText, !status.canClaim && styles.claimTextOff]}>
+                {busy ? '…' : status.canClaim ? 'Watch & Claim' : `${legDoneCount(status)}/3`}
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -121,6 +127,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     ...shadow.raised,
   },
+  btnRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   claimBtnOff: { backgroundColor: colors.surfaceAlt, shadowOpacity: 0, elevation: 0 },
   claimText: { color: colors.white, fontWeight: '800', fontSize: 13 },
   claimTextOff: { color: colors.textFaint },

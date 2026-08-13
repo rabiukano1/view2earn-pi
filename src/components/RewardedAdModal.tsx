@@ -105,20 +105,8 @@ export default function RewardedAdModal({
     }
   }, [isLoaded]);
 
-  // Auto-play: once the ad is loaded, show it immediately — no extra tap.
-  // The fullscreen ad plays on top of this modal; on close we dismiss it below.
-  useEffect(() => {
-    if (isLoaded && visible && phase === 'ready') {
-      try {
-        show();
-      } catch (err: any) {
-        setAdError(sanitize(err?.message || 'Failed to play video', adUnitId));
-        setPhase('error');
-      }
-    }
-  }, [isLoaded, visible, phase, show, adUnitId]);
 
-  // Reward earned → award points exactly once, then close.
+  // Reward earned → award points exactly once, notify onSuccess, then close modal.
   const handleRewardEarned = useCallback(async () => {
     if (!userId || claimedRef.current) return;
     claimedRef.current = true;
@@ -131,14 +119,15 @@ export default function RewardedAdModal({
         rewardAmount: rewardAmount ?? rewardPoints,
       });
       if (onSuccess) {
-        onSuccess(newBalance);
+        await onSuccess(newBalance);
       }
     } catch (err) {
       console.error('Ad reward failed:', err);
     } finally {
       setClaiming(false);
+      onClose();
     }
-  }, [userId, rewardForAd, adUnitId, rewardAmount, rewardPoints, adType, onSuccess]);
+  }, [userId, rewardForAd, adUnitId, rewardAmount, rewardPoints, adType, onSuccess, onClose]);
 
   useEffect(() => {
     if (isEarnedReward) {
@@ -146,17 +135,25 @@ export default function RewardedAdModal({
     }
   }, [isEarnedReward, handleRewardEarned]);
 
-  // Ad dismissed (completed or skipped) → close the modal overlay.
+  // Ad dismissed (completed or skipped) → if reward was earned, wait for handleRewardEarned; otherwise close overlay.
   useEffect(() => {
     if (isClosed && visible) {
+      if (isEarnedReward || claimedRef.current) {
+        // handleRewardEarned will call onClose after finishing points credit & onSuccess
+        return;
+      }
       onClose();
     }
-  }, [isClosed, visible, onClose]);
+  }, [isClosed, visible, isEarnedReward, onClose]);
 
   const retry = () => {
     setPhase('loading');
     setAdError('');
     load();
+  };
+
+  const handleSimulatedClaim = () => {
+    handleRewardEarned();
   };
 
   return (
@@ -187,7 +184,8 @@ export default function RewardedAdModal({
                 <Text style={styles.adTitle}>Ready to watch</Text>
                 <Text style={styles.adSubtitle}>
                   Earn +{displayReward} PTS by watching a short rewarded video
-                </Text>              </>
+                </Text>
+              </>
             )}
 
             {phase === 'error' && (
@@ -205,40 +203,47 @@ export default function RewardedAdModal({
 
           {/* Action Footer */}
           <View style={styles.footerRow}>
-            {phase === 'ready' ? (
+            {phase === 'ready' && (
               <TouchableOpacity
                 style={styles.claimBtn}
-                onPress={() => show()}
+                onPress={() => { try { show(); } catch (err: any) { setAdError(sanitize(err?.message || 'Failed to play video', adUnitId)); setPhase('error'); } }}
                 activeOpacity={0.85}>
-                <Icon name="gift" iconStyle="solid" size={14} color={colors.white} />
-                <Text style={styles.claimText}>Claim (+{displayReward} PTS)</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                <Text style={styles.cancelText}>Close</Text>
+                <Icon name="circle-play" iconStyle="solid" size={15} color={colors.white} />
+                <Text style={styles.claimText}>Watch Video (+{displayReward} PTS)</Text>
               </TouchableOpacity>
             )}
 
             {phase === 'error' && (
-              <TouchableOpacity style={styles.claimBtn} onPress={retry} activeOpacity={0.85}>
-                <Icon name="rotate-right" iconStyle="solid" size={14} color={colors.white} />
-                <Text style={styles.claimText}>Retry</Text>
-              </TouchableOpacity>
+              <>
+                {/* ponytail: dev-only fallback claim — never ship to production.
+                    Awarding points without a completed ad view is invalid traffic
+                    under AdMob policy and grounds for account termination. */}
+                {Boolean(__DEV__) ? (
+                  <TouchableOpacity
+                    style={styles.claimBtn}
+                    onPress={handleSimulatedClaim}
+                    activeOpacity={0.85}>
+                    <Icon name="gift" iconStyle="solid" size={14} color={colors.white} />
+                    <Text style={styles.claimText}>DEV Claim (+{displayReward} PTS)</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity style={styles.cancelBtn} onPress={retry} activeOpacity={0.85}>
+                  <Icon name="rotate-right" iconStyle="solid" size={13} color="#8A8A9E" />
+                </TouchableOpacity>
+              </>
             )}
 
-            {phase === 'ready' && (
-              <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+              <Text style={styles.cancelText}>Close</Text>
+            </TouchableOpacity>
           </View>
 
-          {claiming && (
+          {claiming ? (
             <View style={styles.claimingOverlay}>
               <ActivityIndicator size="small" color={colors.white} />
               <Text style={styles.claimingText}>Crediting points…</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
     </Modal>

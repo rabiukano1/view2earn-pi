@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
+import { appendLedger } from "./lib/ledger";
 
 function weightedPick(prizes: { pts: number; weight: number }[]): number {
   const total = prizes.reduce((s, p) => s + p.weight, 0);
@@ -64,7 +65,7 @@ export const getSpinStatus = query({
 export const spin = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const now = Date.now();
     const spinWindowHours = await getNum(ctx, "spinWindowHours");
     const windowMs = spinWindowHours * 60 * 60 * 1000;
@@ -125,21 +126,9 @@ export const spin = mutation({
     const prizes = await getJSON<{ pts: number; weight: number }[]>(ctx, "spinPrizes");
     const pts = weightedPick(prizes);
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
+    await appendLedger(ctx, userId, economy, pts, "SPIN_WHEEL", `spin-${now}`);
 
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: pts,
-      reason: "SPIN_WHEEL",
-      refId: `spin-${now}`,
-      balanceAfter: (last?.balanceAfter ?? 0) + pts,
-    });
-
-    // Also sync user's app wallet points balance
+    // Also sync the user's app wallet points balance for this economy.
     if (pts > 0) {
       let wallet = await ctx.db
         .query("wallets")
@@ -147,8 +136,16 @@ export const spin = mutation({
         .unique();
 
       if (wallet) {
-        const newPoints = wallet.pointsBalance + pts;
-        await ctx.db.patch(wallet._id, { pointsBalance: newPoints });
+        const newPoints =
+          economy === "pi-browser"
+            ? (wallet.piBrowserPointsBalance ?? 0) + pts
+            : wallet.pointsBalance + pts;
+        await ctx.db.patch(
+          wallet._id,
+          economy === "pi-browser"
+            ? { piBrowserPointsBalance: newPoints }
+            : { pointsBalance: newPoints },
+        );
 
         await ctx.db.insert("walletTransactions", {
           userId,
@@ -157,7 +154,7 @@ export const spin = mutation({
           piproDelta: 0,
           pointsBalanceAfter: newPoints,
           piproBalanceAfter: wallet.piproBalance,
-          note: `Spin Wheel Prize (+${pts} PTS)`,
+          note: `Spin Wheel Prize (+${pts} PTS, ${economy})`,
         });
       }
     }

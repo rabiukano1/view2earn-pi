@@ -15,7 +15,7 @@ import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/PageHeader';
 import Icon from '../components/Icon';
 import { colors, radius, shadow } from '../theme';
-import { smartOpenUrl } from '../lib/openUrl';
+import { openInPiBrowser } from '../lib/openUrl';
 
 // ponytail: Pi Browser web app donation portal URL default fallback
 const PI_APP_DONATE_URL = 'https://view2earn-pi.pages.dev/donate';
@@ -49,7 +49,7 @@ export default function DonateScreen() {
   const [selectedTier, setSelectedTier] = useState<string>('champion');
 
   const handleOpenPiBrowser = async () => {
-    await smartOpenUrl(PI_APP_DONATE_URL);
+    await openInPiBrowser(PI_APP_DONATE_URL);
   };
 
   return (
@@ -156,7 +156,7 @@ export default function DonateScreen() {
         </View>
 
         {/* My Donations */}
-        {userId && (
+        {userId ? (
           <>
             <Text style={[styles.sectionTitle, dark && styles.textLight]}>My Donation History</Text>
             <View style={[styles.card, dark && styles.cardDark]}>
@@ -181,7 +181,7 @@ export default function DonateScreen() {
               )}
             </View>
           </>
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );

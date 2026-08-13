@@ -4,6 +4,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { colors, radius, shadow } from '../theme';
+import Icon from './Icon';
 import RewardedAdModal from './RewardedAdModal';
 
 export default function DailyBox({ userId }: { userId: Id<'users'> }) {
@@ -75,8 +76,9 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
             {status.eligible ? 'Daily box ready!' : 'Daily mystery box'}
           </Text>
           {status.eligible ? (
-            <Text style={styles.subReady}>Tap to open · win up to 250 pts</Text>
-          ) : (            <>
+            <Text style={styles.subReady}>Watch video to open · win up to 250 pts</Text>
+          ) : (
+            <>
               <Text style={styles.sub}>
                 {status.tasksToday}/{status.needed} tasks today to unlock
               </Text>
@@ -86,11 +88,14 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
             </>
           )}
         </View>
-        {status.eligible && (
+        {Boolean(status.eligible) ? (
           <View style={styles.openBtn}>
-            <Text style={styles.openBtnText}>{busy ? '…' : 'Open'}</Text>
+            {!busy ? (
+              <Icon name="circle-play" iconStyle="solid" size={12} color={colors.white} />
+            ) : null}
+            <Text style={styles.openBtnText}>{busy ? '…' : 'Watch Video'}</Text>
           </View>
-        )}
+        ) : null}
       </TouchableOpacity>
       <RewardedAdModal
         visible={adVisible}
@@ -133,9 +138,12 @@ const styles = StyleSheet.create({
   trackDark: { backgroundColor: colors.surfaceAltDark },
   fill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.primary },
   openBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     backgroundColor: colors.primary,
     borderRadius: radius.sm,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     ...shadow.raised,
   },

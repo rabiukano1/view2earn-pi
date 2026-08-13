@@ -140,18 +140,35 @@ export default defineSchema({
     .index("by_state", ["state"])
     .index("by_task", ["taskId"]),
 
+  // Two-economy model (plan: ONE verified user, TWO separate economies).
+  // `economy` tags every ledger row so the Android economy (private/app PTS)
+  // and the Pi-Browser economy (redeemable Pi/Airtime/Data PTS) never mix:
+  //   "android"    — private in-app PTS earned via the native app (tasks, quiz,
+  //                   spin, surveys, AdMob rewarded ads, …). NOT withdrawable.
+  //   "pi-browser" — PTS earned inside the Pi Browser (Pi rewarded ads, Pi
+  //                   activities). This is the ONLY economy the Pi/Airtime/Data
+  //                   redemption & withdrawal systems may draw from.
+  // Balance of each economy = `balanceAfter` of its latest ledger row.
   pointsLedger: defineTable({
     userId: v.id("users"),
+    // Optional only so legacy rows (written before the two-economy split) keep
+    // validating; every NEW write sets this. Backfill via backfillEconomy().
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
     delta: v.number(),
     reason: v.string(),
     refId: v.optional(v.string()),
     balanceAfter: v.number(),
-  }).index("by_user", ["userId"]).index("by_refId", ["refId"]),
+  }).index("by_user", ["userId"])
+    .index("by_user_economy", ["userId", "economy"])
+    .index("by_refId", ["refId"]),
 
-  // App wallet: internal ledger for points, PIPRO, VINTA, and Sidra balances
+  // App wallet: internal ledger for points, PIPRO, VINTA, and Sidra balances.
+  // `pointsBalance` mirrors the ANDROID economy points ledger; the Pi-Browser
+  // economy keeps its own balance so the two never mix (one user, two ledgers).
   wallets: defineTable({
     userId: v.id("users"),
     pointsBalance: v.number(),
+    piBrowserPointsBalance: v.optional(v.number()), // Pi-Browser economy balance mirror
     piproBalance: v.number(),
     vintaBalance: v.optional(v.number()),
     sidraBalance: v.optional(v.number()),
@@ -172,8 +189,11 @@ export default defineSchema({
   // Points-to-Pi withdrawals: A2U (App-to-User) Pi payments. The app sends
   // real Pi from its treasury wallet to the user's linked Pi wallet address
   // in exchange for earned points (plan §7.8 extension).
+  // `economy` is ALWAYS "pi-browser" here: Pi cashouts can only spend the
+  // Pi-Browser economy ledger, never the Android economy (no cross-redemption).
   piWithdrawals: defineTable({
     userId: v.id("users"),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
     pointsSpent: v.number(),                      // points deducted from user
     piAmount: v.number(),                          // Pi sent to wallet
     walletAddress: v.string(),                     // destination Pi address
@@ -252,6 +272,7 @@ export default defineSchema({
 
   redemptions: defineTable({
     userId: v.id("users"),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
     catalogId: v.id("catalog"),
     paidWith: v.string(),
     amount: v.number(),
@@ -448,4 +469,15 @@ export default defineSchema({
     enabled: v.boolean(),
     sortOrder: v.number(),
   }).index("by_key", ["key"]),
+
+  // One-time Pi linking tokens (plan §7.1 linking flow). The Android app
+  // creates a token tied to its own user, passes it to the Pi Browser via the
+  // /link URL, and the Pi web app exchanges it + a verified Pi identity to
+  // promote that user row to the Pi economy (ecosystem "PI").
+  piLinkTokens: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    createdAt: v.number(),
+  }).index("by_token", ["token"])
+    .index("by_user", ["userId"]),
 });

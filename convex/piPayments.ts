@@ -115,6 +115,7 @@ export const startPiRedemption = mutation({
 
     const redemptionId = await ctx.db.insert("redemptions", {
       userId,
+      economy: "pi-browser",
       catalogId,
       paidWith: "PI",
       amount: item.coinPrice,

@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { getOptionalUser, requireUser, requireUserAndEconomy } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
 import { consumeRewardedAd } from "./piAds";
+import { appendLedger } from "./lib/ledger";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000); // UTC day. TODO(prod): user timezone.
@@ -18,7 +19,19 @@ function effectiveStreak(current: number, lastDay: number | null, today: number)
 export const getStreak = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
+    const user = await getOptionalUser(ctx, userId);
+    const schedule = await getJSON<number[]>(ctx, "streakSchedule");
+    if (!user) {
+      return {
+        current: 0,
+        longest: 0,
+        checkedInToday: false,
+        canCheckIn: false,
+        cycleDay: 1,
+        todayReward: schedule[0] ?? 10,
+        schedule,
+      };
+    }
     const row = await ctx.db
       .query("streaks")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -30,7 +43,6 @@ export const getStreak = query({
     const checkedInToday = lastDay === today;
     const eff = effectiveStreak(current, lastDay, today);
     const cycleDay = ((eff - 1) % 7) + 1;
-    const schedule = await getJSON<number[]>(ctx, "streakSchedule");
 
     return {
       current: checkedInToday ? current : current,
@@ -50,7 +62,7 @@ export const checkIn = mutation({
     adId: v.optional(v.string()),
   },
   handler: async (ctx, { userId, adId }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const today = dayNumber(Date.now());
     const row = await ctx.db
       .query("streaks")
@@ -77,20 +89,8 @@ export const checkIn = mutation({
       await ctx.db.insert("streaks", { userId, current: streak, longest, lastDay: today });
     }
 
-    // Append-only points ledger (plan §6), same pattern as rewards/tasks.
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const balanceAfter = (last?.balanceAfter ?? 0) + reward;
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: reward,
-      reason: "DAILY_CHECKIN",
-      refId: `day-${today}`,
-      balanceAfter,
-    });
+    // Append-only points ledger, economy-tagged (server-derived economy).
+    await appendLedger(ctx, userId, economy, reward, "DAILY_CHECKIN", `day-${today}`);
 
     return { reward, current: streak, longest };
   },

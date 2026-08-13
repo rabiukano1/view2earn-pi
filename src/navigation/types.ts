@@ -12,6 +12,7 @@ export type RootTabParamList = {
 };
 
 export type RootStackParamList = {
+  Login: undefined;
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Marketplace: undefined;
   CreateListing: { userId: Id<'users'> };

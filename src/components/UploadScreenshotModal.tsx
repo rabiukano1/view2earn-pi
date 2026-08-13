@@ -77,12 +77,12 @@ export default function UploadScreenshotModal({
             </TouchableOpacity>
           </View>
 
-          {uploading && (
+          {uploading ? (
             <View style={styles.uploadingOverlay}>
               <ActivityIndicator size="large" color={colors.white} />
               <Text style={styles.uploadingText}>Uploading screenshot…</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
     </Modal>

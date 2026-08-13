@@ -1,8 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser } from "./lib/guards";
+import { requireUser, getOptionalUser, requireUserAndEconomy } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
 import { consumeRewardedAd } from "./piAds";
+import { appendLedger } from "./lib/ledger";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000);
@@ -35,14 +36,22 @@ function pickPrize(prizes: { pts: number; weight: number }[]): number {
 export const getBoxStatus = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
+    const user = await getOptionalUser(ctx, userId);
+    const needed = await getNum(ctx, "mysteryBoxTasksNeeded");
+    if (!user) {
+      return {
+        tasksToday: 0,
+        needed,
+        openedToday: false,
+        eligible: false,
+      };
+    }
     const today = dayNumber(Date.now());
     const box = await ctx.db
       .query("dailyBoxes")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
     const done = await tasksToday(ctx, userId);
-    const needed = await getNum(ctx, "mysteryBoxTasksNeeded");
     return {
       tasksToday: Math.min(done, needed),
       needed,
@@ -58,7 +67,7 @@ export const openBox = mutation({
     adId: v.optional(v.string()),
   },
   handler: async (ctx, { userId, adId }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const today = dayNumber(Date.now());
 
     const box = await ctx.db
@@ -85,19 +94,7 @@ export const openBox = mutation({
       await ctx.db.insert("dailyBoxes", { userId, lastDay: today });
     }
 
-    const last = await ctx.db
-      .query("pointsLedger")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .first();
-    const balanceAfter = (last?.balanceAfter ?? 0) + reward;
-    await ctx.db.insert("pointsLedger", {
-      userId,
-      delta: reward,
-      reason: "MYSTERY_BOX",
-      refId: `box-${today}`,
-      balanceAfter,
-    });
+    await appendLedger(ctx, userId, economy, reward, "MYSTERY_BOX", `box-${today}`);
 
     return { reward };
   },

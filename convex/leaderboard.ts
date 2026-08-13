@@ -1,5 +1,6 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { deriveEconomy } from "./lib/guards";
 
 export const topEarners = query({
   args: { limit: v.optional(v.number()) },
@@ -9,9 +10,14 @@ export const topEarners = query({
 
     const withBalance = await Promise.all(
       users.map(async (u) => {
+        // Each user's leaderboard position uses their OWN economy balance —
+        // the two economies are ranked independently.
+        const economy = deriveEconomy(u);
         const last = await ctx.db
           .query("pointsLedger")
-          .withIndex("by_user", (q) => q.eq("userId", u._id))
+          .withIndex("by_user_economy", (q) =>
+            q.eq("userId", u._id).eq("economy", economy),
+          )
           .order("desc")
           .first();
         return {
@@ -39,9 +45,12 @@ export const myRank = query({
 
     const withBalance = await Promise.all(
       all.map(async (u) => {
+        const economy = deriveEconomy(u);
         const last = await ctx.db
           .query("pointsLedger")
-          .withIndex("by_user", (q) => q.eq("userId", u._id))
+          .withIndex("by_user_economy", (q) =>
+            q.eq("userId", u._id).eq("economy", economy),
+          )
           .order("desc")
           .first();
         const bal = last?.balanceAfter ?? 0;

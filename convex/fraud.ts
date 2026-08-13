@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { v } from "convex/values";
 import { computeFraudScore } from "@view2earn/core";
 
 // Fraud scoring (plan §7.9). Recomputes users.fraudScore from stored signals so
@@ -6,6 +7,24 @@ import { computeFraudScore } from "@view2earn/core";
 // recomputeUserScore wherever a signal changes; the daily cron catches the rest.
 
 const FRAUD_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000; // matches verifications.ts
+
+// Duplicate-identity protection (plan §17): a second View2Earn account tried to
+// connect a Pi account that is already linked to a different user. We flag ONLY
+// the offending (second) account as DUPLICATE / FRAUD REVIEW and leave the
+// original verified account completely untouched (no freeze, no balance change,
+// no identity transfer).
+export const flagDuplicatePiLink = internalMutation({
+  args: { userId: v.id("users"), piUid: v.string() },
+  handler: async (ctx, { userId, piUid }) => {
+    await ctx.db.insert("fraudEvents", {
+      userId,
+      type: "DUPLICATE_PI_LINK",
+      detailsJson: JSON.stringify({ piUid, at: Date.now() }),
+    });
+    await recomputeUserScore(ctx, userId);
+    return { flagged: true };
+  },
+});
 
 // Plain helper (like lib/guards.requireUser) so callers recompute inline within
 // their own transaction — no cross-function mutation hop.

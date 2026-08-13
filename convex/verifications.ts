@@ -12,6 +12,7 @@ import { requireUser, requireAuth } from "./lib/guards";
 import { isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
 import { targetUrlsOf } from "./tasks";
+import { economyOfUser } from "./lib/ledger";
 
 // Task Verification State Machine (plan §5):
 // CREATED → USER_CLAIMED_DONE → PROOF_SUBMITTED
@@ -464,6 +465,7 @@ export const releaseImmediately = internalMutation({
 
     await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
+      economy: await economyOfUser(ctx, verification.userId),
       delta: task.points,
       reason: "TASK_COMPLETED",
       refId: verification.taskId,
@@ -526,6 +528,7 @@ export const release = internalMutation({
     });
     await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
+      economy: await economyOfUser(ctx, verification.userId),
       delta: task.points,
       reason: "TASK_COMPLETED",
       refId: verification.taskId,

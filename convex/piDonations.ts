@@ -3,6 +3,7 @@ import { internalAction, internalMutation, internalQuery, mutation, query } from
 import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
+import { appendLedger } from "./lib/ledger";
 
 // Pi Network donation payment flow for Pi Browser testing (plan §7.8 extension).
 // Follows Pi's official 3-phase U2A payment model:
@@ -86,7 +87,8 @@ export const markCompleted = internalMutation({
       txid,
     });
 
-    // Reward donor with bonus points
+    // Reward donor with bonus points. Donations come from the Pi Browser
+    // economy only (real Pi), so the bonus credits the pi-browser ledger.
     const bonusPts = Math.round(donation.amount * DONATION_PTS_PER_PI);
     if (bonusPts > 0) {
       const user = await ctx.db.get(donation.userId);
@@ -96,26 +98,21 @@ export const markCompleted = internalMutation({
           .withIndex("by_user", (q) => q.eq("userId", donation.userId))
           .first();
 
-        const currentBal = wallet?.pointsBalance ?? 0;
+        const currentBal = wallet?.piBrowserPointsBalance ?? 0;
         const newBal = currentBal + bonusPts;
 
         if (wallet) {
-          await ctx.db.patch(wallet._id, { pointsBalance: newBal });
+          await ctx.db.patch(wallet._id, { piBrowserPointsBalance: newBal });
         } else {
           await ctx.db.insert("wallets", {
             userId: donation.userId,
-            pointsBalance: newBal,
+            pointsBalance: 0,
+            piBrowserPointsBalance: newBal,
             piproBalance: 0,
           });
         }
 
-        await ctx.db.insert("pointsLedger", {
-          userId: donation.userId,
-          delta: bonusPts,
-          reason: "PI_DONATION_BONUS",
-          refId: donationId,
-          balanceAfter: newBal,
-        });
+        await appendLedger(ctx, donation.userId, "pi-browser", bonusPts, "PI_DONATION_BONUS", donationId);
       }
     }
   },
