@@ -146,6 +146,7 @@ export default function PiHome() {
       subtitle: "Guides and ways to help",
       items: [
         { href: "/learn", label: "Learn", emoji: "🎓", desc: "How to earn guide", tint: "#F59E0B" },
+        { href: "/knowledge", label: "Pi Knowledge Center", emoji: "📚", desc: "Official-source Pi courses", tint: "#8B5CF6" },
         { href: "/donate", label: "Donate π", emoji: "💜", desc: "Support the pool", tint: "#EC4899" },
       ],
     },

@@ -5,6 +5,7 @@ import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { getNum } from "./rewardsConfig";
 import { appendLedger } from "./lib/ledger";
+import { awardXP } from "./xp";
 
 // ─── Built-In High Quality Question Banks (Fallback & Seed) ─────────────────────
 
@@ -226,17 +227,61 @@ export const seedBuiltInQuestions = internalMutation({
 
 // ─── Public Queries & Mutations ─────────────────────────────────────────────
 
-/** Returns 5 quiz questions for the daily challenge, auto-seeding if empty. */
+/** Deterministic PRNG seeded from a string (so a user sees the same quiz all day). */
+function hashSeed(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Stable shuffle for a given seed (no Math.random — deterministic per user/day). */
+function shuffle<T>(arr: T[], seed: string): T[] {
+  const rand = mulberry32(hashSeed(seed));
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/** Returns the Daily Quiz for the day, auto-seeding if empty.
+ *
+ * Selection (learn-pi.md §8/§9): reads the quizSettings singleton — MIXED or
+ * COURSE_OF_THE_DAY mode, a configurable per-course distribution, and a
+ * weekday schedule. It pulls PUBLISHED questions from the centralized bank
+ * (Knowledge Center questions first, since they carry course/lesson/source
+ * metadata) and avoids repeating questions the user already answered.
+ * Answers/explanations stay on the server until submitQuiz grades them. */
 export const getDailyQuiz = query({
-  args: { userId: v.id("users"), ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")) },
-  handler: async (ctx, { userId, ecosystem }) => {
+  args: {
+    userId: v.id("users"),
+    ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
+    day: v.number(), // 0 = Sunday .. 6 = Saturday (passed from client, no wall-clock read)
+  },
+  handler: async (ctx, { userId, ecosystem, day }) => {
     await requireUser(ctx, userId);
-    let allQuestions = await ctx.db
+
+    const allQuestions = await ctx.db
       .query("quizQuestions")
       .withIndex("by_ecosystem", (q) => q.eq("ecosystem", ecosystem))
       .collect();
 
-    // Auto-seed if database doesn't have enough questions yet
+    // Auto-seed if the database doesn't have enough questions yet.
     if (allQuestions.length === 0) {
       const list = BUILT_IN_QUESTIONS[ecosystem];
       return list.map((q, idx) => ({
@@ -246,16 +291,93 @@ export const getDailyQuiz = query({
       }));
     }
 
-    const shuffled = [...allQuestions].sort(() => Math.random() - 0.5).slice(0, 5);
-    return shuffled.map((q) => ({
+    // Published, course-linked questions are the primary bank.
+    const bank = allQuestions.filter((q) => q.status === "PUBLISHED" && q.courseId);
+    const fallback = allQuestions.filter((q) => q.status === "PUBLISHED" && !q.courseId);
+    const pool = bank.length > 0 ? bank : fallback;
+
+    const courses = await ctx.db.query("courses").collect();
+    const keyByCourse = new Map<string, string | null>(
+      courses.map((c) => [c._id, c.key]),
+    );
+
+    const settings = await ctx.db.query("quizSettings").first();
+    const qCount = Math.max(1, Math.min(20, settings?.questionsPerQuiz ?? 5));
+    const mode = settings?.mode ?? "MIXED";
+
+    // Plan: array of {courseKey, count} or null → take from the whole pool.
+    let plan: { courseKey: string; count: number }[] | null = null;
+    if (mode === "COURSE_OF_THE_DAY") {
+      const scheduled = settings?.schedule?.find((s) => s.day === day);
+      const key = scheduled?.courseKey ?? "MIXED";
+      if (key !== "MIXED") plan = [{ courseKey: key, count: qCount }];
+    }
+    if (!plan && (settings?.distribution?.length ?? 0) > 0) {
+      plan = settings!.distribution;
+    }
+
+    // Recently-seen question ids, so the same question isn't re-served.
+    const recentResults = await ctx.db
+      .query("quizResults")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const seen = new Set<string>();
+    for (const r of recentResults.slice(-20)) {
+      for (const id of r.questionIds) seen.add(id);
+    }
+
+    const chosen: typeof pool = [];
+    const seed = `${userId}:${ecosystem}:${day}`;
+    const pick = (group: typeof pool, n: number) => {
+      const fresh = group.filter((q) => !seen.has(q._id));
+      if (fresh.length === 0) return [];
+      const picked = shuffle(fresh, seed).slice(0, n);
+      for (const q of picked) {
+        chosen.push(q);
+        seen.add(q._id);
+      }
+      return picked;
+    };
+
+    if (plan) {
+      for (const p of plan) {
+        if (chosen.length >= qCount) break;
+        const group = pool.filter((q) => keyByCourse.get(q.courseId!) === p.courseKey);
+        if (group.length > 0) pick(group, p.count);
+      }
+      if (chosen.length < qCount) {
+        pick(pool.filter((q) => !seen.has(q._id)), qCount - chosen.length);
+      }
+    } else {
+      pick(pool, qCount);
+    }
+
+    // Last resort: allow repeats only if the bank is genuinely too small.
+    if (chosen.length < qCount && pool.length > 0) {
+      let i = 0;
+      while (chosen.length < qCount && i < pool.length * 3) {
+        chosen.push(pool[i % pool.length]);
+        i++;
+      }
+    }
+
+    return chosen.slice(0, qCount).map((q) => ({
       _id: q._id,
       question: q.question,
       options: q.options,
+      topic: q.topic ?? null,
+      difficultyLabel: q.difficultyLabel ?? null,
+      courseKey: q.courseId ? (keyByCourse.get(q.courseId) ?? null) : null,
+      sourceUrl: q.sourceUrl ?? null,
     }));
   },
 });
 
-/** Submit quiz answers, credit points, and sync with app wallet. */
+/** Submit quiz answers, credit points, and sync with app wallet.
+ *
+ * Grading happens server-side (learn-pi.md §22: the frontend can never award
+ * rewards). Returns a per-question review with explanations and learn-more
+ * links into the Knowledge Center so a wrong answer points at the lesson. */
 export const submitQuiz = mutation({
   args: {
     userId: v.id("users"),
@@ -269,30 +391,93 @@ export const submitQuiz = mutation({
     await enforceRateLimit(ctx, args.userId, "quiz");
     let score = 0;
     const questionIds: string[] = [];
+    const metas: Array<{
+      correctIndex: number;
+      explanation: string;
+      courseId?: any;
+      lessonId?: any;
+    }> = [];
 
     for (const answer of args.answers) {
-      let correctIndex = -1;
+      let meta: { correctIndex: number; explanation: string; courseId?: any; lessonId?: any };
 
       if (answer.questionId.startsWith("builtin-")) {
         // Built-in question lookup
         const parts = answer.questionId.split("-");
         const eco = parts[1] as "PI" | "SIDRA";
         const idx = Number(parts[2]);
-        if (BUILT_IN_QUESTIONS[eco]?.[idx]) {
-          correctIndex = BUILT_IN_QUESTIONS[eco][idx].correctIndex;
-        }
+        const bq = BUILT_IN_QUESTIONS[eco]?.[idx];
+        meta = {
+          correctIndex: bq?.correctIndex ?? -1,
+          explanation: bq?.explanation ?? "",
+        };
       } else {
         const question = await ctx.db.get(answer.questionId as any);
         if (question && "correctIndex" in question) {
-          correctIndex = (question as any).correctIndex;
+          const q = question as any;
+          meta = {
+            correctIndex: q.correctIndex,
+            explanation: q.explanation ?? "",
+            courseId: q.courseId,
+            lessonId: q.lessonId,
+          };
+        } else {
+          meta = { correctIndex: -1, explanation: "" };
         }
       }
 
       questionIds.push(answer.questionId);
-      if (answer.selectedIndex === correctIndex) {
+      metas.push(meta);
+      if (answer.selectedIndex === meta.correctIndex) {
         score++;
       }
     }
+
+    // Resolve learn-more links (course/lesson titles) for the review.
+    const courseCache = new Map<any, any>();
+    const lessonCache = new Map<any, any>();
+    const links: Array<{
+      courseKey: string | null;
+      courseTitle: string | null;
+      lessonNumber: number | null;
+      lessonTitle: string | null;
+    }> = [];
+    for (const m of metas) {
+      let courseKey: string | null = null;
+      let courseTitle: string | null = null;
+      let lessonNumber: number | null = null;
+      let lessonTitle: string | null = null;
+      if (m.courseId) {
+        let c = courseCache.get(m.courseId);
+        if (!c) {
+          c = await ctx.db.get(m.courseId);
+          if (c) courseCache.set(m.courseId, c);
+        }
+        if (c) {
+          courseKey = c.key;
+          courseTitle = c.title;
+        }
+      }
+      if (m.lessonId) {
+        let l = lessonCache.get(m.lessonId);
+        if (!l) {
+          l = await ctx.db.get(m.lessonId);
+          if (l) lessonCache.set(m.lessonId, l);
+        }
+        if (l) {
+          lessonNumber = l.lessonNumber;
+          lessonTitle = l.title;
+        }
+      }
+      links.push({ courseKey, courseTitle, lessonNumber, lessonTitle });
+    }
+
+    const review = metas.map((m, i) => ({
+      correctIndex: m.correctIndex,
+      explanation: m.explanation,
+      selected: args.answers[i].selectedIndex,
+      ...links[i],
+    }));
 
     const total = args.answers.length;
     const ptsPerCorrect = await getNum(ctx, "quizCorrectPoints");
@@ -307,6 +492,18 @@ export const submitQuiz = mutation({
 
     if (pointsEarned > 0) {
       await appendLedger(ctx, args.userId, economy, pointsEarned, "QUIZ_CORRECT");
+
+      const xpPerCorrect = (await getNum(ctx, "quizXpPerCorrect")) || 20;
+      const xpEarned = score * xpPerCorrect;
+      if (xpEarned > 0) {
+        const today = Math.floor(Date.now() / 86400000);
+        await awardXP(ctx, {
+          userId: args.userId,
+          amount: xpEarned,
+          source: "QUIZ",
+          sourceId: `daily_quiz_${today}`,
+        });
+      }
 
       // Sync points with user's app wallet
       let wallet = await ctx.db
@@ -338,7 +535,7 @@ export const submitQuiz = mutation({
       }
     }
 
-    return { score, total, pointsEarned };
+    return { score, total, pointsEarned, review };
   },
 });
 

@@ -20,8 +20,10 @@ export const REWARD_KEYS = {
     { pts: 25, weight: 13 },
     { pts: 40, weight: 9 },
     { pts: 75, weight: 4 },
-    { pts: 150, weight: 1.5 },
-    { pts: 500, weight: 0.5 },
+    { pts: 100, weight: 2 },
+    { pts: -1, weight: 1.5 },
+    { pts: -2, weight: 0.5 },
+    { pts: -3, weight: 0.5 },
   ]),
   baseSpinsPerWindow: "3",
   spinWindowHours: "3",
@@ -31,6 +33,10 @@ export const REWARD_KEYS = {
   referralRefereeBonus: "50",
   referralQualificationTasks: "5",
   academyLevelPoints: "10",
+  quizXpPerCorrect: "20",
+  streakXp: "50",
+  taskXp: "100",
+  academyXp: "200",
 } as const;
 
 export type RewardKey = keyof typeof REWARD_KEYS;

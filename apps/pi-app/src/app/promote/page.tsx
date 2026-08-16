@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
+import { taskTargetUrl } from "../../lib/deepLink";
 
 type PlatformOption = "telegram" | "youtube" | "tiktok" | "facebook" | "instagram";
 
@@ -354,7 +355,7 @@ export default function PromoteHubPage() {
                       </div>
 
                       <a
-                        href={item.targetUrl}
+                        href={taskTargetUrl(item.platform, item.targetUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="btn btn-secondary btn-sm"

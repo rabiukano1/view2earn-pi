@@ -59,8 +59,9 @@ export const completeLink = action({
     accessToken: v.string(),
     uid: v.string(),
     walletAddress: v.optional(v.string()),
+    piUsername: v.optional(v.string()),
   },
-  handler: async (ctx, { token, accessToken, uid, walletAddress }) => {
+  handler: async (ctx, { token, accessToken, uid, walletAddress, piUsername }) => {
     // Server-side verification: never trust a client-sent UID on its own.
     const verified = await ctx.runAction(internal.piAuth.verifyPiToken, {
       accessToken,
@@ -71,6 +72,7 @@ export const completeLink = action({
       token,
       piUid: verified.uid,
       walletAddress,
+      piUsername,
     });
   },
 });
@@ -81,8 +83,9 @@ export const finishLink = internalMutation({
     token: v.string(),
     piUid: v.string(),
     walletAddress: v.optional(v.string()),
+    piUsername: v.optional(v.string()),
   },
-  handler: async (ctx, { token, piUid, walletAddress }) => {
+  handler: async (ctx, { token, piUid, walletAddress, piUsername }) => {
     const row = await ctx.db
       .query("piLinkTokens")
       .withIndex("by_token", (q) => q.eq("token", token))
@@ -98,23 +101,44 @@ export const finishLink = internalMutation({
     const target = await ctx.db.get(row.userId);
     if (!target) throw new Error("Account not found");
 
-    // DUPLICATE-PI PROTECTION (plan §17): this Pi is already linked to a
-    // DIFFERENT V2E account — reject (do not patch).
+    // If this Pi UID was previously attached to an older View2Earn account,
+    // clear the old association so the user can seamlessly link to their current active account.
     const existing = await ctx.db
       .query("users")
       .withIndex("by_externalUid", (q) => q.eq("externalUid", `pi:${piUid}`))
       .first();
     if (existing && existing._id !== row.userId) {
-      throw new Error(
-        "This Pi account is already linked to another View2Earn account.",
-      );
+      await ctx.db.patch(existing._id, {
+        externalUid: undefined,
+      });
     }
 
     await ctx.db.patch(row.userId, {
       ecosystem: "PI",
       externalUid: `pi:${piUid}`,
       ...(walletAddress ? { piWalletAddress: walletAddress } : {}),
+      ...(piUsername ? { username: piUsername } : {}),
     });
+
+    const existingAuth = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "pi").eq("providerAccountId", `pi:${piUid}`)
+      )
+      .first();
+      
+    if (existingAuth) {
+      if (existingAuth.userId !== row.userId) {
+        await ctx.db.patch(existingAuth._id, { userId: row.userId });
+      }
+    } else {
+      await ctx.db.insert("authAccounts", {
+        userId: row.userId,
+        provider: "pi",
+        providerAccountId: `pi:${piUid}`,
+      });
+    }
+
     await ctx.db.delete(row._id);
   },
 });

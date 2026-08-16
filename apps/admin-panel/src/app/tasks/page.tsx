@@ -41,23 +41,130 @@ const EMPTY: TaskForm = {
   steps: [],
 };
 
-const PLATFORM_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-  facebook: { label: "Facebook", icon: "📘", color: "#1877F2" },
-  tiktok: { label: "TikTok", icon: "🎵", color: "#010101" },
-  telegram: { label: "Telegram", icon: "✈️", color: "#229ED9" },
-  youtube: { label: "YouTube", icon: "▶️", color: "#FF0000" },
-  instagram: { label: "Instagram", icon: "📸", color: "#E4405F" },
-  x: { label: "X (Twitter)", icon: "𝕏", color: "#000000" },
-  app: { label: "In-App Quiz/Survey", icon: "⚡", color: "#7C3AED" },
+// Real brand icons (Simple Icons path data) for each platform.
+const ICON_PATHS: Record<string, string> = {
+  facebook:
+    "M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z",
+  tiktok:
+    "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
+  telegram:
+    "M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z",
+  youtube:
+    "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
+  instagram:
+    "M12 0C8.74 0 8.333.015 7.053.072 5.775.132 4.905.333 4.14.63c-.789.306-1.459.717-2.126 1.384S.935 3.35.63 4.14C.333 4.905.131 5.775.072 7.053.012 8.333 0 8.74 0 12s.015 3.667.072 4.947c.06 1.277.261 2.148.558 2.913.306.788.717 1.459 1.384 2.126.667.666 1.336 1.079 2.126 1.384.766.296 1.636.499 2.913.558C8.333 23.988 8.74 24 12 24s3.667-.015 4.947-.072c1.277-.06 2.148-.262 2.913-.558.788-.306 1.459-.718 2.126-1.384.666-.667 1.079-1.335 1.384-2.126.296-.765.499-1.636.558-2.913.06-1.28.072-1.687.072-4.947s-.015-3.667-.072-4.947c-.06-1.277-.262-2.149-.558-2.913-.306-.789-.718-1.459-1.384-2.126C21.319 1.347 20.651.935 19.86.63c-.765-.297-1.636-.499-2.913-.558C15.667.012 15.26 0 12 0zm0 2.16c3.203 0 3.585.016 4.85.071 1.17.055 1.805.249 2.227.415.562.217.96.477 1.382.896.419.42.679.819.896 1.381.164.422.36 1.057.413 2.227.057 1.266.07 1.646.07 4.85s-.015 3.585-.074 4.85c-.061 1.17-.256 1.805-.421 2.227-.224.562-.479.96-.899 1.382-.419.419-.824.679-1.38.896-.42.164-1.065.36-2.235.413-1.274.057-1.649.07-4.859.07-3.211 0-3.586-.015-4.859-.074-1.171-.061-1.816-.256-2.236-.421-.569-.224-.96-.479-1.379-.899-.421-.419-.69-.824-.9-1.38-.165-.42-.359-1.065-.42-2.235-.045-1.26-.061-1.649-.061-4.844 0-3.196.016-3.586.061-4.861.061-1.17.255-1.814.42-2.234.21-.57.479-.96.9-1.381.419-.419.81-.689 1.379-.898.42-.166 1.051-.361 2.221-.421 1.275-.045 1.65-.06 4.859-.06l.045.03zm0 3.678c-3.405 0-6.162 2.76-6.162 6.162 0 3.405 2.76 6.162 6.162 6.162 3.405 0 6.162-2.76 6.162-6.162 0-3.405-2.76-6.162-6.162-6.162zM12 16c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm7.846-10.405c0 .795-.646 1.44-1.44 1.44-.795 0-1.44-.646-1.44-1.44 0-.794.646-1.439 1.44-1.439.793-.001 1.44.645 1.44 1.439z",
+  x: "M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z",
 };
 
-const ACTION_LABELS: [string, string][] = [
+function PlatformIcon({ platform, color, className }: { platform: string; color?: string; className?: string }) {
+  const path = ICON_PATHS[platform];
+  if (!path) return <span className={className}>🌐</span>;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      style={color ? { color } : undefined}
+      aria-hidden="true"
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
+const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
+  facebook: { label: "Facebook", color: "#1877F2" },
+  tiktok: { label: "TikTok", color: "#25F4EE" },
+  telegram: { label: "Telegram", color: "#229ED9" },
+  youtube: { label: "YouTube", color: "#FF0000" },
+  instagram: { label: "Instagram", color: "#E4405F" },
+  x: { label: "X (Twitter)", color: "#FFFFFF" },
+  app: { label: "In-App Quiz/Survey", color: "#7C3AED" },
+};
+
+const DEFAULT_ACTIONS: [string, string][] = [
   ["FOLLOW", "Follow"],
   ["JOIN", "Join"],
   ["SUBSCRIBE", "Subscribe"],
   ["LIKE", "Like"],
   ["COMMENT", "Comment"],
 ];
+
+// Platform-specific multi-task actions. TikTok has no channels/groups, so its
+// bundle steps are Follow / Like / Comment / Watch only — no "Join Channel".
+const PLATFORM_ACTIONS: Record<string, [string, string][]> = {
+  facebook: [
+    ["FOLLOW", "Follow"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["JOIN", "Join Group"],
+  ],
+  tiktok: [
+    ["FOLLOW", "Follow"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["WATCH", "Watch Video"],
+  ],
+  telegram: [
+    ["JOIN", "Join Channel"],
+    ["COMMENT", "Comment"],
+  ],
+  youtube: [
+    ["SUBSCRIBE", "Subscribe"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["WATCH", "Watch Video"],
+  ],
+  instagram: [
+    ["FOLLOW", "Follow"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["SHARE", "Share"],
+  ],
+  x: [
+    ["FOLLOW", "Follow"],
+    ["LIKE", "Like"],
+    ["REPOST", "Repost"],
+    ["COMMENT", "Comment"],
+  ],
+};
+
+function actionsFor(platform: string): [string, string][] {
+  const list = PLATFORM_ACTIONS[platform];
+  return list && list.length > 0 ? list : DEFAULT_ACTIONS;
+}
+
+// JOIN_CHANNEL only exists where channels/groups are a real concept — Telegram,
+// Facebook groups, YouTube. TikTok/Instagram/X have no channels.
+const CHANNEL_PLATFORMS = new Set(["telegram", "facebook", "youtube"]);
+
+function taskTypesFor(platform: string): [string, string][] {
+  const base: [string, string][] = [
+    ["FOLLOW_PAGE", "Follow / Like Page"],
+    ["JOIN_CHANNEL", "Join Channel"],
+    ["MULTI_TASK", "Multi-task (bundle steps)"],
+    ["QUIZ", "Quiz"],
+    ["SURVEY", "Survey"],
+  ];
+  if (platform === "app") return base.filter(([v]) => v === "QUIZ" || v === "SURVEY");
+  if (!CHANNEL_PLATFORMS.has(platform)) return base.filter(([v]) => v !== "JOIN_CHANNEL");
+  return base;
+}
+
+function previewLabel(form: TaskForm): string {
+  const label = PLATFORM_CONFIG[form.platform]?.label ?? form.platform;
+  if (form.type === "QUIZ") return `Complete ${form.name || "Quiz"}`;
+  if (form.type === "SURVEY") return `Complete ${form.name || "Survey"}`;
+  if (form.type === "MULTI_TASK") {
+    if (form.steps.length === 0) return `Multi-task on ${label}`;
+    const acts = form.steps
+      .map((s) => actionsFor(form.platform).find(([a]) => a === s.action)?.[1] ?? s.action)
+      .join(" + ");
+    return `Bundle: ${acts}`;
+  }
+  const verb = form.type === "JOIN_CHANNEL" ? "Join" : "Follow";
+  return `${verb} ${form.name || `${label} ${form.type === "JOIN_CHANNEL" ? "Channel" : "Page"}`}`;
+}
 
 function buildTargetUrl(platform: string, name: string): string {
   const n = name.trim().replace(/^@/, "");
@@ -133,11 +240,21 @@ export default function TasksPage() {
   };
 
   const onNameChange = (value: string) => {
-    set({ name: value, targetUrl: buildTargetUrl(form.platform, value) });
+    // Auto-fill the target URL from the handle, but only until the admin edits
+    // the URL box manually — afterwards keep the custom URL.
+    const autoUrl = buildTargetUrl(form.platform, value);
+    const isAuto = !form.targetUrl || form.targetUrl === buildTargetUrl(form.platform, form.name);
+    set({ name: value, targetUrl: isAuto ? autoUrl : form.targetUrl });
   };
 
   const onPlatformChange = (value: string) => {
-    set({ platform: value, targetUrl: buildTargetUrl(value, form.name) });
+    const allowedTypes = taskTypesFor(value).map(([v]) => v);
+    const type = allowedTypes.includes(form.type) ? form.type : allowedTypes[0];
+    const actions = actionsFor(value);
+    const steps = form.steps.map((s) =>
+      actions.some(([a]) => a === s.action) ? s : { ...s, action: actions[0][0], label: "" },
+    );
+    set({ platform: value, type, steps, targetUrl: buildTargetUrl(value, form.name) });
   };
 
   const setStep = (index: number, patch: Partial<StepForm>) => {
@@ -152,7 +269,7 @@ export default function TasksPage() {
     const targetUrl = buildTargetUrl(form.platform, value);
     let label = step.label;
     if (!label && value) {
-      const actionLabel = ACTION_LABELS.find(([a]) => a === step.action)?.[1] ?? "Complete";
+      const actionLabel = actionsFor(form.platform).find(([a]) => a === step.action)?.[1] ?? "Complete";
       label = `${actionLabel} ${form.platform}`;
     }
     setStep(index, { name: value, label, targetUrl });
@@ -160,7 +277,7 @@ export default function TasksPage() {
 
   const onStepActionChange = (index: number, action: string) => {
     const step = form.steps[index];
-    const actionLabel = ACTION_LABELS.find(([a]) => a === action)?.[1] ?? "Complete";
+    const actionLabel = actionsFor(form.platform).find(([a]) => a === action)?.[1] ?? "Complete";
     setStep(index, {
       action,
       label: step.label ? `${actionLabel} ${form.platform}` : "",
@@ -183,7 +300,7 @@ export default function TasksPage() {
     const fields = {
       ...rest,
       name: trimmedName || undefined,
-      targetUrl: trimmedName ? buildTargetUrl(form.platform, trimmedName) : targetUrl,
+      targetUrl: targetUrl.trim() || buildTargetUrl(form.platform, trimmedName),
       pageId: pageId.trim() || undefined,
       steps: form.type === "MULTI_TASK" ? cleanSteps : undefined,
     };
@@ -264,7 +381,7 @@ export default function TasksPage() {
           </thead>
           <tbody>
             {tasks?.map((t) => {
-              const pConf = PLATFORM_CONFIG[t.platform] ?? { label: t.platform, icon: "🌐", color: "#64748B" };
+              const pConf = PLATFORM_CONFIG[t.platform] ?? { label: t.platform, color: "#64748B" };
               return (
                 <tr key={t._id}>
                   <td>
@@ -277,7 +394,7 @@ export default function TasksPage() {
                   </td>
                   <td>
                     <div className="flex items-center space-x-2">
-                      <span>{pConf.icon}</span>
+                      <PlatformIcon platform={t.platform} color={pConf.color} className="w-4 h-4 shrink-0" />
                       <span className="font-medium text-slate-200 capitalize">{pConf.label}</span>
                     </div>
                   </td>
@@ -343,7 +460,11 @@ export default function TasksPage() {
                         : "bg-slate-800/50 border-slate-700/60 text-slate-400 hover:border-slate-600"
                     }`}
                     onClick={() => onPlatformChange(key)}>
-                    <span className="text-lg">{cfg.icon}</span>
+                    <span
+                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: active ? `${cfg.color}33` : "rgba(148,163,184,0.12)" }}>
+                      <PlatformIcon platform={key} color={cfg.color} className="w-4 h-4" />
+                    </span>
                     <span className="text-xs font-bold truncate">{cfg.label}</span>
                   </button>
                 );
@@ -354,11 +475,11 @@ export default function TasksPage() {
           <div className="form-grid">
             <Field label="Task Type">
               <select value={form.type} onChange={(e) => set({ type: e.target.value })}>
-                <option value="FOLLOW_PAGE">FOLLOW_PAGE</option>
-                <option value="JOIN_CHANNEL">JOIN_CHANNEL</option>
-                <option value="MULTI_TASK">MULTI_TASK (multiple bundle steps)</option>
-                <option value="QUIZ">QUIZ</option>
-                <option value="SURVEY">SURVEY</option>
+                {taskTypesFor(form.platform).map(([value, text]) => (
+                  <option key={value} value={value}>
+                    {value} — {text}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Verification Provider">
@@ -380,7 +501,12 @@ export default function TasksPage() {
                 <button
                   className="btn btn-primary btn-sm"
                   type="button"
-                  onClick={() => setForm((f) => ({ ...f, steps: [...f.steps, { ...EMPTY_STEP }] }))}>
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      steps: [...f.steps, { ...EMPTY_STEP, action: actionsFor(f.platform)[0][0] }],
+                    }))
+                  }>
                   + Add Step
                 </button>
               </div>
@@ -391,7 +517,7 @@ export default function TasksPage() {
                 <div key={i} className="grid grid-cols-12 gap-2 items-center p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
                   <div className="col-span-2">
                     <select value={step.action} onChange={(e) => onStepActionChange(i, e.target.value)}>
-                      {ACTION_LABELS.map(([value, text]) => (
+                      {actionsFor(form.platform).map(([value, text]) => (
                         <option key={value} value={value}>{text}</option>
                       ))}
                     </select>
@@ -433,25 +559,28 @@ export default function TasksPage() {
           ) : (
             <div className="space-y-3">
               <Field
-                label={form.platform === "app" ? "Campaign / Quiz Name" : "Page / Channel / Account Handle"}
+                label={form.platform === "app" ? "Campaign / Quiz Name" : "Page Name (shown in verification screen)"}
                 hint={
                   form.platform === "app"
                     ? "Shown to users in app task feed"
-                    : "Type handle or username — target link is generated automatically"
+                    : "Type handle or username — URL below is auto-filled from it"
                 }>
                 <input
                   value={form.name}
                   onChange={(e) => onNameChange(e.target.value)}
-                  placeholder={PLACEHOLDERS[form.platform] ?? "handle"}
+                  placeholder={PLACEHOLDERS[form.platform] ?? "Page name"}
                   autoFocus
                 />
               </Field>
-              {form.name.trim() && form.platform !== "app" && (
-                <div className="p-2.5 bg-slate-900/60 rounded-lg border border-slate-700/60 text-xs flex items-center justify-between">
-                  <span className="text-slate-400 font-semibold">Generated Link:</span>
-                  <code className="text-purple-300 font-mono font-semibold">{form.targetUrl}</code>
-                </div>
-              )}
+              <Field
+                label="Target URL"
+                hint="Opened when the user taps the task — auto-filled from the page name, edit to override">
+                <input
+                  value={form.targetUrl}
+                  onChange={(e) => set({ targetUrl: e.target.value })}
+                  placeholder="https://..."
+                />
+              </Field>
               {form.platform === "facebook" && (
                 <Field label="Facebook Page ID (Optional — Deep-link helper for FB Lite)">
                   <input
@@ -467,13 +596,19 @@ export default function TasksPage() {
           {/* Live Mobile Card Preview Box */}
           <div className="p-3 bg-purple-950/30 rounded-xl border border-purple-500/30 flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-full bg-purple-500/20 flex items-center justify-center text-lg">
-                {PLATFORM_CONFIG[form.platform]?.icon ?? "🌐"}
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: `${PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}26`,
+                }}>
+                <PlatformIcon
+                  platform={form.platform}
+                  color={PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}
+                  className="w-4 h-4"
+                />
               </div>
               <div>
-                <div className="text-xs font-bold text-white">
-                  {form.name ? `Follow ${form.name}` : `Follow ${PLATFORM_CONFIG[form.platform]?.label} Page`}
-                </div>
+                <div className="text-xs font-bold text-white">{previewLabel(form)}</div>
                 <div className="text-[11px] text-purple-300 font-mono">
                   {form.targetUrl || "https://..."}
                 </div>

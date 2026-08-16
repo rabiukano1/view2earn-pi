@@ -3,6 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAction } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import Link from "next/link";
 import { api } from "@convex/api";
 import { signInWithPi, isPiBrowser } from "@/pi/pi";
 
@@ -11,10 +13,20 @@ import { signInWithPi, isPiBrowser } from "@/pi/pi";
 // user authenticates with Pi, the token + verified Pi identity are exchanged
 // server-side to promote the Android user to the Pi economy. This page creates
 // NO Pi web session — it only completes the link.
+function cleanErrorMessage(raw: string): string {
+  let msg = raw.replace(/^\[CONVEX\s*[^\]]*\]\s*/i, "");
+  if (msg.includes("Uncaught Error:")) {
+    const parts = msg.split("Uncaught Error:");
+    msg = parts[parts.length - 1].split("\n")[0].split(" at ")[0].trim();
+  }
+  return msg || "An error occurred during verification.";
+}
+
 function LinkCard() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const completeLink = useAction(api.piLink.completeLink);
+  const { signIn } = useAuthActions();
 
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -39,10 +51,12 @@ function LinkCard() {
         accessToken: res.accessToken,
         uid: res.user.uid,
         ...(res.user.wallet_address ? { walletAddress: res.user.wallet_address } : {}),
+        ...(res.user.username ? { piUsername: res.user.username } : {}),
       });
+      await signIn("pi", { accessToken: res.accessToken, uid: res.user.uid });
       setDone(true);
     } catch (e) {
-      setError(String((e as Error)?.message ?? e).replace("[CONVEX] ", ""));
+      setError(cleanErrorMessage(String((e as Error)?.message ?? e)));
     } finally {
       setBusy(false);
     }
@@ -51,7 +65,7 @@ function LinkCard() {
   return (
     <div className="pi-centered">
       <div className="pi-card pi-signin" style={{ maxWidth: 400 }}>
-        <div className="pi-logo" aria-hidden>
+        <Link href="/" className="pi-logo" aria-label="Go home">
           <img
             src="/logo.png"
             alt="View2Earn Logo"
@@ -59,7 +73,7 @@ function LinkCard() {
             height={64}
             style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "18px" }}
           />
-        </div>
+        </Link>
 
         {done ? (
           <>

@@ -106,6 +106,13 @@ export const spin = mutation({
     // window rolls over so the ad-earn quota refreshes each window.
     const newAdBonusEarned = sameWindow ? (spinRecord?.adBonusEarned ?? 0) : 0;
 
+    const prizes = await getJSON<{ pts: number; weight: number }[]>(ctx, "spinPrizes");
+    const pts = weightedPick(prizes);
+
+    if (pts < 0) {
+      newBonusSpins += Math.abs(pts);
+    }
+
     if (spinRecord) {
       await ctx.db.patch(spinRecord._id, {
         windowStart: currentWindowStart,
@@ -123,10 +130,9 @@ export const spin = mutation({
       });
     }
 
-    const prizes = await getJSON<{ pts: number; weight: number }[]>(ctx, "spinPrizes");
-    const pts = weightedPick(prizes);
-
-    await appendLedger(ctx, userId, economy, pts, "SPIN_WHEEL", `spin-${now}`);
+    if (pts > 0) {
+      await appendLedger(ctx, userId, economy, pts, "SPIN_WHEEL", `spin-${now}`);
+    }
 
     // Also sync the user's app wallet points balance for this economy.
     if (pts > 0) {

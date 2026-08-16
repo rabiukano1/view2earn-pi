@@ -34,7 +34,7 @@ export const PiProvider = ConvexCredentials({
     // Flag the offending second account as DUPLICATE/FRAUD and reject the link.
     // The original verified account is never touched.
     const currentUserId = await getAuthUserId(ctx);
-    if (existing && currentUserId && existing.user._id !== currentUserId) {
+    if (existing && existing.user && currentUserId && existing.user._id !== currentUserId) {
       await ctx.runMutation(internal.fraud.flagDuplicatePiLink, {
         userId: currentUserId as Id<"users">,
         piUid: verified.uid,
@@ -44,7 +44,7 @@ export const PiProvider = ConvexCredentials({
       );
     }
 
-    if (existing) {
+    if (existing && existing.user) {
       // Refresh the wallet address on re-login if the Pioneer has one.
       if (walletAddress && existing.user.piWalletAddress !== walletAddress) {
         await ctx.runMutation(internal.piWallet.setPiWalletAddressInternal, {

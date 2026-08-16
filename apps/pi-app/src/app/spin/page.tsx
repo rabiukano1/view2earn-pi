@@ -288,8 +288,8 @@ export default function PiSpin() {
       {result !== null ? (
         <div className="pi-card pi-spin-result-card" style={{ marginTop: 16 }}>
           <div className="pi-spin-trophy-icon">🏆</div>
-          <p className="pi-spin-result-title">{result > 0 ? "YOU WON!" : "NO BONUS"}</p>
-          <p className="pi-spin-result-pts">{result > 0 ? `+${result} PTS` : "TRY AGAIN"}</p>
+          <p className="pi-spin-result-title">{result > 0 || result < 0 ? "YOU WON!" : "NO BONUS"}</p>
+          <p className="pi-spin-result-pts">{result > 0 ? `+${result} PTS` : result < 0 ? `+${Math.abs(result)} SPINS` : "TRY AGAIN"}</p>
 
           {/* Double Reward Pi Ad Button */}
           {result > 0 && !doubleClaimed && (

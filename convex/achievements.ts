@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import { requireAdmin } from "./admin";
+import { requireAuth } from "./lib/guards";
+import { awardXP } from "./xp";
+import { Id } from "./_generated/dataModel";
 
 // Achievements are fully admin-configurable. Each achievement has a `metric`
 // (which dashboard value it measures) and a `target` threshold. The app client
@@ -271,5 +274,29 @@ export const remove = mutation({
       .withIndex("by_key", (q) => q.eq("key", key))
       .unique();
     if (existing) await ctx.db.delete(existing._id);
+  },
+});
+
+/** User: Claim an achievement to get XP. */
+export const claimAchievement = mutation({
+  args: { key: v.string() },
+  handler: async (ctx, args) => {
+    const userId = (await requireAuth(ctx)) as Id<"users">;
+    const achievement = await ctx.db
+      .query("achievements")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .first();
+    
+    // We get the default if not overridden
+    let targetDef = ACHIEVEMENT_DEFAULTS.find(a => a.key === args.key);
+    
+    const xpReward = achievement?.xpReward ?? 100;
+
+    await awardXP(ctx, {
+      userId,
+      amount: xpReward,
+      source: "ACHIEVEMENT",
+      sourceId: args.key,
+    });
   },
 });

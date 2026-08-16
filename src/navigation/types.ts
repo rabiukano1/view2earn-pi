@@ -7,7 +7,7 @@ export type RootTabParamList = {
   Tasks: undefined;
   Wallet: undefined;
   Rewards: undefined;
-  Leaderboard: undefined;
+  Settings: undefined;
   Profile: undefined;
 };
 
@@ -18,15 +18,17 @@ export type RootStackParamList = {
   CreateListing: { userId: Id<'users'> };
   PointsHistory: undefined;
   WalletHistory: undefined;
-  Academy: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
-  Quiz: { userId: string; ecosystem: 'PI' | 'SIDRA' } | undefined;
+  Academy: { userId?: string; ecosystem?: 'PI' | 'SIDRA' } | undefined;
+  Quiz: { userId?: string; ecosystem?: 'PI' | 'SIDRA' } | undefined;
   Spin: { userId: string } | undefined;
+  Level: undefined;
   Surveys: { userId?: string } | undefined;
   Terms: undefined;
   Policy: { policy: PolicyKey };
   Referral: undefined;
   LinkedAccounts: undefined;
   Security: undefined;
+  Leaderboard: undefined;
   Achievements: undefined;
   Stats: undefined;
   PayoutSettings: undefined;

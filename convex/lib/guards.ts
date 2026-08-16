@@ -19,9 +19,10 @@ export async function requireUser(
   const authUserId = await getAuthUserId(ctx);
   if (!authUserId) throw new Error("Not authenticated");
   if (authUserId !== userId) throw new Error("Unauthorized");
-  const user = await ctx.db.get(userId as any);
-  if (!user) throw new Error("User not found");
-  return user as Doc<"users">;
+  const userDoc = await ctx.db.get(userId as any) as Doc<"users"> | null;
+  if (!userDoc) throw new Error("User not found");
+  if (userDoc.accountStatus === "suspended") throw new Error("ACCOUNT_SUSPENDED");
+  return userDoc;
 }
 
 // Safe optional user lookup for queries during session refresh / token expiration.
@@ -90,6 +91,7 @@ export async function requireUserAndEconomy(
   userId: string,
 ): Promise<{ user: Doc<"users">; economy: Economy }> {
   const user = await requireUser(ctx, userId);
+  if (user.accountStatus === "paused") throw new Error("ACCOUNT_PAUSED");
   return { user, economy: deriveEconomy(user) };
 }
 

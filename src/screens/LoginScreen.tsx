@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useConvexAuth } from '@convex-dev/auth/react';
-import { smartOpenUrl } from '../lib/openUrl';
+import { openTaskLink } from '../services/TaskLinkService';
 import { api } from '../../convex/_generated/api';
 import Icon from '../components/Icon';
 import { colors, radius, shadow } from '../theme';
@@ -82,7 +82,7 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
     try {
       const { nonce, url } = await startTelegram({});
       setTgNonce(nonce);
-      await smartOpenUrl(url);
+      await openTaskLink(url);
     } catch {
       setTgNonce(null);
       setError('Could not open Telegram.');

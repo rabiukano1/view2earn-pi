@@ -64,10 +64,12 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     // App fields:
+    accountStatus: v.optional(v.union(v.literal("active"), v.literal("suspended"), v.literal("paused"))),
     ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
     externalUid: v.string(),
     username: v.string(),
     tier: v.number(),
+    xp: v.optional(v.number()), // User's total XP for the 12-level progression system
     fraudScore: v.number(),
     deviceFingerprint: v.string(),
     signupIp: v.string(),
@@ -99,6 +101,7 @@ export default defineSchema({
     name: v.optional(v.string()),        // page/channel handle, e.g. "pinetwork"
     pageId: v.optional(v.string()),      // numeric FB page ID (plan §7.9d)
     points: v.number(),
+    xpReward: v.optional(v.number()),    // Optional explicit XP reward for completing this task
     verifier: v.string(),
     maxCompletions: v.number(),
     creatorUserId: v.optional(v.id("users")),
@@ -343,7 +346,32 @@ export default defineSchema({
     correctIndex: v.number(),
     explanation: v.string(),
     difficulty: v.number(),
-  }).index("by_ecosystem", ["ecosystem"]),
+    // Knowledge Center fields (learn-pi.md). All optional so the legacy quiz
+    // engine and AI-generated questions keep working unchanged.
+    courseId: v.optional(v.id("courses")),
+    lessonId: v.optional(v.id("lessons")),
+    topic: v.optional(v.string()),
+    difficultyLabel: v.optional(
+      v.union(v.literal("EASY"), v.literal("MEDIUM"), v.literal("HARD")),
+    ),
+    sourceId: v.optional(v.string()),
+    sourceUrl: v.optional(v.string()),
+    sourceDate: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("DRAFT"),
+        v.literal("REVIEW"),
+        v.literal("PUBLISHED"),
+        v.literal("NEEDS_REVIEW"),
+        v.literal("OUTDATED"),
+        v.literal("ARCHIVED"),
+      ),
+    ),
+    lastReviewedAt: v.optional(v.number()),
+    contentVersion: v.optional(v.number()),
+  }).index("by_ecosystem", ["ecosystem"])
+    .index("by_course", ["courseId"])
+    .index("by_status", ["status"]),
 
   quizResults: defineTable({
     userId: v.id("users"),
@@ -370,6 +398,105 @@ export default defineSchema({
     level: v.number(),
     passedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // ─── Knowledge Center (learn-pi.md) ──────────────────────────────────────
+  // 15 official-source-backed Pi courses sharing ONE Course/Lesson/Question
+  // architecture and ONE centralized question bank.
+
+  courses: defineTable({
+    key: v.string(),       // stable slug, e.g. "pi-tokenomics"
+    title: v.string(),     // full title, e.g. "04. Pi Tokenomics"
+    shortTitle: v.string(), // nav label, e.g. "Pi Tokenomics"
+    description: v.string(),
+    sortOrder: v.number(),
+    status: v.union(
+      v.literal("DRAFT"),
+      v.literal("REVIEW"),
+      v.literal("PUBLISHED"),
+      v.literal("ARCHIVED"),
+    ),
+    contentVersion: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastReviewedAt: v.number(),
+  }).index("by_key", ["key"])
+    .index("by_status", ["status"]),
+
+  lessons: defineTable({
+    courseId: v.id("courses"),
+    lessonNumber: v.number(),
+    title: v.string(),
+    // learn-pi.md §5 lesson sections.
+    what: v.string(),
+    why: v.string(),
+    how: v.string(),
+    example: v.optional(v.string()),
+    important: v.optional(v.string()),
+    commonMistake: v.optional(v.string()),
+    officialSource: v.optional(v.string()),
+    status: v.union(
+      v.literal("DRAFT"),
+      v.literal("REVIEW"),
+      v.literal("PUBLISHED"),
+      v.literal("ARCHIVED"),
+    ),
+    contentVersion: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastReviewedAt: v.number(),
+  }).index("by_course", ["courseId"])
+    .index("by_status", ["status"]),
+
+  sources: defineTable({
+    sourceId: v.string(),  // stable id, e.g. "whitepaper-v1"
+    title: v.string(),
+    officialUrl: v.string(),
+    publisher: v.string(), // e.g. "Pi Network Core Team"
+    publicationDate: v.optional(v.number()),
+    lastChecked: v.number(),
+    version: v.optional(v.string()),
+    status: v.union(
+      v.literal("ACTIVE"),
+      v.literal("NEEDS_REVIEW"),
+      v.literal("OUTDATED"),
+    ),
+    courseId: v.optional(v.id("courses")),
+    relevantSection: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_sourceId", ["sourceId"]),
+
+  // Simple per-course learning progress (learn-pi.md §23/§24): no reputation
+  // system, just lessons completed + best quiz score.
+  learningProgress: defineTable({
+    userId: v.id("users"),
+    courseId: v.id("courses"),
+    lessonsCompleted: v.array(v.id("lessons")),
+    quizBest: v.optional(v.number()),       // best quiz score (0-100)
+    questionsAnswered: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_user_course", ["userId", "courseId"]),
+
+  // Singleton Daily Quiz config (learn-pi.md §8/§9): MIXED or COURSE_OF_THE_DAY,
+  // with a configurable distribution and weekday schedule.
+  quizSettings: defineTable({
+    mode: v.union(v.literal("MIXED"), v.literal("COURSE_OF_THE_DAY")),
+    questionsPerQuiz: v.number(),
+    distribution: v.array(
+      v.object({
+        courseKey: v.string(),
+        count: v.number(),
+      }),
+    ),
+    schedule: v.array(
+      v.object({
+        day: v.number(),     // 0 = Sunday .. 6 = Saturday
+        courseKey: v.string(), // or "MIXED"
+      }),
+    ),
+    updatedAt: v.number(),
+  }),
 
   bioCodes: defineTable({
     userId: v.id("users"),
@@ -459,16 +586,36 @@ export default defineSchema({
   // a default achievement (see convex/achievements.ts ACHIEVEMENT_DEFAULTS).
   // `metric` selects what the progress measures; `target` is the threshold.
   achievements: defineTable({
-    key: v.string(),        // stable id, e.g. "first-task"
-    metric: v.string(),     // "tasks" | "earned" | "streak" | "referrals" | "rank"
+    key: v.string(),
+    metric: v.string(),
     target: v.number(),
-    icon: v.string(),       // FontAwesome6 icon name
-    tint: v.string(),       // accent hex color
+    icon: v.string(),
+    tint: v.string(),
     title: v.string(),
     desc: v.string(),
     enabled: v.boolean(),
     sortOrder: v.number(),
+    xpReward: v.optional(v.number()), // Optional XP reward when achievement is claimed
   }).index("by_key", ["key"]),
+
+  // 12-Level User Progression System
+  xpTransactions: defineTable({
+    userId: v.id("users"),
+    source: v.string(), // "LESSON", "COURSE", "QUIZ", "TASK", "ACHIEVEMENT", "STREAK", "OTHER"
+    sourceId: v.optional(v.string()), // ID of the specific activity to prevent duplicates
+    amount: v.number(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"])
+    .index("by_user_source", ["userId", "source", "sourceId"]),
+
+  levels: defineTable({
+    level: v.number(),
+    name: v.string(),
+    xpRequired: v.number(),
+    desc: v.string(),
+    icon: v.optional(v.string()),
+    enabled: v.boolean(),
+  }).index("by_level", ["level"]),
 
   // One-time Pi linking tokens (plan §7.1 linking flow). The Android app
   // creates a token tied to its own user, passes it to the Pi Browser via the

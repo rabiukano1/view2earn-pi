@@ -23,6 +23,8 @@ const ICONS = {
   achievements: "M12 2l2.4 4.8L20 8l-3.5 4.5L18 19l-6-3-6 3 1.5-6.5L4 8l5.6-1.2z",
   exchange: "M17 1l4 4-4 4 M3 11V9a4 4 0 0 1 4-4h14 M7 23l-4-4 4-4 M21 13v2a4 4 0 0 1-4 4H3",
   visitors: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  knowledge: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z",
+  levels: "M23 6l-9.5 9.5-5-5L1 18 M16 6h7v7",
 };
 
 const links = [
@@ -32,7 +34,9 @@ const links = [
   { href: "/review", label: "Review queue", icon: ICONS.review },
   { href: "/providers", label: "Providers", icon: ICONS.providers },
   { href: "/rewards", label: "Rewards", icon: ICONS.rewards },
+  { href: "/knowledge", label: "Knowledge Center", icon: ICONS.knowledge },
   { href: "/achievements", label: "Achievements", icon: ICONS.achievements },
+  { href: "/levels", label: "Levels", icon: ICONS.levels },
   { href: "/exchange", label: "Exchange", icon: ICONS.exchange },
   { href: "/redemptions", label: "Redemptions", icon: ICONS.redemptions },
   { href: "/inquiries", label: "Inquiries", icon: ICONS.exchange },

@@ -51,8 +51,6 @@ function HomeScreenActivityHubCard({ userId, onPress }: { userId: string; onPres
     headline = `All ${s.totalToday} activities done today`;
   }
 
-  const lvl = dash ? levelInfo((dash as SmartDashboard).stats.totalEarned) : null;
-
   return (
     <TouchableOpacity
       style={[styles.hubCard, dark && styles.cardDark]}
@@ -62,12 +60,6 @@ function HomeScreenActivityHubCard({ userId, onPress }: { userId: string; onPres
         <View style={styles.hubTitleWrap}>
           <Icon name="trophy" iconStyle="solid" size={17} color="#F59E0B" />
           <Text style={[styles.hubTitle, dark && styles.textLight]}>Achievements</Text>
-          {lvl !== null && lvl !== undefined ? (
-            <View style={styles.levelBadge}>
-              <Icon name="medal" iconStyle="solid" size={13} color="#D97706" />
-              <Text style={styles.levelBadgeText}>Lvl {lvl.level}</Text>
-            </View>
-          ) : null}
         </View>
         <Text style={styles.hubHeadline}>{headline}</Text>
       </View>
@@ -90,20 +82,42 @@ function HomeScreenActivityHubCard({ userId, onPress }: { userId: string; onPres
           </Text>
         </View>
       </View>
-      {lvl !== null && lvl !== undefined ? (
-        <>
-          <View style={styles.xpTrack}>
-            <View style={[styles.xpFill, { width: `${Math.round(lvl.progress * 100)}%` }]} />
-          </View>
-          <Text style={styles.hubLevelText}>
-            {formatPts(lvl.xp)} XP · {formatPts(lvl.next - lvl.xp)} to Lvl {lvl.level + 1}
-          </Text>
-        </>
-      ) : null}
       <View style={styles.hubBtn}>
         <Text style={styles.hubBtnText}>View achievements</Text>
         <Icon name="arrow-right" iconStyle="solid" size={12} color={colors.white} />
       </View>
+    </TouchableOpacity>
+  );
+}
+
+function HomeScreenLevelCard({ onPress }: { onPress: () => void }) {
+  const dark = useColorScheme() === 'dark';
+  const progress = useQuery(api.xp.myLevelProgress);
+
+  if (!progress) return null;
+
+  return (
+    <TouchableOpacity
+      style={[styles.hubCard, dark && styles.cardDark]}
+      onPress={onPress}
+      activeOpacity={0.88}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary, letterSpacing: 0.5 }}>✨ LEVEL {progress.currentLevel.level}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: dark ? '#94A3B8' : '#64748B' }}>{progress.xp.toLocaleString()} XP</Text>
+      </View>
+      <Text style={{ fontSize: 26, fontWeight: '900', color: dark ? colors.white : colors.text, marginBottom: 12 }}>{progress.currentLevel.name}</Text>
+      
+      {progress.nextLevel ? (
+        <>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: dark ? '#E2E8F0' : '#334155', marginBottom: 8 }}>Progress to Level {progress.nextLevel.level}</Text>
+          <View style={styles.xpTrack}>
+            <View style={[styles.xpFill, { width: `${progress.progressPercentage}%` }]} />
+          </View>
+          <Text style={{ fontSize: 12, fontWeight: '500', color: dark ? '#94A3B8' : '#64748B', marginTop: 8 }}>{progress.xpToNextLevel.toLocaleString()} XP remaining</Text>
+        </>
+      ) : (
+        <Text style={{ fontSize: 13, fontWeight: '600', color: dark ? colors.white : colors.text, marginBottom: 8 }}>Maximum Level Reached</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -172,6 +186,7 @@ export default function HomeScreen() {
         <View style={styles.body}>
           {userId ? (
             <>
+              <HomeScreenLevelCard onPress={() => stackNav.navigate('Level')} />
               <HomeScreenActivityHubCard userId={userId} onPress={() => stackNav.navigate('Achievements')} />
               <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
               <StreakCard userId={userId} />

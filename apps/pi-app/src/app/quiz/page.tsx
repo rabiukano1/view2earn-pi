@@ -24,7 +24,7 @@ export default function DailyQuizPage() {
 
   const questions = useQuery(
     api.quiz.getDailyQuiz,
-    userId ? { userId, ecosystem: "PI" } : "skip"
+    userId ? { userId, ecosystem: "PI", day: new Date().getDay() } : "skip"
   );
   const submitQuiz = useMutation(api.quiz.submitQuiz);
 
@@ -40,6 +40,15 @@ export default function DailyQuizPage() {
     score: number;
     total: number;
     pointsEarned: number;
+    review: {
+      correctIndex: number;
+      selected: number;
+      explanation: string;
+      courseKey: string | null;
+      courseTitle: string | null;
+      lessonNumber: number | null;
+      lessonTitle: string | null;
+    }[];
   } | null>(null);
 
   useEffect(() => {
@@ -137,15 +146,16 @@ export default function DailyQuizPage() {
               Test Your Pi &amp; Web3 Knowledge
             </h2>
             <p className="pi-muted" style={{ fontSize: 14, maxWidth: 440, margin: "0 auto 20px" }}>
-              Answer 5 daily multiple-choice questions to test your Web3 skills and claim bonus points directly to your wallet!
+              Answer {list.length} daily multiple-choice questions from the Pi Pioneer
+              Knowledge Center to test your Pi knowledge and claim bonus points directly to your wallet!
             </p>
 
             <div className="pi-quiz-perks">
               <div className="pi-quiz-perk">
-                <span>⚡</span> <span>5 Questions</span>
+                <span>⚡</span> <span>{list.length} Questions</span>
               </div>
               <div className="pi-quiz-perk">
-                <span>🪙</span> <span>+100 Max PTS</span>
+                <span>🪙</span> <span>Score Points</span>
               </div>
               <div className="pi-quiz-perk">
                 <span>🔥</span> <span>Daily Bonus</span>
@@ -268,6 +278,58 @@ export default function DailyQuizPage() {
                 Credited directly to your wallet balance
               </span>
             </div>
+
+            {/* Review: explanation + learn-more links (learn-pi.md §10/§11) */}
+            {result.review && result.review.length > 0 ? (
+              <div className="pi-quiz-review" style={{ marginTop: 22, textAlign: "left" }}>
+                <p className="pi-section-title" style={{ textAlign: "center" }}>Review your answers</p>
+                {result.review.map((r, i) => {
+                  const q = list[i];
+                  if (!q) return null;
+                  const isCorrect = r.selected === r.correctIndex;
+                  return (
+                    <div key={i} className="pi-quiz-review-item">
+                      <p className="pi-question" style={{ fontSize: 14 }}>
+                        <span className={`pi-review-badge ${isCorrect ? "pi-review-ok" : "pi-review-bad"}`}>
+                          {isCorrect ? "✓" : "✕"}
+                        </span>{" "}
+                        {q.question}
+                      </p>
+                      {q.options.map((opt, oi) => {
+                        const isRight = oi === r.correctIndex;
+                        const isPicked = oi === r.selected;
+                        return (
+                          <div
+                            key={oi}
+                            className={[
+                              "pi-review-option",
+                              isRight ? "pi-review-right" : "",
+                              isPicked && !isRight ? "pi-review-picked" : "",
+                            ].join(" ")}>
+                            <span className="pi-review-letter">{String.fromCharCode(65 + oi)}</span>
+                            <span>{opt}</span>
+                            {isRight ? <span>✓</span> : isPicked ? <span>✕</span> : null}
+                          </div>
+                        );
+                      })}
+                      {r.explanation ? (
+                        <p className="pi-explanation" style={{ marginBottom: 6 }}>
+                          <span className="pi-explanation-label">Why? </span>
+                          {r.explanation}
+                        </p>
+                      ) : null}
+                      {r.courseKey && r.lessonNumber ? (
+                        <Link
+                          href={`/knowledge?course=${r.courseKey}&lesson=${r.lessonNumber}`}
+                          className="pi-link-text">
+                          📚 Learn more: {r.courseTitle} → {r.lessonTitle ?? `Lesson ${r.lessonNumber}`}
+                        </Link>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
 
             {/* Pi Rewarded Ad Bonus */}
             {userId && (

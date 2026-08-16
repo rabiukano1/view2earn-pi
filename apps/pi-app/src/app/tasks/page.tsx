@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
+import type { Id } from "@convex/dataModel";
+import { taskTargetUrl } from "../../lib/deepLink";
 
 type PlatformFilter = "all" | "telegram" | "youtube" | "tiktok" | "facebook" | "instagram" | "x";
 
@@ -259,7 +261,7 @@ export default function PiTasks() {
                       <a
                         className="btn btn-primary"
                         style={{ width: "100%", justifyContent: "center" }}
-                        href={t.targetUrl}
+                        href={taskTargetUrl(t.platform, t.targetUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >

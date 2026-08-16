@@ -1,4 +1,4 @@
-import { query } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireUserAndEconomy } from "./lib/guards";
@@ -28,5 +28,16 @@ export const balance = query({
       .order("desc")
       .first();
     return last?.balanceAfter ?? 0;
+  },
+});
+
+// Self-deletion for the user's own account. Deletes the primary users table row,
+// which permanently orphans their ledgers and disables their active sessions.
+export const deleteMyAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+    await ctx.db.delete(userId);
   },
 });

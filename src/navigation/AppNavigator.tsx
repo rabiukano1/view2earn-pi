@@ -14,6 +14,7 @@ import RewardsScreen from '../screens/RewardsScreen';
 import QuizScreen from '../screens/QuizScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import MarketplaceScreen from '../screens/MarketplaceScreen';
 import CreateListingScreen from '../screens/CreateListingScreen';
 import PointsHistoryScreen from '../screens/PointsHistoryScreen';
@@ -31,6 +32,7 @@ import AchievementsScreen from '../screens/AchievementsScreen';
 import DonateScreen from '../screens/DonateScreen';
 import StatsScreen from '../screens/StatsScreen';
 import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
+import LevelScreen from '../screens/LevelScreen';
 
 import LoginScreen from '../screens/LoginScreen';
 import { useAuth } from '../auth/AuthContext';
@@ -43,7 +45,7 @@ const TAB_META: Record<keyof RootTabParamList, { icon: string; label: string }> 
   Tasks: { icon: 'list-check', label: 'Tasks' },
   Wallet: { icon: 'wallet', label: 'Wallet' },
   Rewards: { icon: 'gift', label: 'Rewards' },
-  Leaderboard: { icon: 'trophy', label: 'Ranks' },
+  Settings: { icon: 'gear', label: 'Settings' },
   Profile: { icon: 'user', label: 'Profile' },
 };
 
@@ -120,7 +122,7 @@ function MainTabs() {
       <Tab.Screen name="Tasks" component={TasksScreen} />
       <Tab.Screen name="Wallet" component={WalletScreen} />
       <Tab.Screen name="Rewards" component={RewardsScreen} />
-      <Tab.Screen name="Leaderboard" component={LeaderboardScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -138,6 +140,7 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
       {userId ? (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="Level" component={LevelScreen} />
           <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
           <Stack.Screen
             name="CreateListing"
@@ -155,6 +158,7 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="Referral" component={ReferralScreen} />
           <Stack.Screen name="LinkedAccounts" component={LinkedAccountsScreen} />
           <Stack.Screen name="Security" component={SecurityScreen} />
+          <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="Achievements" component={AchievementsScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
           <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />

@@ -280,9 +280,9 @@ export async function isPiAdsSupported(
 }
 
 export type PiRewardedAdResult =
-  | { supported: true; rewarded: true; adId?: string }
-  | { supported: true; rewarded: false; reason: string }
-  | { supported: false; reason: string };
+  | { supported: true; rewarded: true; adId?: string; reason?: string }
+  | { supported: true; rewarded: false; reason: string; adId?: undefined }
+  | { supported: false; rewarded: false; reason: string; adId?: undefined };
 
 // Runs the full rewarded-ad flow per the SDK contract: check readiness,
 // request a fresh ad if needed, show it, and resolve with the adId ONLY on
@@ -293,19 +293,19 @@ export async function showPiRewardedAd(
   try {
     const Pi = await initPi(sandbox);
     if (!Pi.Ads) {
-      return { supported: false, reason: "ADS_NOT_SUPPORTED" };
+      return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
     }
     if (Pi.nativeFeaturesList) {
       const features = await Pi.nativeFeaturesList();
       if (!features.includes("ad_network")) {
-        return { supported: false, reason: "ADS_NOT_SUPPORTED" };
+        return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
       }
     }
 
     const ready = await Pi.Ads.isAdReady("rewarded");
     if (!ready.ready) {
       const request = await Pi.Ads.requestAd("rewarded");
-      if (request.result !== "AD_LOADED" && request.result !== "AD_REWARDED") {
+      if (request.result !== "AD_LOADED" && (request.result as string) !== "AD_REWARDED") {
         return { supported: true, rewarded: false, reason: request.result };
       }
     }
@@ -314,7 +314,7 @@ export async function showPiRewardedAd(
     const resultStr = String(shown?.result || "").toUpperCase();
 
     if (resultStr === "AD_REWARDED" || resultStr === "REWARDED") {
-      return { supported: true, rewarded: true, adId: shown.adId };
+      return { supported: true, rewarded: true, adId: (shown as any)?.adId };
     }
     if (resultStr === "AD_CLOSED") {
       return { supported: true, rewarded: false, reason: "AD_CLOSED" };
@@ -323,6 +323,7 @@ export async function showPiRewardedAd(
   } catch (e) {
     return {
       supported: false,
+      rewarded: false,
       reason: e instanceof Error ? e.message : "AD_ERROR",
     };
   }
@@ -342,7 +343,7 @@ export async function requireRewardedAd(
     return { ok: true, adId: ad.adId ?? null };
   }
   if (ad.supported) {
-    const isClosed = ad.reason.includes("CLOSED") || ad.reason.includes("cancel");
+    const isClosed = ad.reason?.includes("CLOSED") || ad.reason?.includes("cancel");
     return {
       ok: false,
       reason: isClosed ? "Video closed early. Watch the full ad to continue." : `Ad not completed (${ad.reason})`,

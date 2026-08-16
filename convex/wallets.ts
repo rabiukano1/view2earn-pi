@@ -70,12 +70,11 @@ export const getOrCreateWallet = query({
       .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .unique();
 
-    const ledgerPoints = await lastBalance(ctx, userId, economy);
-    const walletPoints =
-      economy === "pi-browser"
-        ? existing?.piBrowserPointsBalance ?? 0
-        : existing?.pointsBalance ?? 0;
-    const pointsBalance = Math.max(ledgerPoints, walletPoints);
+    const androidLedger = await lastBalance(ctx, userId, "android");
+    const piLedger = await lastBalance(ctx, userId, "pi-browser");
+    const totalLedger = androidLedger + piLedger;
+    const totalWallet = (existing?.piBrowserPointsBalance ?? 0) + (existing?.pointsBalance ?? 0);
+    const pointsBalance = Math.max(totalLedger, totalWallet);
 
     return {
       _id: existing?._id ?? null,

@@ -13,6 +13,8 @@ import { isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
 import { targetUrlsOf } from "./tasks";
 import { economyOfUser } from "./lib/ledger";
+import { getNum } from "./rewardsConfig";
+import { awardXP } from "./xp";
 
 // Task Verification State Machine (plan §5):
 // CREATED → USER_CLAIMED_DONE → PROOF_SUBMITTED
@@ -471,6 +473,14 @@ export const releaseImmediately = internalMutation({
       refId: verification.taskId,
     });
 
+    const taskXp = task.xpReward ?? (await getNum(ctx, "taskXp")) ?? 100;
+    await awardXP(ctx, {
+      userId: verification.userId,
+      amount: taskXp,
+      source: "TASK",
+      sourceId: verification.taskId,
+    });
+
     if (task.targetUrl || (Array.isArray(task.steps) && task.steps.length > 0)) {
       for (const url of targetUrlsOf(task)) {
         await ctx.db.insert("completedTargets", {
@@ -532,6 +542,14 @@ export const release = internalMutation({
       delta: task.points,
       reason: "TASK_COMPLETED",
       refId: verification.taskId,
+    });
+
+    const taskXp = task.xpReward ?? (await getNum(ctx, "taskXp")) ?? 100;
+    await awardXP(ctx, {
+      userId: verification.userId,
+      amount: taskXp,
+      source: "TASK",
+      sourceId: verification.taskId,
     });
     if (task.targetUrl || (Array.isArray(task.steps) && task.steps.length > 0)) {
       for (const url of targetUrlsOf(task)) {

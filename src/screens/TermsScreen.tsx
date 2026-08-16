@@ -8,7 +8,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-import { smartOpenUrl } from '../lib/openUrl';
+import { openTaskLink } from '../services/TaskLinkService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -523,35 +523,35 @@ export default function TermsScreen() {
 
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => smartOpenUrl('mailto:support@view2earn.org')}>
+            onPress={() => openTaskLink('mailto:support@view2earn.org')}>
             <Icon name="envelope" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>General Support: support@view2earn.org</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => smartOpenUrl('mailto:partners@view2earn.org')}>
+            onPress={() => openTaskLink('mailto:partners@view2earn.org')}>
             <Icon name="handshake" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>Business Partnerships: partners@view2earn.org</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => smartOpenUrl('mailto:legal@view2earn.org')}>
+            onPress={() => openTaskLink('mailto:legal@view2earn.org')}>
             <Icon name="gavel" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>Legal Notices: legal@view2earn.org</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => smartOpenUrl('mailto:ip@view2earn.org')}>
+            onPress={() => openTaskLink('mailto:ip@view2earn.org')}>
             <Icon name="copyright" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>Intellectual Property: ip@view2earn.org</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => smartOpenUrl('mailto:security@view2earn.org')}>
+            onPress={() => openTaskLink('mailto:security@view2earn.org')}>
             <Icon name="shield-halved" iconStyle="solid" size={16} color={colors.primary} />
             <Text style={styles.linkText}>Security Reports: security@view2earn.org</Text>
           </TouchableOpacity>

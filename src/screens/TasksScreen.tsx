@@ -32,7 +32,7 @@ import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
 import Icon from '../components/Icon';
 import UploadScreenshotModal from '../components/UploadScreenshotModal';
-import { smartOpenUrl } from '../lib/openUrl';
+import { openTaskLink } from '../services/TaskLinkService';
 
 // ponytail: default active platform filter set to 'all'; fallback logic for dynamic filter state.
 type PlatformFilter = 'all' | 'telegram' | 'youtube' | 'tiktok' | 'facebook' | 'x';
@@ -104,7 +104,7 @@ function targetName(url: string): string {
 // the HTTPS URL — same WhatsApp-like behavior across all platforms.
 async function openUrl(platform: string, url: string, pageId?: string) {
   if (!url) return;
-  await smartOpenUrl(url, platform, pageId);
+  await openTaskLink(url, platform, pageId);
 }
 
 async function openTask(task: Task, onQuizNav: () => void) {
@@ -456,7 +456,7 @@ export default function TasksScreen() {
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             {/* Daily Limits Summary Bar */}
-            {limits && limits.some((l) => l.used > 0 || l.remaining < l.limit) ? (
+            {limits?.some((l) => l.used > 0 || l.remaining < l.limit) ? (
               <View style={styles.limitsContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.limitsScroll}>
                   {limits.map((l) => {

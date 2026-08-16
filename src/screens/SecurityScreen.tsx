@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Switch, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { StyleSheet, Switch, Text, TouchableOpacity, View, useColorScheme, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthActions } from '@convex-dev/auth/react';
 import { useNavigation } from '@react-navigation/native';
@@ -9,6 +9,8 @@ import { biometricAvailable, isLockEnabled, setLockEnabled, promptBiometric } fr
 import { colors, radius, shadow } from '../theme';
 import PageHeader from '../components/PageHeader';
 import Icon from '../components/Icon';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -19,6 +21,30 @@ export default function SecurityScreen() {
   const stackNav = useNavigation<StackNav>();
   const [bioAvailable, setBioAvailable] = useState(false);
   const [lockOn, setLockOn] = useState(false);
+
+  const deleteMyAccount = useMutation(api.users.deleteMyAccount);
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to permanently delete your account? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await deleteMyAccount();
+              await signOut();
+            } catch (e) {
+              Alert.alert("Error", String(e));
+            }
+          } 
+        }
+      ]
+    );
+  };
 
   useEffect(() => {
     biometricAvailable().then(setBioAvailable);
@@ -112,6 +138,11 @@ export default function SecurityScreen() {
         <TouchableOpacity style={styles.signOutBtn} onPress={() => signOut()} activeOpacity={0.85}>
           <Icon name="right-from-bracket" iconStyle="solid" size={15} color={colors.danger} />
           <Text style={styles.signOutText}>Sign Out of Account</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.signOutBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.danger, marginTop: 12 }]} onPress={handleDeleteAccount} activeOpacity={0.85}>
+          <Icon name="trash" iconStyle="solid" size={15} color={colors.danger} />
+          <Text style={styles.signOutText}>Delete Account</Text>
         </TouchableOpacity>
       </View>
     </View>

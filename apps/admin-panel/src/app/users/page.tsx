@@ -23,6 +23,25 @@ export default function UsersPage() {
   const [pointsDelta, setPointsDelta] = useState<number>(100);
   const [pointsReason, setPointsReason] = useState<string>("ADMIN_BONUS");
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const stats = {
+    total: users?.length ?? 0,
+    active: users?.filter(u => !u.accountStatus || u.accountStatus === "active").length ?? 0,
+    suspended: users?.filter(u => u.accountStatus === "suspended").length ?? 0,
+    paused: users?.filter(u => u.accountStatus === "paused").length ?? 0,
+  };
+
+  const filteredUsers = users?.filter(u => {
+    const matchesSearch = u.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          u.externalUid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          u.country.toLowerCase().includes(searchQuery.toLowerCase());
+    const status = u.accountStatus || "active";
+    const matchesFilter = statusFilter === "all" || status === statusFilter;
+    return matchesSearch && matchesFilter;
+  });
+
   const openEdit = (u: NonNullable<typeof users>[number]) => {
     setEditing(u._id);
     setForm({ tier: u.tier, fraudScore: u.fraudScore, country: u.country });
@@ -71,14 +90,53 @@ export default function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="Users" sub={`${users?.length ?? "—"} registered users`} />
+      <PageHeader title="Users" sub="Manage registered accounts and their status" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 800, letterSpacing: 0.5 }}>TOTAL USERS</div>
+          <div style={{ fontSize: 28, fontWeight: 900, marginTop: 4 }}>{stats.total}</div>
+        </div>
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 800, letterSpacing: 0.5 }}>ACTIVE</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--ok)', marginTop: 4 }}>{stats.active}</div>
+        </div>
+        <div className="card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 800, letterSpacing: 0.5 }}>RESTRICTED</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--danger)', marginTop: 4 }}>{stats.paused + stats.suspended}</div>
+        </div>
+      </div>
+
       <div className="card table-wrap">
+        <div style={{ padding: '16px 20px', display: 'flex', gap: 12, borderBottom: '1px solid var(--border)', background: 'var(--surface)', alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: 9, fontSize: 14 }}>🔍</span>
+            <input 
+              type="text" 
+              placeholder="Search by username, ID, or country..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
+            />
+          </div>
+          <select 
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', outline: 'none', cursor: 'pointer' }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="paused">Paused</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
         <table>
           <thead>
             <tr>
               <th>Username</th>
               <th>Ecosystem</th>
               <th>Tier</th>
+              <th>Status</th>
               <th>Fraud score</th>
               <th>Country</th>
               <th>Joined</th>
@@ -86,15 +144,30 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users?.map((u) => (
+            {filteredUsers?.map((u) => (
               <tr key={u._id}>
-                <td style={{ fontWeight: 600 }}>{u.username}</td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 18, background: 'var(--accent-weak)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: 'var(--accent)' }}>
+                      {u.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800 }}>{u.username}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'monospace' }}>{u.externalUid.substring(0, 16)}…</div>
+                    </div>
+                  </div>
+                </td>
                 <td>
                   <span className={`badge ${u.ecosystem === "PI" ? "badge-accent" : "badge-yellow"}`}>
                     {u.ecosystem}
                   </span>
                 </td>
                 <td className="num">{u.tier}</td>
+                <td>
+                  <span className={`badge ${!u.accountStatus || u.accountStatus === "active" ? "badge-green" : u.accountStatus === "paused" ? "badge-yellow" : "badge-red"}`}>
+                    {(u.accountStatus || "active").toUpperCase()}
+                  </span>
+                </td>
                 <td>
                   <span className={`badge ${u.fraudScore >= 50 ? "badge-red" : u.fraudScore >= 20 ? "badge-yellow" : "badge-green"}`}>
                     {u.fraudScore}
@@ -103,33 +176,52 @@ export default function UsersPage() {
                 <td>{u.country}</td>
                 <td>{new Date(u._creationTime).toLocaleDateString()}</td>
                 <td>
-                  <div className="row-actions">
+                  <div className="row-actions" style={{ gap: 4 }}>
                     <button
-                      className="btn btn-accent btn-sm"
+                      className="btn btn-ghost btn-sm"
+                      title="Adjust Points"
+                      style={{ padding: '4px 8px' }}
                       onClick={() => setPointsModal({ userId: u._id, username: u.username })}>
-                      + Points
+                      🪙
                     </button>
                     <button
                       className="btn btn-ghost btn-sm"
+                      title="Download PDF Report"
+                      style={{ padding: '4px 8px' }}
                       disabled={generatingPdf === u._id}
                       onClick={() => handleDownloadPdf(u._id)}>
-                      {generatingPdf === u._id ? "Generating…" : "PDF"}
+                      {generatingPdf === u._id ? "⌛" : "📄"}
                     </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>Edit</button>
+                    {u.accountStatus === "suspended" ? (
+                      <button className="btn btn-ghost btn-sm" title="Unsuspend" style={{ padding: '4px 8px' }} onClick={() => updateUser({ userId: u._id, accountStatus: "active" })}>✅</button>
+                    ) : (
+                      <>
+                        {u.accountStatus !== "paused" && (
+                          <button className="btn btn-ghost btn-sm" title="Pause Earnings" style={{ padding: '4px 8px' }} onClick={() => updateUser({ userId: u._id, accountStatus: "paused" })}>⏸️</button>
+                        )}
+                        {u.accountStatus === "paused" && (
+                          <button className="btn btn-ghost btn-sm" title="Unpause Earnings" style={{ padding: '4px 8px' }} onClick={() => updateUser({ userId: u._id, accountStatus: "active" })}>▶️</button>
+                        )}
+                        <button className="btn btn-ghost btn-sm" title="Suspend Account" style={{ padding: '4px 8px' }} onClick={() => updateUser({ userId: u._id, accountStatus: "suspended" })}>🛑</button>
+                      </>
+                    )}
+                    <button className="btn btn-ghost btn-sm" title="Edit Tier/Score" style={{ padding: '4px 8px' }} onClick={() => openEdit(u)}>✏️</button>
                     <button
-                      className="btn btn-danger btn-sm"
+                      className="btn btn-ghost btn-sm"
+                      title="Delete User"
+                      style={{ color: 'var(--danger)', padding: '4px 8px' }}
                       onClick={() =>
                         confirmThen(`Delete user "${u.username}"? This cannot be undone.`, () =>
                           deleteUser({ userId: u._id }),
                         )
                       }>
-                      Delete
+                      🗑️
                     </button>
                   </div>
                 </td>
               </tr>
             ))}
-            {(!users || users.length === 0) && <EmptyRow colSpan={7} text="No users yet" />}
+            {(!filteredUsers || filteredUsers.length === 0) && <EmptyRow colSpan={8} text="No users found matching filters" />}
           </tbody>
         </table>
       </div>

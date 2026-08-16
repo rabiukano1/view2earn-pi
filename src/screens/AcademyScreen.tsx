@@ -54,8 +54,30 @@ export default function AcademyScreen() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [shuffledOptions, setShuffledOptions] = useState<Record<number, { opt: string; originalIndex: number }[]>>({});
 
   const open = lessons?.find((l) => l.level === openLevel) ?? null;
+
+  useEffect(() => {
+    if (open) {
+      setShuffledOptions((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        open.quiz.forEach((q: any, qi: number) => {
+          if (!next[qi]) {
+            const arr = q.options.map((opt: any, i: number) => ({ opt, originalIndex: i }));
+            for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            next[qi] = arr;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [open]);
 
   const passed = (lessons ?? []).filter((l) => l.passed).length;
   const total = (lessons ?? []).length;
@@ -82,12 +104,13 @@ export default function AcademyScreen() {
     setOpenLevel(level);
     setAnswers({});
     setResult(null);
+    setShuffledOptions({});
   };
 
   const submit = async () => {
     if (!userId || !open) return;
-    const ordered = open.quiz.map((_, i) => (answers[i] ?? -1));
-    if (ordered.some((a) => a < 0)) {
+    const ordered = open.quiz.map((_: any, i: number) => (answers[i] ?? -1));
+    if (ordered.some((a: number) => a < 0)) {
       Alert.alert('Answer every question first');
       return;
     }
@@ -173,17 +196,17 @@ export default function AcademyScreen() {
 
           <Text style={[styles.sectionTitle, dark && styles.textLight]}>Quiz</Text>
 
-          {open.quiz.map((q, qi) => {
+          {open.quiz.map((q: any, qi: number) => {
             const rev = result?.review[qi];
             return (
               <View key={qi} style={styles.qBlock}>
                 <Text style={[styles.question, dark && styles.textLight]}>
                   {qi + 1}. {q.question}
                 </Text>
-                {q.options.map((opt, oi) => {
-                  const selected = answers[qi] === oi;
-                  const isCorrect = rev && rev.correctIndex === oi;
-                  const isWrongPick = rev && rev.selected === oi && rev.selected !== rev.correctIndex;
+                {(shuffledOptions[qi] ?? q.options.map((opt: any, i: number) => ({ opt, originalIndex: i }))).map((item) => {
+                  const selected = answers[qi] === item.originalIndex;
+                  const isCorrect = rev && rev.correctIndex === item.originalIndex;
+                  const isWrongPick = rev && rev.selected === item.originalIndex && rev.selected !== rev.correctIndex;
                   const letterStyle = [
                     styles.optionLetter,
                     selected && !result && styles.optionLetterSelected,
@@ -192,7 +215,7 @@ export default function AcademyScreen() {
                   ];
                   return (
                     <TouchableOpacity
-                      key={oi}
+                      key={item.originalIndex}
                       disabled={!!result}
                       style={[
                         styles.option,
@@ -202,11 +225,11 @@ export default function AcademyScreen() {
                         isWrongPick && styles.optionWrong,
                       ]}
                       activeOpacity={0.85}
-                      onPress={() => setAnswers((p) => ({ ...p, [qi]: oi }))}>
+                      onPress={() => setAnswers((p) => ({ ...p, [qi]: item.originalIndex }))}>
                       <View style={letterStyle}>
-                        <Text style={styles.optionLetterText}>{String.fromCharCode(65 + oi)}</Text>
+                        <Text style={[styles.optionLetterText, (isCorrect || isWrongPick) && styles.optionLetterTextResult]}>{String.fromCharCode(65 + item.originalIndex)}</Text>
                       </View>
-                      <Text style={[styles.optionText, dark && styles.textLight]}>{opt}</Text>
+                      <Text style={[styles.optionText, dark && styles.textLight]}>{item.opt}</Text>
                       {(selected && !result) || isCorrect ? (
                         <Text style={[styles.optionCheck, isCorrect && styles.optionCheckCorrect]}>✓</Text>
                       ) : null}
@@ -466,6 +489,8 @@ const styles = StyleSheet.create({
   optionLetterCorrect: { backgroundColor: colors.success },
   optionLetterWrong: { backgroundColor: colors.danger },
   optionLetterText: { fontSize: 13, fontWeight: '800', color: colors.textMuted },
+  optionLetterTextSelected: { color: colors.white },
+  optionLetterTextResult: { color: colors.white },
   optionText: { fontSize: 14, color: colors.text, flex: 1 },
   optionCheck: { color: colors.primary, fontWeight: '900' },
   optionCheckCorrect: { color: colors.success },

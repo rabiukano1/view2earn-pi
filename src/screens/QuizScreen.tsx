@@ -46,11 +46,26 @@ export default function QuizScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [submitted, setSubmitted] = useState(false);
-  const [result, setResult] = useState<{ score: number; total: number; pointsEarned: number } | null>(null);
+  const [result, setResult] = useState<{
+    score: number;
+    total: number;
+    pointsEarned: number;
+    review: {
+      correctIndex: number;
+      selected: number;
+      explanation: string;
+      courseKey: string | null;
+      courseTitle: string | null;
+      lessonNumber: number | null;
+      lessonTitle: string | null;
+    }[];
+  } | null>(null);
+
+  const [shuffledOptions, setShuffledOptions] = useState<Record<string, { opt: string; originalIndex: number }[]>>({});
 
   const questions = useQuery(
     api.quiz.getDailyQuiz,
-    userId ? { userId, ecosystem } : 'skip',
+    userId ? { userId, ecosystem, day: new Date().getDay() } : 'skip',
   );
   const submitQuiz = useMutation(api.quiz.submitQuiz);
 
@@ -59,10 +74,32 @@ export default function QuizScreen() {
     setAnswers([]);
     setSubmitted(false);
     setResult(null);
+    setShuffledOptions({});
   }, []);
 
   const loading = questions === undefined;
   const current = questions?.[currentIndex];
+
+  useEffect(() => {
+    if (questions) {
+      setShuffledOptions((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        questions.forEach((q) => {
+          if (!next[q._id]) {
+            const arr = q.options.map((opt, i) => ({ opt, originalIndex: i }));
+            for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            next[q._id] = arr;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }
+  }, [questions]);
 
   const handleSelect = (selectedIndex: number) => {
     if (!current || submitted) return;
@@ -111,7 +148,8 @@ export default function QuizScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : result ? (
-        <View style={styles.center}>
+        <ScrollView
+          contentContainerStyle={[styles.center, { paddingVertical: 30, paddingHorizontal: 20 }]}>
           <Text style={styles.resultIcon}>{result.score > 0 ? '🎉' : '📚'}</Text>
           <Text style={[styles.resultTitle, dark && styles.textLight]}>
             {result.score > 0 ? 'Quiz Complete!' : 'Keep Learning!'}
@@ -122,12 +160,76 @@ export default function QuizScreen() {
           {Boolean(result.pointsEarned > 0) ? (
             <Text style={styles.resultPoints}>+{result.pointsEarned} Points Earned!</Text>
           ) : null}
-          <TouchableOpacity
-            style={styles.doneButton}
-            onPress={() => navigation.goBack()}>
+
+          {Boolean(result.review && result.review.length > 0) ? (
+            <View style={styles.reviewWrap}>
+              <Text style={[styles.reviewTitle, dark && styles.textLight]}>Review your answers</Text>
+              {result.review.map((r, i) => {
+                const q = questions?.[i];
+                if (!q) return null;
+                const isCorrect = r.selected === r.correctIndex;
+                return (
+                  <View key={i} style={styles.reviewItem}>
+                    <Text style={[styles.reviewQuestion, dark && styles.textLight]}>
+                      {isCorrect ? '✓ ' : '✕ '}
+                      {q.question}
+                    </Text>
+                    {q.options.map((opt, oi) => {
+                      const isRight = oi === r.correctIndex;
+                      const isPicked = oi === r.selected;
+                      return (
+                        <View
+                          key={oi}
+                          style={[
+                            styles.reviewOption,
+                            isRight && styles.reviewOptionRight,
+                            isPicked && !isRight && styles.reviewOptionPicked,
+                          ]}>
+                          <Text
+                            style={[
+                              styles.reviewOptionText,
+                              dark && styles.textLight,
+                              (isRight || (isPicked && !isRight)) && styles.reviewOptionTextStrong,
+                            ]}>
+                            {String.fromCharCode(65 + oi)}. {opt}
+                          </Text>
+                          {isRight ? (
+                            <Text style={styles.reviewMarkRight}>✓</Text>
+                          ) : isPicked ? (
+                            <Text style={styles.reviewMarkWrong}>✕</Text>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                    {r.explanation ? (
+                      <Text style={[styles.reviewExplanation, dark && styles.textMuted]}>
+                        <Text style={styles.reviewExplanationLabel}>Why? </Text>
+                        {r.explanation}
+                      </Text>
+                    ) : null}
+                    {Boolean(r.courseKey && r.lessonNumber) ? (
+                      <TouchableOpacity
+                        style={styles.learnMore}
+                        onPress={() =>
+                          navigation.navigate('Academy', {
+                            ecosystem: ecosystem,
+                          })
+                        }>
+                        <Text style={styles.learnMoreText}>
+                          📚 Learn more: {r.courseTitle} → {r.lessonTitle ?? `Lesson ${r.lessonNumber}`}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
+          <TouchableOpacity style={styles.doneButton} onPress={() => navigation.goBack()}>
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       ) : current ? (
         <View style={styles.quizContent}>
           <View style={styles.counterRow}>
@@ -139,25 +241,25 @@ export default function QuizScreen() {
             {current.question}
           </Text>
           <View style={styles.optionsContainer}>
-            {current.options.map((option, idx) => {
+            {(shuffledOptions[current._id] ?? current.options.map((opt, i) => ({ opt, originalIndex: i }))).map((item) => {
               const selected =
-                answers.find((a) => a.questionId === current._id)?.selectedIndex === idx;
+                answers.find((a) => a.questionId === current._id)?.selectedIndex === item.originalIndex;
               return (
                 <TouchableOpacity
-                  key={idx}
+                  key={item.originalIndex}
                   style={[
                     styles.option,
                     selected && styles.optionSelected,
                     dark && styles.optionDark,
                   ]}
-                  onPress={() => handleSelect(idx)}>
+                  onPress={() => handleSelect(item.originalIndex)}>
                   <Text
                     style={[
                       styles.optionText,
                       selected && styles.optionTextSelected,
                       dark && styles.textLight,
                     ]}>
-                    {option}
+                    {item.opt}
                   </Text>
                 </TouchableOpacity>
               );
@@ -227,6 +329,55 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
   },
+  textMuted: { color: colors.textMuted },
+  reviewWrap: { width: '100%', marginTop: 18, gap: 14 },
+  reviewTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  reviewItem: {
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderRadius: radius.md,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.14)',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  reviewQuestion: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 10, lineHeight: 21 },
+  reviewOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    padding: 9,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  reviewOptionRight: { borderColor: colors.success, backgroundColor: 'rgba(236,253,245,0.95)' },
+  reviewOptionPicked: { borderColor: colors.danger, backgroundColor: 'rgba(254,242,242,0.95)' },
+  reviewOptionText: { fontSize: 13, color: colors.textMuted, flex: 1 },
+  reviewOptionTextStrong: { color: colors.text, fontWeight: '700' },
+  reviewMarkRight: { color: colors.success, fontWeight: '900', marginLeft: 8 },
+  reviewMarkWrong: { color: colors.danger, fontWeight: '900', marginLeft: 8 },
+  reviewExplanation: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 19,
+    marginTop: 6,
+    padding: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    backgroundColor: 'rgba(237,233,254,0.8)',
+    borderRadius: radius.sm,
+  },
+  reviewExplanationLabel: { fontWeight: '800', color: colors.text },
+  learnMore: { marginTop: 8, alignSelf: 'flex-start' },
+  learnMoreText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
   resultIcon: {
     fontSize: 52,
   },

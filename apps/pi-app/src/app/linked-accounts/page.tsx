@@ -61,7 +61,7 @@ export default function LinkedAccountsPage() {
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: "var(--text)" }}>Pi Network Account</h3>
             <p className="pi-muted" style={{ fontSize: 12, margin: 0 }}>
-              Authenticated via Pi SDK · UID: {me.piUserId ? `${me.piUserId.slice(0, 10)}…` : "Verified"}
+              Authenticated via Pi SDK · UID: {me.externalUid ? `${me.externalUid.slice(0, 10)}…` : "Verified"}
             </p>
           </div>
           <span style={{ fontSize: 12, fontWeight: 800, padding: "4px 10px", borderRadius: 999, backgroundColor: "#dcfce7", color: "#166534" }}>

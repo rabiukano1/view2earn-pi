@@ -239,6 +239,10 @@ export default function SpinScreen() {
     setAdVisible(true);
   };
 
+  const handleDirectClaim = () => {
+    setResult(null);
+  };
+
   const handleResultPress = () => {
     if (result === null) return;
     if (result > 0 && !doubleClaimed) {
@@ -392,24 +396,40 @@ export default function SpinScreen() {
               <Icon name="trophy" iconStyle="solid" size={30} color="#8B5CF6" />
             </View>
             <Text style={styles.resultTitle}>
-              {result > 0 ? 'YOU WON!' : 'NO BONUS'}
+              {result > 0 || result < 0 ? 'YOU WON!' : 'NO BONUS'}
             </Text>
             <Animated.Text style={[styles.resultPts, { transform: [{ scale: popScale }] }]}>
-              {result > 0 ? `+${result} PTS` : 'TRY AGAIN'}
+              {result > 0 ? `+${result} PTS` : result < 0 ? `+${Math.abs(result)} SPINS` : 'TRY AGAIN'}
             </Animated.Text>
 
-            <TouchableOpacity style={styles.resultBtn} onPress={handleResultPress} activeOpacity={0.88}>
-              {Boolean(result && result > 0 && !doubleClaimed) ? (
-                <Icon name="circle-play" iconStyle="solid" size={14} color="#FFF" />
-              ) : null}
-              <Text style={styles.resultBtnText}>
-                {result > 0 && !doubleClaimed
-                  ? 'WATCH VIDEO TO DOUBLE'
-                  : spinsRemaining > 0
-                  ? 'SPIN AGAIN'
-                  : 'CLAIM REWARD'}
-              </Text>
-            </TouchableOpacity>
+            {Boolean(result && result > 0 && !doubleClaimed) ? (
+              <View style={styles.resultButtonGroup}>
+                <TouchableOpacity style={styles.doubleBtn} onPress={handleResultPress} activeOpacity={0.88}>
+                  <Icon name="circle-play" iconStyle="solid" size={15} color="#FFF" />
+                  <Text style={styles.doubleBtnText}>WATCH VIDEO TO DOUBLE (2X)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.directClaimBtn} onPress={handleDirectClaim} activeOpacity={0.85}>
+                  <Icon name="check" iconStyle="solid" size={13} color="#C4B5FD" />
+                  <Text style={styles.directClaimText}>Claim +{result} PTS (Skip Ad)</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.resultButtonGroup}>
+                <TouchableOpacity style={styles.doubleBtn} onPress={handleDirectClaim} activeOpacity={0.88}>
+                  {Boolean(doubleClaimed) ? (
+                    <Icon name="check-double" iconStyle="solid" size={15} color="#FFF" />
+                  ) : null}
+                  <Text style={styles.doubleBtnText}>
+                    {result && result > 0 && doubleClaimed
+                      ? 'CLAIMED (2X REWARD)'
+                      : spinsRemaining > 0
+                      ? 'SPIN AGAIN'
+                      : 'CONTINUE'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.actionColumn}>
@@ -691,21 +711,43 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFF',
   },
-  resultBtn: {
-    alignSelf: 'stretch',
+  resultButtonGroup: {
+    width: '100%',
+    gap: 10,
+    marginTop: 10,
+  },
+  doubleBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    backgroundColor: '#8B5CF6',
+    ...shadow.raised,
+  },
+  doubleBtnText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#FFF',
+    letterSpacing: 0.8,
+  },
+  directClaimBtn: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 10,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: radius.pill,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
   },
-  resultBtnText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#FFF',
-    letterSpacing: 1.2,
+  directClaimText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#DDD6FE',
   },
 });

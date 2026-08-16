@@ -53,6 +53,16 @@
         <action android:name="android.intent.action.VIEW" />
         <data android:scheme="snssdk1233" />
       </intent>
+      <!-- TikTok Lite -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="snssdk1180" />
+      </intent>
+      <!-- TikTok (generic) -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="tiktok" />
+      </intent>
       <!-- TikTok (Musical.ly legacy) -->
       <intent>
         <action android:name="android.intent.action.VIEW" />
@@ -67,6 +77,10 @@
       <intent>
         <action android:name="android.intent.action.VIEW" />
         <data android:scheme="twitter" />
+      </intent>
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="x" />
       </intent>
       <!-- Instagram -->
       <intent>
@@ -86,6 +100,16 @@
       <intent>
         <action android:name="android.intent.action.VIEW" />
         <data android:scheme="phantom" />
+      </intent>
+      <!-- WhatsApp -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="whatsapp" />
+      </intent>
+      <!-- LinkedIn -->
+      <intent>
+        <action android:name="android.intent.action.VIEW" />
+        <data android:scheme="linkedin" />
       </intent>
     </queries>
 </manifest>

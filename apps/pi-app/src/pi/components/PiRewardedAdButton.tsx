@@ -82,7 +82,7 @@ export function PiRewardedAdButton({
 
   return (
     <div className={`pi-card pi-card-glass ${className}`} style={{ padding: 16, ...style }}>
-      <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
             <span style={{ fontSize: 18 }}>🎬</span>

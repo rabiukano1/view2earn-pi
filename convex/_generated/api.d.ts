@@ -28,7 +28,12 @@ import type * as fraud from "../fraud.js";
 import type * as http from "../http.js";
 import type * as inquiries from "../inquiries.js";
 import type * as ipReputation from "../ipReputation.js";
+import type * as knowledge from "../knowledge.js";
+import type * as knowledgeAdmin from "../knowledgeAdmin.js";
+import type * as knowledgeContent from "../knowledgeContent.js";
+import type * as knowledgeSeed from "../knowledgeSeed.js";
 import type * as leaderboard from "../leaderboard.js";
+import type * as levels from "../levels.js";
 import type * as lib_guards from "../lib/guards.js";
 import type * as lib_ledger from "../lib/ledger.js";
 import type * as lib_ratelimit from "../lib/ratelimit.js";
@@ -63,6 +68,7 @@ import type * as verifications from "../verifications.js";
 import type * as videos from "../videos.js";
 import type * as visitors from "../visitors.js";
 import type * as wallets from "../wallets.js";
+import type * as xp from "../xp.js";
 
 import type {
   ApiFromModules,
@@ -91,7 +97,12 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   inquiries: typeof inquiries;
   ipReputation: typeof ipReputation;
+  knowledge: typeof knowledge;
+  knowledgeAdmin: typeof knowledgeAdmin;
+  knowledgeContent: typeof knowledgeContent;
+  knowledgeSeed: typeof knowledgeSeed;
   leaderboard: typeof leaderboard;
+  levels: typeof levels;
   "lib/guards": typeof lib_guards;
   "lib/ledger": typeof lib_ledger;
   "lib/ratelimit": typeof lib_ratelimit;
@@ -126,6 +137,7 @@ declare const fullApi: ApiFromModules<{
   videos: typeof videos;
   visitors: typeof visitors;
   wallets: typeof wallets;
+  xp: typeof xp;
 }>;
 
 /**

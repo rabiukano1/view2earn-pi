@@ -173,6 +173,7 @@ export const updateUser = mutation({
     tier: v.optional(v.number()),
     fraudScore: v.optional(v.number()),
     country: v.optional(v.string()),
+    accountStatus: v.optional(v.union(v.literal("active"), v.literal("suspended"), v.literal("paused"))),
   },
   handler: async (ctx, { token, userId, ...fields }) => {
     requireAdmin(token);

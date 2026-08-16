@@ -4,6 +4,7 @@ import { getOptionalUser, requireUser, requireUserAndEconomy } from "./lib/guard
 import { getJSON, getNum } from "./rewardsConfig";
 import { consumeRewardedAd } from "./piAds";
 import { appendLedger } from "./lib/ledger";
+import { awardXP } from "./xp";
 
 function dayNumber(ms: number): number {
   return Math.floor(ms / 86400000); // UTC day. TODO(prod): user timezone.
@@ -91,6 +92,14 @@ export const checkIn = mutation({
 
     // Append-only points ledger, economy-tagged (server-derived economy).
     await appendLedger(ctx, userId, economy, reward, "DAILY_CHECKIN", `day-${today}`);
+
+    const streakXp = (await getNum(ctx, "streakXp")) || 50;
+    await awardXP(ctx, {
+      userId,
+      amount: streakXp,
+      source: "STREAK",
+      sourceId: `day-${today}`,
+    });
 
     return { reward, current: streak, longest };
   },

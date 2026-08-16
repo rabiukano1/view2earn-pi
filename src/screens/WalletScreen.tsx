@@ -13,7 +13,7 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-import { smartOpenUrl } from '../lib/openUrl';
+import { openTaskLink } from '../services/TaskLinkService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -234,9 +234,9 @@ export default function WalletScreen() {
       return;
     }
     const solanaPayUrl = `solana:${platformAddr}?spl-token=${PIPRO_MINT}&amount=${numAmount}&label=PIPRO%20Deposit&message=View2Earn%20Deposit`;
-    smartOpenUrl(solanaPayUrl).catch(() => {
+    openTaskLink(solanaPayUrl).catch(() => {
       const phantomUrl = `https://phantom.app/ul/transfer/${platformAddr}?token=${PIPRO_MINT}&amount=${numAmount}`;
-      smartOpenUrl(phantomUrl).catch(() => {
+      openTaskLink(phantomUrl).catch(() => {
         Alert.alert('No Wallet Found', 'Install Phantom, Solflare, or another Solana wallet app.');
       });
     });
