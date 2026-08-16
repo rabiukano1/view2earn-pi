@@ -42,6 +42,7 @@ const links = [
   { href: "/inquiries", label: "Inquiries", icon: ICONS.exchange },
   { href: "/visitors", label: "Visitors", icon: ICONS.visitors },
   { href: "/fraud", label: "Fraud", icon: ICONS.fraud },
+  { href: "/features", label: "Features", icon: ICONS.dashboard },
 ];
 
 export function Sidebar() {

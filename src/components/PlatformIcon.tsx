@@ -9,6 +9,8 @@ const BRAND: Record<string, string> = {
   instagram: 'instagram',
   youtube: 'youtube',
   x: 'x-twitter',
+  linkedin: 'linkedin',
+  whatsapp: 'whatsapp',
 };
 
 export const PLATFORM_COLOR: Record<string, string> = {
@@ -18,6 +20,8 @@ export const PLATFORM_COLOR: Record<string, string> = {
   instagram: '#E4405F',
   youtube: '#FF0000',
   x: '#000000',
+  linkedin: '#0A66C2',
+  whatsapp: '#25D366',
   app: '#7C3AED',
 };
 

@@ -7,7 +7,7 @@ import { useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { taskTargetUrl } from "../../lib/deepLink";
+import { openWebTaskLink, platformEmoji } from "@view2earn/core";
 
 type PlatformFilter = "all" | "telegram" | "youtube" | "tiktok" | "facebook" | "instagram" | "x";
 
@@ -258,15 +258,13 @@ export default function PiTasks() {
 
                   <div className="pi-task-card-footer">
                     {t.targetUrl ? (
-                      <a
+                      <button
                         className="btn btn-primary"
                         style={{ width: "100%", justifyContent: "center" }}
-                        href={taskTargetUrl(t.platform, t.targetUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={() => openWebTaskLink(t.platform, t.targetUrl)}
                       >
-                        Open Task &amp; Complete ↗
-                      </a>
+                        {platformEmoji(t.targetUrl)} Open Task &amp; Complete ↗
+                      </button>
                     ) : (
                       <button className="btn btn-primary" style={{ width: "100%" }} disabled>
                         In-App Verification

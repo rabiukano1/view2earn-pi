@@ -131,6 +131,7 @@ export default function HomeScreen() {
 
   const recordSignals = useMutation(api.deviceSignals.record);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
+  const flags = useQuery(api.features.getFlags) || {};
 
   useEffect(() => {
     if (!userId) return;
@@ -142,26 +143,26 @@ export default function HomeScreen() {
       title: '🔥 Earn Points',
       subtitle: 'Quick ways to boost your balance',
       items: [
-        { icon: 'list-check', label: 'Tasks', desc: 'Social media tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') },
-        { icon: 'brain', label: 'Daily Quiz', desc: 'Answer & score bonus', tint: '#6366F1', go: () => stackNav.navigate('Quiz', userId ? { userId, ecosystem: 'SIDRA' } : undefined) },
-        { icon: 'arrows-spin', label: 'Spin & Win', desc: 'Daily lucky wheel', tint: '#EC4899', go: () => stackNav.navigate('Spin', userId ? { userId } : undefined) },
-        { icon: 'clipboard-list', label: 'Surveys', desc: 'Share your feedback', tint: '#F97316', go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined) },
+        ...(flags['feature:tasks'] !== false ? [{ icon: 'list-check', label: 'Tasks', desc: 'Social media tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') }] : []),
+        ...(flags['feature:quiz'] !== false ? [{ icon: 'brain', label: 'Daily Quiz', desc: 'Answer & score bonus', tint: '#6366F1', go: () => stackNav.navigate('Quiz', userId ? { userId, ecosystem: 'SIDRA' } : undefined) }] : []),
+        ...(flags['feature:spin'] !== false ? [{ icon: 'arrows-spin', label: 'Spin & Win', desc: 'Daily lucky wheel', tint: '#EC4899', go: () => stackNav.navigate('Spin', userId ? { userId } : undefined) }] : []),
+        ...(flags['feature:surveys'] !== false ? [{ icon: 'clipboard-list', label: 'Surveys', desc: 'Share your feedback', tint: '#F97316', go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined) }] : []),
       ],
     },
     {
       title: '💳 Rewards & Growth',
       subtitle: 'Cash out and share your profile',
       items: [
-        { icon: 'gift', label: 'Rewards', desc: 'Redeem gift cards & Pi', tint: '#10B981', go: () => tabNav.navigate('Rewards') },
-        { icon: 'rocket', label: 'Promote Hub', desc: 'Promote your links', tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') },
+        ...(flags['feature:rewards'] !== false ? [{ icon: 'gift', label: 'Rewards', desc: 'Redeem gift cards & Pi', tint: '#10B981', go: () => tabNav.navigate('Rewards') }] : []),
+        ...(flags['feature:promote'] !== false ? [{ icon: 'rocket', label: 'Promote Hub', desc: 'Promote your links', tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') }] : []),
       ],
     },
     {
       title: '🎓 Learn & Support',
       subtitle: 'Guides and ways to help',
       items: [
-        { icon: 'graduation-cap', label: 'Learn', desc: 'How to earn guide', tint: '#F59E0B', go: () => stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined) },
-        { icon: 'heart', label: 'Donate π', desc: 'Support the pool', tint: '#EC4899', go: () => stackNav.navigate('Donate') },
+        ...(flags['feature:academy'] !== false ? [{ icon: 'graduation-cap', label: 'Learn', desc: 'How to earn guide', tint: '#F59E0B', go: () => stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined) }] : []),
+        ...(flags['feature:donate'] !== false ? [{ icon: 'heart', label: 'Donate π', desc: 'Support the pool', tint: '#EC4899', go: () => stackNav.navigate('Donate') }] : []),
       ],
     },
   ];

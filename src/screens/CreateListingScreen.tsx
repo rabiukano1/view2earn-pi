@@ -24,12 +24,14 @@ type RouteParams = {
 };
 
 const PLATFORMS = [
-  { value: 'facebook', label: 'Facebook', icon: 'facebook', iconStyle: 'brands', color: '#1877F2', bg: '#EFF6FF', placeholder: 'https://facebook.com/yourpage' },
-  { value: 'tiktok', label: 'TikTok', icon: 'tiktok', iconStyle: 'brands', color: '#010101', bg: '#F4F4F5', placeholder: 'https://tiktok.com/@yourhandle' },
-  { value: 'telegram', label: 'Telegram', icon: 'telegram', iconStyle: 'brands', color: '#229ED9', bg: '#F0F9FF', placeholder: 'https://t.me/yourhandle' },
-  { value: 'youtube', label: 'YouTube', icon: 'youtube', iconStyle: 'brands', color: '#FF0000', bg: '#FEF2F2', placeholder: 'https://youtube.com/@yourchannel' },
-  { value: 'x', label: 'X (Twitter)', icon: 'x-twitter', iconStyle: 'brands', color: '#0F172A', bg: '#F8FAFC', placeholder: 'https://x.com/yourhandle' },
-  { value: 'instagram', label: 'Instagram', icon: 'instagram', iconStyle: 'brands', color: '#E4405F', bg: '#FDF2F8', placeholder: 'https://instagram.com/yourhandle' },
+  { value: 'facebook', label: 'Facebook', icon: 'facebook', iconStyle: 'brands', color: '#1877F2', bg: '#EFF6FF', placeholder: 'yourpage', prefix: 'facebook.com/' },
+  { value: 'tiktok', label: 'TikTok', icon: 'tiktok', iconStyle: 'brands', color: '#010101', bg: '#F4F4F5', placeholder: 'yourhandle', prefix: 'tiktok.com/@' },
+  { value: 'telegram', label: 'Telegram', icon: 'telegram', iconStyle: 'brands', color: '#229ED9', bg: '#F0F9FF', placeholder: 'yourhandle', prefix: 't.me/' },
+  { value: 'youtube', label: 'YouTube', icon: 'youtube', iconStyle: 'brands', color: '#FF0000', bg: '#FEF2F2', placeholder: 'yourchannel', prefix: 'youtube.com/@' },
+  { value: 'x', label: 'X (Twitter)', icon: 'x-twitter', iconStyle: 'brands', color: '#0F172A', bg: '#F8FAFC', placeholder: 'yourhandle', prefix: 'x.com/' },
+  { value: 'instagram', label: 'Instagram', icon: 'instagram', iconStyle: 'brands', color: '#E4405F', bg: '#FDF2F8', placeholder: 'yourhandle', prefix: 'instagram.com/' },
+  { value: 'linkedin', label: 'LinkedIn', icon: 'linkedin', iconStyle: 'brands', color: '#0A66C2', bg: '#EFF6FF', placeholder: 'yourprofile', prefix: 'linkedin.com/in/' },
+  { value: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp', iconStyle: 'brands', color: '#25D366', bg: '#F0FDF4', placeholder: '2341234567890', prefix: 'wa.me/' },
 ];
 
 const PTS_PRESETS = [10, 25, 50, 100];
@@ -45,7 +47,9 @@ export default function CreateListingScreen() {
   const createListing = useMutation(api.marketplace.createListing);
 
   const [platform, setPlatform] = useState('facebook');
+  const [campaignType, setCampaignType] = useState<'follow' | 'engagement'>('follow');
   const [targetUrl, setTargetUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [pointsReward, setPointsReward] = useState('10');
   const [maxCompletions, setMaxCompletions] = useState('10');
   const [submitting, setSubmitting] = useState(false);
@@ -56,19 +60,30 @@ export default function CreateListingScreen() {
 
   const selected = PLATFORMS.find((p) => p.value === platform) ?? PLATFORMS[0];
 
+  const isEngagement = platform === 'tiktok' && campaignType === 'engagement';
+
   const canSubmit =
-    platform && targetUrl.trim() && reward >= 10 && completions >= 1 && completions <= 100 && !submitting;
+    platform && targetUrl.trim() && (!isEngagement || videoUrl.trim()) && reward >= 10 && completions >= 1 && completions <= 100 && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
+      let steps = undefined;
+      if (isEngagement) {
+        steps = [
+          { action: 'LIKE', label: 'Like Video', targetUrl: videoUrl.trim() },
+          { action: 'COMMENT', label: 'Comment on Video', targetUrl: videoUrl.trim() },
+        ];
+      }
+
       const { balanceAfter } = await createListing({
         userId,
         platform,
         targetUrl: targetUrl.trim(),
         pointsReward: reward,
         maxCompletions: completions,
+        steps,
       });
       Alert.alert(
         'Submitted for Admin Review 🛡️',
@@ -76,7 +91,16 @@ export default function CreateListingScreen() {
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     } catch (e) {
-      Alert.alert('Error', String(e).replace('[CONVEX] ', ''));
+      const msg = String(e)
+        .replace(/^Error:\s*/i, '')
+        .replace(/\[CONVEX\]\s*/g, '')
+        .replace(/M\([^)]+\)\s*/g, '')
+        .replace(/\[Request ID:[^\]]+\]\s*/g, '')
+        .replace(/Server Error\s*/g, '')
+        .replace(/Uncaught Error:\s*/g, '')
+        .replace(/at handler \([^)]+\)\s*/g, '')
+        .trim();
+      Alert.alert('Error', msg || 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -138,11 +162,45 @@ export default function CreateListingScreen() {
           </View>
         </View>
 
-        {/* Section 2: Target Link / Handle */}
+        {/* TikTok Campaign Type */}
+        {platform === 'tiktok' && (
+          <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
+            <Text style={[styles.sectionHeading, dark && styles.textLight]}>Campaign Type</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[
+                  styles.presetChip,
+                  { flex: 1, alignItems: 'center' },
+                  campaignType === 'follow' && styles.presetChipActive,
+                  dark && styles.presetChipDark,
+                ]}
+                onPress={() => setCampaignType('follow')}>
+                <Text style={[styles.presetText, campaignType === 'follow' && styles.presetTextActive]}>
+                  Follow Profile
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.presetChip,
+                  { flex: 1, alignItems: 'center' },
+                  campaignType === 'engagement' && styles.presetChipActive,
+                  dark && styles.presetChipDark,
+                ]}
+                onPress={() => setCampaignType('engagement')}>
+                <Text style={[styles.presetText, campaignType === 'engagement' && styles.presetTextActive]}>
+                  Like & Comment Video
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Section 2: Handle / Username */}
         <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
-          <Text style={[styles.sectionHeading, dark && styles.textLight]}>2. Target Profile URL</Text>
+          <Text style={[styles.sectionHeading, dark && styles.textLight]}>2. Your Handle / Username</Text>
           <View style={[styles.inputWrapper, dark && styles.inputWrapperDark]}>
             <Icon name={selected.icon} iconStyle={selected.iconStyle as any} size={18} color={selected.color} />
+            <Text style={styles.prefixText}>{selected.prefix}</Text>
             <TextInput
               style={[styles.input, dark && styles.inputDark]}
               placeholder={selected.placeholder}
@@ -151,17 +209,40 @@ export default function CreateListingScreen() {
               onChangeText={setTargetUrl}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="url"
             />
           </View>
           <Text style={[styles.hintText, dark && styles.textMuted]}>
-            Direct URL of the page or channel you want users to follow
+            Just type your username — we'll build the correct link for you
           </Text>
         </View>
 
-        {/* Section 3: Reward & Followers Setup */}
+        {/* Video URL (If Engagement) */}
+        {isEngagement && (
+          <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
+            <Text style={[styles.sectionHeading, dark && styles.textLight]}>3. Video Link</Text>
+            <View style={[styles.inputWrapper, dark && styles.inputWrapperDark]}>
+              <Icon name="link" iconStyle="solid" size={18} color={selected.color} />
+              <TextInput
+                style={[styles.input, dark && styles.inputDark]}
+                placeholder="https://vm.tiktok.com/..."
+                placeholderTextColor="#94A3B8"
+                value={videoUrl}
+                onChangeText={setVideoUrl}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+            <Text style={[styles.hintText, dark && styles.textMuted]}>
+              Paste the link to the specific TikTok video
+            </Text>
+          </View>
+        )}
+
+        {/* Reward & Followers Setup */}
         <View style={[styles.sectionCard, dark && styles.sectionCardDark]}>
-          <Text style={[styles.sectionHeading, dark && styles.textLight]}>3. Reward & Quantity</Text>
+          <Text style={[styles.sectionHeading, dark && styles.textLight]}>
+            {isEngagement ? '4. Reward & Quantity' : '3. Reward & Quantity'}
+          </Text>
 
           {/* Reward PTS */}
           <Text style={[styles.fieldLabel, dark && styles.textLight]}>Reward per follow (PTS)</Text>
@@ -231,10 +312,10 @@ export default function CreateListingScreen() {
               </View>
               <View style={styles.previewMeta}>
                 <Text style={[styles.previewTitle, dark && styles.textLight]} numberOfLines={1}>
-                  Follow {selected.label} Profile
+                  {isEngagement ? `Like & Comment Video` : `Follow ${selected.label} Profile`}
                 </Text>
                 <Text style={styles.previewLink} numberOfLines={1}>
-                  {targetUrl.trim() || selected.placeholder}
+                  {isEngagement ? (videoUrl.trim() || 'https://vm.tiktok.com/...') : (targetUrl.trim() || selected.placeholder)}
                 </Text>
               </View>
             </View>
@@ -368,6 +449,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   hintText: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
+  prefixText: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
 
   fieldLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 8 },
   fieldLabelMargin: { marginTop: 14 },

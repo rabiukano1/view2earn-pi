@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@view2earn/core": "*",
     "convex": "^1.42.1",
     "next": "^15.3.1",
     "pdf-lib": "^1.17.1",

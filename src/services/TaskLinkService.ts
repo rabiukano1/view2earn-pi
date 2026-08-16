@@ -7,9 +7,11 @@ import { smartOpenUrl } from '../lib/openUrl';
 export function validateUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    return ['http:', 'https:', 'mailto:'].includes(u.protocol) || 
-           // Allow common native schemes if they slipped through
-           /^[a-zA-Z0-9.-]+:$/.test(u.protocol);
+    const proto = u.protocol.toLowerCase();
+    // Block known dangerous protocols
+    if (['javascript:', 'data:', 'file:', 'vbscript:', 'blob:'].includes(proto)) return false;
+    // Allow http(s), mailto, and known native app schemes
+    return true;
   } catch {
     return false;
   }
@@ -137,19 +139,28 @@ export async function resolveShortUrl(url: string, platform: string): Promise<st
 export async function openTaskLink(url: string, platform?: string, pageId?: string): Promise<void> {
   if (!url) return;
 
-  if (!validateUrl(url)) {
-    console.warn(`[TaskLinkService] Unsafe or unsupported URL protocol: ${url}`);
+  // Normalize URLs missing a protocol (e.g. "vm.tiktok.com/abc" → "https://vm.tiktok.com/abc").
+  // Some tasks were saved without https://, so this prevents silent failures downstream
+  // where new URL() would throw and the link would never open.
+  let normalized = url.trim();
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(normalized) && normalized.includes('.')) {
+    normalized = `https://${normalized}`;
+  }
+
+  if (!validateUrl(normalized)) {
+    console.warn(`[TaskLinkService] Unsafe or unsupported URL protocol: ${normalized}`);
     return;
   }
 
-  const detectedPlatform = detectPlatform(url);
-  const resolvedUrl = await resolveShortUrl(url, detectedPlatform);
+  const detectedPlatform = detectPlatform(normalized);
+  const resolvedUrl = await resolveShortUrl(normalized, detectedPlatform);
   const contentType = detectContentType(detectedPlatform, resolvedUrl);
 
   if (__DEV__) {
     console.log(`\n==================================================`);
     console.log(`[TaskLinkService] OPENING TASK LINK`);
     console.log(`Original URL:  ${url}`);
+    console.log(`Normalized:    ${normalized}`);
     console.log(`Resolved URL:  ${resolvedUrl}`);
     console.log(`Platform:      ${detectedPlatform}`);
     console.log(`Content Type:  ${contentType}`);

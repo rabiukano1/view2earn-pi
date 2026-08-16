@@ -113,15 +113,19 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   );
 }
 
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+
 function MainTabs() {
+  const flags = useQuery(api.features.getFlags) || {};
   return (
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Tasks" component={TasksScreen} />
-      <Tab.Screen name="Wallet" component={WalletScreen} />
-      <Tab.Screen name="Rewards" component={RewardsScreen} />
+      {flags['feature:tasks'] !== false && <Tab.Screen name="Tasks" component={TasksScreen} />}
+      {flags['feature:wallet'] !== false && <Tab.Screen name="Wallet" component={WalletScreen} />}
+      {flags['feature:rewards'] !== false && <Tab.Screen name="Rewards" component={RewardsScreen} />}
       <Tab.Screen name="Settings" component={SettingsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   StyleSheet,
@@ -122,6 +123,11 @@ export default function RewardedAdModal({
         await onSuccess(newBalance);
       }
     } catch (err) {
+      const data = (err as { data?: { code?: string; message?: string; waitMs?: number } } | null)?.data;
+      if (data?.code === 'AD_REWARD_COOLDOWN') {
+        Alert.alert('Almost there!', data.message ?? 'Please wait before claiming another ad reward.');
+        return;
+      }
       console.error('Ad reward failed:', err);
     } finally {
       setClaiming(false);

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
 
@@ -111,7 +111,12 @@ export const rewardForAd = mutation({
       recentReward.reason.startsWith("AD_REWARD_") &&
       Date.now() - recentReward._creationTime < 30_000
     ) {
-      throw new Error("Please wait before claiming another ad reward.");
+      const waitMs = 30_000 - (Date.now() - recentReward._creationTime);
+      throw new ConvexError({
+        code: "AD_REWARD_COOLDOWN",
+        message: "Please wait before claiming another ad reward.",
+        waitMs,
+      });
     }
 
     let rewardPoints: number | null = null;

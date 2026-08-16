@@ -9,6 +9,27 @@
  */
 
 import { Alert, Linking } from 'react-native';
+import InAppBrowser from 'react-native-inappbrowser-reborn';
+
+const BROWSER_OPTIONS = {
+  toolbarColor: '#075E54',
+  showTitle: true,
+  enableUrlBarHiding: true,
+} as const;
+
+async function openInBrowser(url: string): Promise<void> {
+  try {
+    if (await InAppBrowser.isAvailable()) {
+      await InAppBrowser.open(url, BROWSER_OPTIONS);
+      return;
+    }
+  } catch (err) {
+    console.warn('[openInBrowser] InAppBrowser failed, falling back to Linking:', err);
+  }
+  
+  // Fallback to system browser
+  await Linking.openURL(url);
+}
 
 function parseSafe(raw: string): { host: string; path: string; search: string } {
   try {
@@ -84,10 +105,12 @@ function tiktok(url: string): string[] | null {
 
   const seg = firstSegment(path);
   // Profiles are best opened by secUid (present on profile URLs as
-  // ?secUid=...), falling back to the @handle.
+  // ?secUid=...). TikTok's user/profile scheme needs the secUid — the @handle
+  // alone can open the wrong screen, so without a secUid we return null and let
+  // the exact https URL resolve the profile via TikTok's App Links.
   const secUid = search.match(/[?&]secUid=([^&]+)/)?.[1];
-  const profile = secUid ? decodeURIComponent(secUid) : seg;
-  if (seg.startsWith('@') || secUid) {
+  if ((seg.startsWith('@') || secUid) && secUid) {
+    const profile = decodeURIComponent(secUid);
     return [
       `snssdk1233://user/profile/${profile}`,
       `snssdk1180://user/profile/${profile}`,
@@ -126,7 +149,6 @@ function facebook(url: string, _platform?: string, pageId?: string): string[] | 
       const reelMatch = path.match(/\/reel(?:s)?\/([^/?#]+)/);
       if (reelMatch?.[1]) candidates.push(`fb://reel/${reelMatch[1]}`);
     }
-    if (candidates.length === 0) candidates.push('fb://watch');
   }
   const videoSeg = path.match(/\/videos\/([^/?#]+)/);
   if (videoSeg?.[1]) {
@@ -139,14 +161,12 @@ function facebook(url: string, _platform?: string, pageId?: string): string[] | 
     candidates.push(`fb://group/${groupSeg[1]}`);
   }
 
-  // Profile / page — /{handle} or /pages/…
-  if (seg && !['pages', 'groups', 'watch', 'reel', 'reels', 'videos', 'events', 'share', 'photo'].includes(seg)) {
-    candidates.push(`fb://profile/${seg}`);
-    candidates.push(`fb://page/${seg}`);
-  }
+  // Profile / page — /{handle} or /pages/… have no stable public scheme that
+  // guarantees the exact page (fb://profile needs the numeric user id). Open the
+  // exact URL via Facebook's in-app webview (facewebmodal) instead.
 
+  // Reliable exact fallback: Facebook's in-app webview opened at the exact URL.
   candidates.push(`fb://facewebmodal/f?href=${encodedUrl}`);
-  candidates.push('fb://');
   return candidates;
 }
 
@@ -181,7 +201,7 @@ function instagram(url: string): string[] | null {
   // Posts, reels, IGTV, stories — no reliable scheme; https App Link resolves.
   if (['p', 'reel', 'reels', 'tv', 'stories', 'explore'].includes(target)) return null;
 
-  return [`instagram://user?username=${target}`, 'instagram://'];
+  return [`instagram://user?username=${target}`];
 }
 
 function whatsapp(url: string): string[] | null {
@@ -189,45 +209,50 @@ function whatsapp(url: string): string[] | null {
   if (!host.includes('whatsapp.com') && !host.includes('wa.me')) return null;
 
   const seg = firstSegment(path);
-  
+
   if (host.includes('wa.me')) {
-    return [`whatsapp://send?phone=${seg}${search ? '&' + search.replace('?', '') : ''}`, 'whatsapp://'];
+    return [`whatsapp://send?phone=${seg}${search ? '&' + search.replace('?', '') : ''}`];
   }
-  
+
   if (host === 'chat.whatsapp.com') {
-    return [`whatsapp://chat?code=${seg}`, 'whatsapp://'];
+    return [`whatsapp://chat?code=${seg}`];
   }
 
   if (path.startsWith('/send')) {
-    return [`whatsapp://send${search}`, 'whatsapp://'];
+    return [`whatsapp://send${search}`];
   }
 
-  return ['whatsapp://'];
-}
-
-function linkedin(url: string): string[] | null {
-  const { host, path } = parseSafe(url);
-  if (!host.includes('linkedin.com') && !host.includes('lnkd.in')) return null;
-
-  if (host.includes('lnkd.in')) return null;
-
-  const seg = firstSegment(path);
-  const parts = path.replace(/^\/+/, '').replace(/\/+$/, '').split('/');
-
-  if (seg === 'in' && parts[1]) {
-    return [`linkedin://profile/${parts[1]}`, 'linkedin://'];
-  }
-  
-  if (seg === 'company' && parts[1]) {
-    return [`linkedin://company/${parts[1]}`, 'linkedin://'];
-  }
-
-  return ['linkedin://'];
+  return null;
 }
 
 type LinkBuilder = (url: string, platform?: string, pageId?: string) => string[] | null;
 
-const BUILDERS: LinkBuilder[] = [telegram, youtube, tiktok, facebook, twitter, instagram, whatsapp, linkedin];
+const BUILDERS: LinkBuilder[] = [telegram, youtube, tiktok, facebook, twitter, instagram, whatsapp];
+
+// Probe scheme used to detect whether the platform's native app is installed.
+// The <queries> declarations in AndroidManifest.xml make canOpenURL reliable on
+// Android 11+. Only schemes declared there are listed.
+const PROBE_SCHEME: Record<string, string> = {
+  telegram: 'tg://',
+  youtube: 'vnd.youtube://',
+  tiktok: 'snssdk1233://',
+  facebook: 'fb://',
+  twitter: 'twitter://',
+  x: 'twitter://',
+  instagram: 'instagram://',
+  whatsapp: 'whatsapp://',
+  linkedin: 'linkedin://',
+};
+
+async function isNativeAppInstalled(platform: string): Promise<boolean> {
+  const probe = PROBE_SCHEME[platform];
+  if (!probe) return false;
+  try {
+    return await Linking.canOpenURL(probe);
+  } catch {
+    return false;
+  }
+}
 
 // Opens a URL inside the Pi Browser app via its `pi://` deep link scheme
 // (e.g. https://pi.view2earn.org → pi://pi.view2earn.org), falling back to the
@@ -252,46 +277,91 @@ export async function openInPiBrowser(url: string): Promise<void> {
 // ---- Public API -----------------------------------------------------------
 
 /**
- * Smart URL opener — tries native app deep links first (Facebook, TikTok,
- * Instagram, Twitter/X, Telegram, YouTube), falling back to the browser if the
- * native app is not installed.
+ * Smart URL opener — "exact destination" first.
+ *
+ * 1. Detect the platform and whether its native app is installed.
+ * 2. If installed AND a deep-link builder can open the EXACT destination
+ *    (e.g. YouTube video id, TikTok video id, Telegram channel, WhatsApp chat,
+ *    Twitter status, Instagram profile, Facebook page-id), fire that scheme.
+ * 3. Otherwise open the EXACT https URL — Android App Links route it into the
+ *    installed native app at the exact destination; if the app isn't installed
+ *    it opens in the in-app browser (or system browser as a last resort).
+ *
+ * We never fall back to a platform homepage, and never invent a scheme that
+ * cannot guarantee the exact requested destination.
  */
 export async function smartOpenUrl(url: string, platform?: string, pageId?: string): Promise<void> {
   if (!url) return;
 
+  // Auto-fix URLs that look like web addresses but are missing the protocol
+  // (e.g. "vm.tiktok.com/abc" → "https://vm.tiktok.com/abc").
+  let resolved = url;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(resolved) && resolved.includes('.')) {
+    resolved = `https://${resolved}`;
+  }
+
   // Non-http schemes — pass straight through (mailto:, phantom:, etc.)
-  if (!/^https?:\/\//i.test(url)) {
+  if (!/^https?:\/\//i.test(resolved)) {
     try {
-      await Linking.openURL(url);
+      await Linking.openURL(resolved);
     } catch {
       Alert.alert('Could not open link', `Open it manually:\n${url}`);
     }
     return;
   }
 
-  // 1. Gather native deep link candidate URLs
-  const candidates: string[] = [];
-  for (const build of BUILDERS) {
-    const list = build(url, platform, pageId);
-    if (list && list.length > 0) {
-      candidates.push(...list);
-    }
-  }
+  const resolvedPlatform = platform || detectPlatformForUrl(resolved);
+  const installed = await isNativeAppInstalled(resolvedPlatform);
 
-  // 2. Try opening candidate native deep link URLs
-  for (const nativeUrl of candidates) {
+  // 1. Reliable exact-destination native schemes (only when the app is installed).
+  if (installed) {
+    for (const build of BUILDERS) {
+      const list = build(resolved, resolvedPlatform, pageId);
+      if (!list || list.length === 0) continue;
+      for (const nativeUrl of list) {
+        try {
+          if (await Linking.canOpenURL(nativeUrl)) {
+            await Linking.openURL(nativeUrl);
+            return; // Native app opened at the exact destination!
+          }
+        } catch {
+          // This candidate failed — try the next one
+        }
+      }
+    }
+
+    // 2. App installed but no reliable custom scheme for this exact destination
+    //    (e.g. Instagram posts/reels, TikTok profiles, LinkedIn, YouTube
+    //    channels). Open the exact https URL — Android App Links route it into
+    //    the installed app at the exact destination. If App Links aren't
+    //    configured, it opens in the system browser at the exact URL instead.
     try {
-      await Linking.openURL(nativeUrl);
-      return; // Native app opened successfully!
+      await Linking.openURL(resolved);
+      return;
     } catch {
-      // Candidate scheme failed or native app not installed — try next candidate
+      // App Links handoff failed — fall through to the in-app browser.
     }
   }
 
-  // 3. Fallback — open original HTTPS URL in browser
+  // 3. App not installed (or native attempts failed) — open the exact https URL
+  //    in the in-app browser (or system browser as a last resort).
   try {
-    await Linking.openURL(url);
-  } catch {
-    Alert.alert('Could not open link', `Open it manually:\n${url}`);
+    await openInBrowser(resolved);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    Alert.alert('Could not open link', `Error: ${msg}\n\nOpen it manually:\n${url}`);
   }
+}
+
+function detectPlatformForUrl(url: string): string {
+  const { host } = parseSafe(url);
+  if (host.includes('tiktok.com')) return 'tiktok';
+  if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';
+  if (host.includes('instagram.com') || host.includes('instagr.am')) return 'instagram';
+  if (host.includes('facebook.com') || host.includes('fb.watch') || host.endsWith('fb.com')) return 'facebook';
+  if (host.includes('twitter.com') || host.includes('x.com')) return 'x';
+  if (host.includes('t.me') || host.includes('telegram.me') || host.includes('telegram.org')) return 'telegram';
+  if (host.includes('linkedin.com') || host.includes('lnkd.in')) return 'linkedin';
+  if (host.includes('whatsapp.com') || host.includes('wa.me')) return 'whatsapp';
+  return 'website';
 }

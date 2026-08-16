@@ -6,7 +6,6 @@ import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import type { TokenStorage } from '@convex-dev/auth/react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
-import codePush from 'react-native-code-push';
 import { CONVEX_URL } from './src/config';
 import { useAuth } from './src/auth/AuthContext';
 import BiometricGate from './src/auth/BiometricGate';
@@ -28,6 +27,7 @@ const tokenStorage: TokenStorage = {
 };
 
 import SplashScreen, { ONBOARDING_STORAGE_KEY } from './src/screens/SplashScreen';
+import BootSplash from 'react-native-bootsplash';
 
 // Show the app once signed in, the login screen otherwise. Every screen reads
 // the user from useAuth(), so inside AppNavigator a signed-in user always exists.
@@ -46,24 +46,19 @@ function Gate() {
   }, []);
 
   if (showSplash === null) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
+    return null;
   }
 
   if (showSplash) {
+    BootSplash.hide({ fade: true });
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
   if (!ready) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
-    );
+    return null;
   }
+  
+  BootSplash.hide({ fade: true });
   return userId ? (
     <BiometricGate>
       <AppNavigator />
@@ -89,5 +84,4 @@ function App() {
     </ConvexAuthProvider>
   );
 }
-
-export default typeof codePush === 'function' ? codePush(App) : App;
+export default App;

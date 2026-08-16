@@ -1,7 +1,6 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-apply from: "../../node_modules/react-native-code-push/android/codepush.gradle"
 
 // Release signing credentials (NOT committed to git — see android/.gitignore).
 // Create android/keystore.properties with:

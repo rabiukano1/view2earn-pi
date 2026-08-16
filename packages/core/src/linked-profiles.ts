@@ -14,11 +14,25 @@ export function normalizeUrl(url: string): string {
 // content-moderation hardening — no off-platform or exfil URLs).
 export const PROFILE_HOST_ALLOWLIST: Record<string, string[]> = {
   facebook: ["facebook.com", "fb.com", "m.facebook.com"],
-  tiktok: ["tiktok.com", "vm.tiktok.com"],
+  tiktok: ["tiktok.com", "vm.tiktok.com", "vt.tiktok.com"],
   telegram: ["t.me", "telegram.me"],
   instagram: ["instagram.com"],
   youtube: ["youtube.com", "youtu.be"],
   x: ["x.com", "twitter.com"],
+  linkedin: ["linkedin.com", "lnkd.in"],
+  whatsapp: ["whatsapp.com", "wa.me", "chat.whatsapp.com"],
+};
+
+// Maps a platform key to a base URL pattern for auto-building profile URLs
+// from bare handles. %s is replaced with the handle (without leading @).
+const PLATFORM_BASE_URL: Record<string, string> = {
+  facebook: "https://facebook.com/%s",
+  tiktok: "https://tiktok.com/@%s",
+  telegram: "https://t.me/%s",
+  instagram: "https://instagram.com/%s",
+  youtube: "https://youtube.com/@%s",
+  x: "https://x.com/%s",
+  linkedin: "https://linkedin.com/in/%s",
 };
 
 export interface SanitizedProfileUrl {
@@ -30,10 +44,27 @@ export interface SanitizedProfileUrl {
   handle?: string;
 }
 
-/** Validate + normalize a profile URL against a platform allowlist. */
+/** Validate + normalize a profile URL against a platform allowlist.
+ *  Accepts:
+ *    - A full https://… URL
+ *    - A URL without protocol (e.g. tiktok.com/@handle)
+ *    - A bare handle/username (e.g. @pinetwork or pinetwork) — auto-built
+ *      into the canonical URL for the chosen platform.
+ */
 export function sanitizeProfileUrl(platform: string, rawUrl: string): SanitizedProfileUrl {
-  const trimmed = (rawUrl ?? "").trim();
+  let trimmed = (rawUrl ?? "").trim();
   if (!trimmed) throw new Error("Profile URL is required.");
+
+  // If the input looks like a bare handle (no dots, no slashes, no colons),
+  // auto-build the full URL using the platform's base template.
+  const looksLikeHandle = !/[./:]/.test(trimmed.replace(/^@/, ""));
+  if (looksLikeHandle && PLATFORM_BASE_URL[platform]) {
+    const handle = trimmed.replace(/^@/, "");
+    trimmed = PLATFORM_BASE_URL[platform].replace("%s", handle);
+  } else if (!/^https?:\/\//i.test(trimmed)) {
+    // Automatically prepend https:// if the protocol is missing
+    trimmed = `https://${trimmed.replace(/^:\/\//, "")}`;
+  }
 
   let parsed: URL;
   try {

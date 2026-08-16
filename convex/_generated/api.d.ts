@@ -24,6 +24,7 @@ import type * as countDelta from "../countDelta.js";
 import type * as cpx from "../cpx.js";
 import type * as crons from "../crons.js";
 import type * as deviceSignals from "../deviceSignals.js";
+import type * as features from "../features.js";
 import type * as fraud from "../fraud.js";
 import type * as http from "../http.js";
 import type * as inquiries from "../inquiries.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   cpx: typeof cpx;
   crons: typeof crons;
   deviceSignals: typeof deviceSignals;
+  features: typeof features;
   fraud: typeof fraud;
   http: typeof http;
   inquiries: typeof inquiries;

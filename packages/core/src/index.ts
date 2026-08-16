@@ -10,4 +10,5 @@ export * from "./spin";
 export * from "./fraud";
 export * from "./device-signals";
 export * from "./wallet-address";
+export * from "./web-social-links";
 export * from "./policies";

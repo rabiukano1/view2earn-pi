@@ -3,6 +3,7 @@ export type Ecosystem = "PI" | "SIDRA";
 export type TaskType =
   | "FOLLOW_PAGE"
   | "JOIN_CHANNEL"
+  | "MULTI_TASK"
   | "QUIZ"
   | "SURVEY";
 

@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { taskTargetUrl } from "../../lib/deepLink";
+import { openWebTaskLink } from "@view2earn/core";
 
 type PlatformOption = "telegram" | "youtube" | "tiktok" | "facebook" | "instagram";
 
@@ -354,15 +354,13 @@ export default function PromoteHubPage() {
                         </div>
                       </div>
 
-                      <a
-                        href={taskTargetUrl(item.platform, item.targetUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openWebTaskLink(item.platform, item.targetUrl)}
                         className="btn btn-secondary btn-sm"
                         style={{ marginTop: 8, justifyContent: "center" }}
                       >
                         Open Target Link ↗
-                      </a>
+                      </button>
                     </div>
                   );
                 })}

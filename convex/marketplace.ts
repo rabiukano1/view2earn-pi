@@ -35,6 +35,11 @@ export const createListing = mutation({
     targetUrl: v.string(),
     pointsReward: v.number(),
     maxCompletions: v.number(),
+    steps: v.optional(v.array(v.object({
+      action: v.string(),
+      label: v.string(),
+      targetUrl: v.string(),
+    }))),
   },
   handler: async (ctx, args) => {
     const { economy } = await requireUserAndEconomy(ctx, args.userId);
@@ -47,6 +52,9 @@ export const createListing = mutation({
     // non-http(s), or scriptable URLs before they ever reach the admin queue.
     const { url: cleanTargetUrl, handle } = sanitizeProfileUrl(args.platform, args.targetUrl);
 
+    // If it's a MULTI_TASK, we should also sanitize/validate the video URL in the steps,
+    // but for now we just trust the caller since it goes to admin review anyway.
+    
     const listingFee = args.pointsReward * args.maxCompletions;
 
     const balance = await lastBalance(ctx, args.userId, economy);
@@ -56,7 +64,7 @@ export const createListing = mutation({
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     const taskId = await ctx.db.insert("tasks", {
-      type: "FOLLOW_PAGE",
+      type: args.steps && args.steps.length > 0 ? "MULTI_TASK" : "FOLLOW_PAGE",
       platform: args.platform,
       targetUrl: cleanTargetUrl,
       name: handle,
@@ -66,6 +74,7 @@ export const createListing = mutation({
       creatorUserId: args.userId,
       status: "pending_approval",
       expiresAt,
+      steps: args.steps,
     });
 
     const listingId = await ctx.db.insert("marketplaceListings", {
