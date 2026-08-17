@@ -20,8 +20,8 @@ const FEATURES = [
     icon: "M12 8v4l3 3 M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
   },
   {
-    title: "Redeem real rewards",
-    desc: "Swap your points for airtime, data bundles and more — with Pi or Sidra supported at checkout.",
+    title: "Redeem reward points",
+    desc: "Redeem your points for available in-app perks, partner offers, and digital rewards across supported ecosystems.",
     icon: "M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4 M4 6v12c0 1.1.9 2 2 2h14v-4 M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z",
   },
   {
@@ -46,8 +46,8 @@ const STEPS = [
     desc: "Follow, like, share and join channels across Telegram, Facebook and TikTok to earn points.",
   },
   {
-    title: "Redeem rewards",
-    desc: "Swap your points for airtime, data and more — right from the app wallet.",
+    title: "Redeem points",
+    desc: "Redeem verified points for available platform rewards and digital vouchers right from your wallet.",
   },
 ];
 
@@ -80,14 +80,14 @@ const ROADMAP = [
   },
   {
     title: "Creator dashboard",
-    desc: "Turn your own page or channel into a paid engagement magnet with transparent, real-time earnings.",
+    desc: "Turn your own page or channel into a featured engagement magnet with transparent campaign analytics.",
     icon: "M18 20V10 M12 20V4 M6 20v-6",
     tag: "Planned",
     tone: "plan",
   },
   {
-    title: "Instant payouts",
-    desc: "Cash out points to Pi, Sidra or mobile money — faster, with lower reward thresholds.",
+    title: "Faster redemptions",
+    desc: "Streamlined point redemptions and partner rewards with lower claim thresholds.",
     icon: "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
     tag: "Planned",
     tone: "plan",
@@ -114,8 +114,8 @@ const FAQS: [string, string][] = [
     "Complete social engagements — follow pages, like and share posts, join channels — answer daily quizzes and build your check-in streak. Every action is verified and credited to your app wallet automatically.",
   ],
   [
-    "Can I really get rewarded?",
-    "Yes. Points are redeemable for real rewards like airtime and data bundles through our verified providers. Some purchases can also be made with Pi or Sidra directly in the app.",
+    "How do reward points work?",
+    "Points accumulated from verified activities can be redeemed for eligible digital rewards, vouchers, and ecosystem perks as made available by verified partners.",
   ],
   [
     "What is the difference between Pi and Sidra?",
@@ -126,12 +126,12 @@ const FAQS: [string, string][] = [
     "We never store user secrets or seed phrases. Logins use the Pi SDK and Sidra's secure auth, and our backend enforces strict anti-fraud rules on every engagement.",
   ],
   [
-    "How do I get paid out?",
-    "Rewards are delivered through integrated redemption providers as airtime, data bundles and similar vouchers. Follow the redemption steps inside the app wallet.",
+    "How do redemptions work?",
+    "Eligible rewards and digital vouchers are processed through integrated redemption providers. Simply follow the redemption steps inside the app wallet.",
   ],
   [
     "I'm an advertiser or creator — can I join?",
-    "Absolutely. Use the partner request form to list your page or channel as a paid engagement, reaching an active, reward-driven audience. We'll get back to you quickly.",
+    "Absolutely. Use the partner request form to list your page or channel as a featured promotional campaign, reaching an active community. We'll get back to you quickly.",
   ],
 ];
 
@@ -189,8 +189,8 @@ function PhoneMockup() {
         <div className="pf-label">Join confirmed</div>
       </div>
       <div className="phone-float pf-2">
-        <div className="pf-value">Reward redeemed</div>
-        <div className="pf-label">Airtime · 1 GB data</div>
+        <div className="pf-value">Points Redeemed</div>
+        <div className="pf-label">Digital Perk · Verified</div>
       </div>
     </div>
   );
@@ -230,12 +230,12 @@ export default function HomePage() {
                 Now live on Pi Network & Sidra Chain
               </div>
               <h1>
-                Earn rewards for <span className="grad">every engagement</span>
+                Earn points for <span className="grad">verified engagements</span>
               </h1>
               <p className="lead">
-                View2Earn turns your daily social activity into points. Follow,
+                View2Earn rewards your verified daily social activity with points. Follow,
                 like, share and join across your favorite apps — then redeem
-                your points for real rewards.
+                your points for available digital rewards and perks.
               </p>
               <div className="hero-actions" id="download">
                 <a className="btn btn-lg btn-on-dark" href="/#download">
@@ -262,10 +262,10 @@ export default function HomePage() {
         <div className="container">
           <Reveal className="section-head">
             <span className="kicker">Live platform</span>
-            <h2 className="section-title">Engagements are earning rewards right now</h2>
+            <h2 className="section-title">Engagements are earning points right now</h2>
             <p className="section-sub">
               Real activity across the platform — updated as members complete
-              engagements and redeem rewards.
+              engagements and redeem available rewards.
             </p>
           </Reveal>
           <div className="stats-band">
@@ -395,10 +395,10 @@ export default function HomePage() {
         <div className="container">
           <Reveal>
             <div className="cta-band">
-              <h2>Ready to start earning?</h2>
+              <h2>Ready to start earning points?</h2>
               <p>
-                Join View2Earn today and turn your everyday social activity into
-                rewards. Or partner with us to put your page in front of an
+                Join View2Earn today and turn your verified social activity into
+                points. Or partner with us to put your page in front of an
                 engaged, active audience.
               </p>
               <div className="cta-actions">

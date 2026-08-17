@@ -4,11 +4,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "View2Earn - Earn rewards for every engagement",
+    default: "View2Earn - Verified Digital Engagement",
     template: "%s - View2Earn",
   },
   description:
-    "View2Earn Pi web app — follow, like, share and join channels on the Pi Network to earn points redeemable for airtime, data and more.",
+    "View2Earn Pi web app — follow, like, share and join channels on the Pi Network to earn points redeemable for digital perks and rewards.",
   metadataBase: new URL("https://view2earn.org"),
 };
 

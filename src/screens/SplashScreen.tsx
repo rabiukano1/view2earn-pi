@@ -35,16 +35,16 @@ const SLIDES: SplashSlide[] = [
   {
     id: 'slide_1',
     badge: 'WELCOME TO VIEW2EARN',
-    title: 'Watch, Engage\n& Earn Rewards',
-    subtitle: 'Turn your daily social views, micro-tasks, and quiz interactions into real crypto and reward points effortlessly.',
+    title: 'Engage, Learn\n& Earn Points',
+    subtitle: 'Turn your daily social interactions, micro-tasks, and quiz challenges into reward points across supported ecosystems.',
     highlightColor: '#8B5CF6', // Purple
-    tags: ['Watch to Earn', 'Daily Quizzes', 'Social Micro-Tasks'],
+    tags: ['Interactive Tasks', 'Daily Quizzes', 'Community Quests'],
     type: 'watch',
   },
   {
     id: 'slide_2',
     badge: 'DECENTRALIZED WALLET',
-    title: 'Multi-Asset\nCrypto Rewards',
+    title: 'Multi-Asset\nEcosystem Perks',
     subtitle: 'Seamlessly hold, swap, and manage PIPRO (Solana), VINTA, Sidra Coin, and Points in one secure vault.',
     highlightColor: '#FBBF24', // Gold
     tags: ['Pi & Solana Powered', 'Instant Swaps', 'Non-Custodial'],
@@ -52,11 +52,11 @@ const SLIDES: SplashSlide[] = [
   },
   {
     id: 'slide_3',
-    badge: 'INSTANT PAYOUTS',
+    badge: 'SECURE REDEMPTIONS',
     title: 'Fast & Secure\nRedemptions',
-    subtitle: 'Redeem your balance anytime to your favorite crypto address or payout account with full transparency.',
+    subtitle: 'Redeem your points anytime for supported digital assets and ecosystem perks with full transparency.',
     highlightColor: '#10B981', // Emerald Green
-    tags: ['Zero Hidden Fees', 'Instant Transfer', 'Verified Security'],
+    tags: ['Transparent Terms', 'Fast Transfer', 'Verified Security'],
     type: 'payout',
   },
 ];
@@ -156,8 +156,8 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           <Text style={[styles.chipText, { color: '#FFF' }]}>100% Verified</Text>
         </View>
         <View style={[styles.floatingChip, styles.bottomLeftChip]}>
-          <Icon name="bolt" iconStyle="solid" size={13} color="#10B981" />
-          <Text style={styles.chipText}>Instant Payout</Text>
+          <Icon name="shield" iconStyle="solid" size={13} color="#10B981" />
+          <Text style={styles.chipText}>Fast Redemptions</Text>
         </View>
       </View>
     );

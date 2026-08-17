@@ -8,21 +8,21 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "View2Earn — Earn rewards for every engagement",
+    default: "View2Earn — Earn points for verified engagements",
     template: "%s · View2Earn",
   },
   description:
-    "View2Earn is a social-engagement and rewards platform on Pi Network and Sidra Chain. Follow, like, share and join channels to earn points redeemable for airtime, data and more.",
+    "View2Earn is a social-engagement and rewards platform on Pi Network and Sidra Chain. Follow, like, share and join channels to earn points redeemable for digital rewards, vouchers, and perks.",
   keywords: [
     "View2Earn",
     "earn rewards",
     "Pi Network",
     "Sidra Chain",
     "social engagement rewards",
-    "paid to engage",
+    "community rewards",
   ],
   openGraph: {
-    title: "View2Earn — Earn rewards for every engagement",
+    title: "View2Earn — Earn points for verified engagements",
     description:
       "Follow, like, share and join channels to earn points redeemable for real rewards on Pi Network and Sidra Chain.",
     type: "website",

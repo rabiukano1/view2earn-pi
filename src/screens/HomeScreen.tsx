@@ -151,9 +151,9 @@ export default function HomeScreen() {
     },
     {
       title: '💳 Rewards & Growth',
-      subtitle: 'Cash out and share your profile',
+      subtitle: 'Redeem perks and share your profile',
       items: [
-        ...(flags['feature:rewards'] !== false ? [{ icon: 'gift', label: 'Rewards', desc: 'Redeem gift cards & Pi', tint: '#10B981', go: () => tabNav.navigate('Rewards') }] : []),
+        ...(flags['feature:rewards'] !== false ? [{ icon: 'gift', label: 'Rewards', desc: 'Redeem available perks', tint: '#10B981', go: () => tabNav.navigate('Rewards') }] : []),
         ...(flags['feature:promote'] !== false ? [{ icon: 'rocket', label: 'Promote Hub', desc: 'Promote your links', tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') }] : []),
       ],
     },

@@ -36,7 +36,7 @@ export function PartnerForm() {
         <div className="form-card">
           <h1>Partner with View2Earn</h1>
           <p className="form-sub">
-            Want to grow your page or channel with real, reward-driven
+            Want to grow your page or channel with active community
             engagement? Tell us about yourself and we&apos;ll be in touch.
           </p>
           <form

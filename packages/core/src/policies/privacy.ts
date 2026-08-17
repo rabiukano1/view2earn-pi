@@ -45,7 +45,7 @@ export const PRIVACY_POLICY: PolicyDoc = {
     { t: "s", x: "2.3 Device and Technical Information" },
     {
       t: "p",
-      x: "To protect the Service against fraud, abuse, and unauthorized access, we may automatically collect limited technical information, including device type and operating system, browser type and version, device identifiers, IP address, general location derived from your IP address, language and time zone settings, network information, and limited device fingerprinting signals (browser and hardware characteristics) used solely for fraud detection and platform security.",
+      x: "To protect the Service against fraud, abuse, and unauthorized access, we may automatically collect limited technical information, including device type and operating system, browser type and version, device identifiers, IP address, general location derived from your IP address, language and time zone settings, network information, limited device fingerprinting signals (browser and hardware characteristics) used solely for fraud detection and platform security, and the Android Advertising ID (where permitted) for delivering personalized advertisements and measuring ad performance.",
     },
     {
       t: "p",

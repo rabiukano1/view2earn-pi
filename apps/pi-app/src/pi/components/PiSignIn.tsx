@@ -56,7 +56,7 @@ export function PiSignIn() {
       <p className="pi-sub">
         {inPi === false
           ? "You're not in the Pi Browser. Open this app inside the Pi Browser to sign in with your Pi identity."
-          : "Continue with your Pi Network account to start earning points for every engagement."}
+          : "Continue with your Pi Network account to start earning points for verified engagements."}
       </p>
       {error ? <div className="pi-error">{error}</div> : null}
       <button

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://view2earn.org/sitemap.xml

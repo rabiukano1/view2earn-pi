@@ -13,7 +13,7 @@ export function SiteFooter() {
             <p className="footer-desc">
               A social-engagement and rewards platform on Pi Network and Sidra
               Chain. Earn points for following, liking and joining — then redeem
-              them for real rewards.
+              them for digital rewards and perks.
             </p>
           </div>
           <div className="footer-col">
@@ -29,7 +29,9 @@ export function SiteFooter() {
             <Link href="/contact">Contact us</Link>
             <Link href="/partner">Partner with us</Link>
             <Link href="/privacy">Privacy policy</Link>
+            <Link href="/delete-account">Delete account</Link>
             <Link href="/terms">Terms of service</Link>
+            <Link href="/child-safety">Child safety</Link>
             <Link href="/cookies">Cookie policy</Link>
             <Link href="/anti-fraud">Anti-fraud policy</Link>
             <Link href="/rewards-redemption">Rewards &amp; redemption</Link>
