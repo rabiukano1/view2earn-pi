@@ -16,9 +16,9 @@ export function SiteHeader() {
           <Link href="/#faq">FAQ</Link>
           <Link href="/contact">Contact</Link>
           <Link href="/partner">For partners</Link>
-          <Link href="/#download" className="btn btn-primary btn-sm nav-cta">
-            Get the app
-          </Link>
+          <a href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk" download className="btn btn-primary btn-sm nav-cta">
+            Download APK
+          </a>
         </nav>
       </div>
     </header>

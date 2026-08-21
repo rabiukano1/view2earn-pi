@@ -238,8 +238,8 @@ export default function HomePage() {
                 your points for available digital rewards and perks.
               </p>
               <div className="hero-actions" id="download">
-                <a className="btn btn-lg btn-on-dark" href="/#download">
-                  Get the app
+                <a className="btn btn-lg btn-on-dark" href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk" download>
+                  Download APK (Android)
                 </a>
                 <Link className="btn btn-lg btn-outline-light" href="/contact">
                   Contact us
@@ -402,8 +402,8 @@ export default function HomePage() {
                 engaged, active audience.
               </p>
               <div className="cta-actions">
-                <a className="btn btn-lg btn-on-dark" href="/#download">
-                  Get the app
+                <a className="btn btn-lg btn-on-dark" href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk" download>
+                  Download APK (Android)
                 </a>
                 <Link className="btn btn-lg btn-outline-light" href="/partner">
                   Become a partner
