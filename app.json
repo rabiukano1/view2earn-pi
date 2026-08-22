@@ -5,5 +5,10 @@
     "android_app_id": "ca-app-pub-5278018921408798~9302302185",
     "ios_app_id": "ca-app-pub-5278018921408798~9302302185",
     "delay_app_measurement_init": true
+  },
+  "extra": {
+    "eas": {
+      "projectId": "b3efec20-c2b1-4bd1-8a4e-f868fc010a8d"
+    }
   }
 }
