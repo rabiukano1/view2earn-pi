@@ -318,6 +318,7 @@ export default function TasksScreen() {
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const limits = useQuery(api.tasks.myLimits, userId ? { userId } : 'skip');
   const verifications = useQuery(api.verifications.listMine, userId ? { userId } : 'skip');
+  const flags = useQuery(api.features.getFlags) || {};
 
   const verificationByTask = new Map<string, Verification>(
     (verifications ?? []).map((v) => [v.taskId, v])
@@ -497,7 +498,9 @@ export default function TasksScreen() {
                 {showRewardsDrawer ? (
                   <View style={styles.cardsGrid}>
                     <StreakCard userId={userId} />
-                    <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
+                    {flags['feature:rewards'] !== false && (
+                      <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
+                    )}
                     <DailyBox userId={userId} />
                     <ComboTracker userId={userId} />
                   </View>

@@ -177,11 +177,13 @@ export default function HomeScreen() {
           <Text style={styles.heroHi}>Welcome back 👋</Text>
           <Text style={styles.heroLabel}>Points Balance</Text>
           <Text style={styles.heroBalance}>{balance === undefined ? '—' : balance}</Text>
-          <TouchableOpacity
-            style={styles.historyChip}
-            onPress={() => stackNav.navigate('PointsHistory')}>
-            <Text style={styles.historyChipText}>View history →</Text>
-          </TouchableOpacity>
+          {flags['feature:rewards'] !== false && (
+            <TouchableOpacity
+              style={styles.historyChip}
+              onPress={() => stackNav.navigate('PointsHistory')}>
+              <Text style={styles.historyChipText}>View history →</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.body}>
@@ -189,7 +191,9 @@ export default function HomeScreen() {
             <>
               <HomeScreenLevelCard onPress={() => stackNav.navigate('Level')} />
               <HomeScreenActivityHubCard userId={userId} onPress={() => stackNav.navigate('Achievements')} />
-              <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
+              {flags['feature:rewards'] !== false && (
+                <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
+              )}
               <StreakCard userId={userId} />
               <DailyBox userId={userId} />
             </>

@@ -43,6 +43,7 @@ export default function SettingsScreen() {
   const { userId } = useAuth();
   const nav = useNavigation<Nav>();
   const data = useQuery(api.profile.smartDashboard, userId ? { userId } : 'skip');
+  const flags = useQuery(api.features.getFlags) || {};
   const generatePdf = useAction(api.reports.generatePdf);
 
   const handleDownloadReport = async () => {
@@ -63,11 +64,11 @@ export default function SettingsScreen() {
   const runCoachAction = (i: CoachInsight) => {
     if (!i.action) return;
     if (i.action === 'Home') nav.navigate('Home');
-    else if (i.action === 'Tasks') nav.navigate('Tasks');
-    else if (i.action === 'Spin') nav.navigate('Spin', { userId: userId! });
-    else if (i.action === 'Quiz')
+    else if (i.action === 'Tasks' && flags['feature:tasks'] !== false) nav.navigate('Tasks');
+    else if (i.action === 'Spin' && flags['feature:spin'] !== false) nav.navigate('Spin', { userId: userId! });
+    else if (i.action === 'Quiz' && flags['feature:quiz'] !== false)
       nav.navigate('Quiz', { userId: userId!, ecosystem: d?.user.ecosystem ?? 'SIDRA' });
-    else if (i.action === 'Rewards') nav.navigate('Rewards');
+    else if (i.action === 'Rewards' && flags['feature:rewards'] !== false) nav.navigate('Rewards');
     else if (i.action === 'Referral') nav.navigate('Referral');
   };
 
@@ -107,27 +108,39 @@ export default function SettingsScreen() {
       sub: 'Social profiles & Telegram',
       onPress: () => nav.navigate('LinkedAccounts'),
     },
-    {
-      icon: 'wallet',
-      tint: '#627EEA',
-      label: 'Payout Wallets',
-      sub: 'EVM & Solana addresses',
-      onPress: () => nav.navigate('PayoutSettings'),
-    },
-    {
-      icon: 'clock-rotate-left',
-      tint: colors.textMuted,
-      label: 'Points History',
-      sub: 'Full ledger records',
-      onPress: () => nav.navigate('PointsHistory'),
-    },
-    {
-      icon: 'heart',
-      tint: '#EC4899',
-      label: 'Donate π (Pi Browser)',
-      sub: 'Support platform & test payments',
-      onPress: () => nav.navigate('Donate'),
-    },
+    ...(flags['feature:wallet'] !== false
+      ? [
+          {
+            icon: 'wallet',
+            tint: '#627EEA',
+            label: 'Payout Wallets',
+            sub: 'EVM & Solana addresses',
+            onPress: () => nav.navigate('PayoutSettings'),
+          },
+        ]
+      : []),
+    ...(flags['feature:rewards'] !== false && flags['feature:wallet'] !== false
+      ? [
+          {
+            icon: 'clock-rotate-left',
+            tint: colors.textMuted,
+            label: 'Points History',
+            sub: 'Full ledger records',
+            onPress: () => nav.navigate('PointsHistory'),
+          },
+        ]
+      : []),
+    ...(flags['feature:donate'] !== false
+      ? [
+          {
+            icon: 'heart',
+            tint: '#EC4899',
+            label: 'Donate π (Pi Browser)',
+            sub: 'Support platform & test payments',
+            onPress: () => nav.navigate('Donate'),
+          },
+        ]
+      : []),
     {
       icon: 'file-pdf',
       tint: '#EF4444',

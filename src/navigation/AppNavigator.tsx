@@ -138,6 +138,7 @@ interface AppNavigatorProps {
 
 export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
   const { userId } = useAuth();
+  const flags = useQuery(api.features.getFlags) || {};
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -151,8 +152,12 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
             component={CreateListingScreen}
             options={{ presentation: 'modal' }}
           />
-          <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
-          <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
+          {flags['feature:rewards'] !== false && (
+            <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
+          )}
+          {flags['feature:wallet'] !== false && (
+            <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
+          )}
           <Stack.Screen name="Academy" component={AcademyScreen} />
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Spin" component={SpinScreen} />
@@ -165,7 +170,9 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="Achievements" component={AchievementsScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
-          <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
+          {flags['feature:wallet'] !== false && (
+            <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
+          )}
           <Stack.Screen name="Donate" component={DonateScreen} />
         </>
       ) : (
