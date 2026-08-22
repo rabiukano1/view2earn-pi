@@ -150,10 +150,9 @@ export default function HomeScreen() {
       ],
     },
     {
-      title: '💳 Rewards & Growth',
-      subtitle: 'Redeem perks and share your profile',
+      title: '🚀 Growth & Marketplace',
+      subtitle: 'Promote your links and explore listings',
       items: [
-        ...(flags['feature:rewards'] !== false ? [{ icon: 'gift', label: 'Rewards', desc: 'Redeem available perks', tint: '#10B981', go: () => tabNav.navigate('Rewards') }] : []),
         ...(flags['feature:promote'] !== false ? [{ icon: 'rocket', label: 'Promote Hub', desc: 'Promote your links', tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') }] : []),
       ],
     },
@@ -177,13 +176,6 @@ export default function HomeScreen() {
           <Text style={styles.heroHi}>Welcome back 👋</Text>
           <Text style={styles.heroLabel}>Points Balance</Text>
           <Text style={styles.heroBalance}>{balance === undefined ? '—' : balance}</Text>
-          {flags['feature:rewards'] !== false && (
-            <TouchableOpacity
-              style={styles.historyChip}
-              onPress={() => stackNav.navigate('PointsHistory')}>
-              <Text style={styles.historyChipText}>View history →</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={styles.body}>
@@ -191,9 +183,6 @@ export default function HomeScreen() {
             <>
               <HomeScreenLevelCard onPress={() => stackNav.navigate('Level')} />
               <HomeScreenActivityHubCard userId={userId} onPress={() => stackNav.navigate('Achievements')} />
-              {flags['feature:rewards'] !== false && (
-                <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
-              )}
               <StreakCard userId={userId} />
               <DailyBox userId={userId} />
             </>

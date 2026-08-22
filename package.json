@@ -19,6 +19,8 @@
     "website:build": "npm run build -w @view2earn/website",
     "pi:dev": "npm run dev -w @view2earn/pi-app -- -p 3002",
     "pi:build": "npm run build -w @view2earn/pi-app",
+    "wallet:start": "npm run start -w @view2earn/wallet-app",
+    "wallet:android": "npm run android -w @view2earn/wallet-app",
     "dev:all": "npx concurrently -k -n \"CONVEX,WEBSITE,PI-APP,ADMIN,MOBILE\" -c \"magenta,cyan,green,yellow,blue\" \"npm run convex:dev\" \"npm run website:dev\" \"npm run pi:dev\" \"npm run admin:dev -- -p 3001\" \"npm start\""
   },
   "dependencies": {

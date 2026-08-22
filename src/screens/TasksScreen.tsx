@@ -498,9 +498,6 @@ export default function TasksScreen() {
                 {showRewardsDrawer ? (
                   <View style={styles.cardsGrid}>
                     <StreakCard userId={userId} />
-                    {flags['feature:rewards'] !== false && (
-                      <ProgressToReward userId={userId} onPress={() => tabNav.navigate('Rewards')} />
-                    )}
                     <DailyBox userId={userId} />
                     <ComboTracker userId={userId} />
                   </View>

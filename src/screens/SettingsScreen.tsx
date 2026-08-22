@@ -68,7 +68,6 @@ export default function SettingsScreen() {
     else if (i.action === 'Spin' && flags['feature:spin'] !== false) nav.navigate('Spin', { userId: userId! });
     else if (i.action === 'Quiz' && flags['feature:quiz'] !== false)
       nav.navigate('Quiz', { userId: userId!, ecosystem: d?.user.ecosystem ?? 'SIDRA' });
-    else if (i.action === 'Rewards' && flags['feature:rewards'] !== false) nav.navigate('Rewards');
     else if (i.action === 'Referral') nav.navigate('Referral');
   };
 
@@ -108,28 +107,7 @@ export default function SettingsScreen() {
       sub: 'Social profiles & Telegram',
       onPress: () => nav.navigate('LinkedAccounts'),
     },
-    ...(flags['feature:wallet'] !== false
-      ? [
-          {
-            icon: 'wallet',
-            tint: '#627EEA',
-            label: 'Payout Wallets',
-            sub: 'EVM & Solana addresses',
-            onPress: () => nav.navigate('PayoutSettings'),
-          },
-        ]
-      : []),
-    ...(flags['feature:rewards'] !== false && flags['feature:wallet'] !== false
-      ? [
-          {
-            icon: 'clock-rotate-left',
-            tint: colors.textMuted,
-            label: 'Points History',
-            sub: 'Full ledger records',
-            onPress: () => nav.navigate('PointsHistory'),
-          },
-        ]
-      : []),
+
     ...(flags['feature:donate'] !== false
       ? [
           {

@@ -5,8 +5,6 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 export type RootTabParamList = {
   Home: undefined;
   Tasks: undefined;
-  Wallet: undefined;
-  Rewards: undefined;
   Settings: undefined;
   Profile: undefined;
 };
@@ -16,8 +14,6 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Marketplace: undefined;
   CreateListing: { userId: Id<'users'> };
-  PointsHistory: undefined;
-  WalletHistory: undefined;
   Academy: { userId?: string; ecosystem?: 'PI' | 'SIDRA' } | undefined;
   Quiz: { userId?: string; ecosystem?: 'PI' | 'SIDRA' } | undefined;
   Spin: { userId: string } | undefined;
@@ -31,7 +27,6 @@ export type RootStackParamList = {
   Leaderboard: undefined;
   Achievements: undefined;
   Stats: undefined;
-  PayoutSettings: undefined;
   Donate: undefined;
 };
 

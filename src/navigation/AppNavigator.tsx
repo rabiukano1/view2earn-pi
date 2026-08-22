@@ -10,19 +10,15 @@ import { colors, radius, shadow } from '../theme';
 
 import HomeScreen from '../screens/HomeScreen';
 import TasksScreen from '../screens/TasksScreen';
-import RewardsScreen from '../screens/RewardsScreen';
 import QuizScreen from '../screens/QuizScreen';
 import LeaderboardScreen from '../screens/LeaderboardScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import MarketplaceScreen from '../screens/MarketplaceScreen';
 import CreateListingScreen from '../screens/CreateListingScreen';
-import PointsHistoryScreen from '../screens/PointsHistoryScreen';
 import AcademyScreen from '../screens/AcademyScreen';
 import SpinScreen from '../screens/SpinScreen';
 import SurveysScreen from '../screens/SurveysScreen';
-import WalletScreen from '../screens/WalletScreen';
-import WalletHistoryScreen from '../screens/WalletHistoryScreen';
 import TermsScreen from '../screens/TermsScreen';
 import PolicyScreen from '../screens/PolicyScreen';
 import ReferralScreen from '../screens/ReferralScreen';
@@ -31,7 +27,6 @@ import SecurityScreen from '../screens/SecurityScreen';
 import AchievementsScreen from '../screens/AchievementsScreen';
 import DonateScreen from '../screens/DonateScreen';
 import StatsScreen from '../screens/StatsScreen';
-import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
 import LevelScreen from '../screens/LevelScreen';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -43,8 +38,6 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 const TAB_META: Record<keyof RootTabParamList, { icon: string; label: string }> = {
   Home: { icon: 'house', label: 'Home' },
   Tasks: { icon: 'list-check', label: 'Tasks' },
-  Wallet: { icon: 'wallet', label: 'Wallet' },
-  Rewards: { icon: 'gift', label: 'Rewards' },
   Settings: { icon: 'gear', label: 'Settings' },
   Profile: { icon: 'user', label: 'Profile' },
 };
@@ -124,8 +117,6 @@ function MainTabs() {
       screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={HomeScreen} />
       {flags['feature:tasks'] !== false && <Tab.Screen name="Tasks" component={TasksScreen} />}
-      {flags['feature:wallet'] !== false && <Tab.Screen name="Wallet" component={WalletScreen} />}
-      {flags['feature:rewards'] !== false && <Tab.Screen name="Rewards" component={RewardsScreen} />}
       <Tab.Screen name="Settings" component={SettingsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -152,12 +143,6 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
             component={CreateListingScreen}
             options={{ presentation: 'modal' }}
           />
-          {flags['feature:rewards'] !== false && (
-            <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
-          )}
-          {flags['feature:wallet'] !== false && (
-            <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
-          )}
           <Stack.Screen name="Academy" component={AcademyScreen} />
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Spin" component={SpinScreen} />
@@ -170,9 +155,6 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="Achievements" component={AchievementsScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
-          {flags['feature:wallet'] !== false && (
-            <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
-          )}
           <Stack.Screen name="Donate" component={DonateScreen} />
         </>
       ) : (
