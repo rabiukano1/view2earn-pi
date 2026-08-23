@@ -48,6 +48,7 @@ import type * as piPayments from "../piPayments.js";
 import type * as piWallet from "../piWallet.js";
 import type * as piWithdrawals from "../piWithdrawals.js";
 import type * as piWithdrawalsPayout from "../piWithdrawalsPayout.js";
+import type * as pointDonations from "../pointDonations.js";
 import type * as points from "../points.js";
 import type * as profile from "../profile.js";
 import type * as quiz from "../quiz.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   piWallet: typeof piWallet;
   piWithdrawals: typeof piWithdrawals;
   piWithdrawalsPayout: typeof piWithdrawalsPayout;
+  pointDonations: typeof pointDonations;
   points: typeof points;
   profile: typeof profile;
   quiz: typeof quiz;

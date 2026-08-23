@@ -1,12 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  AppState,
   FlatList,
+  Image,
   Modal,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,624 +14,440 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList, RootTabParamList } from '../navigation/types';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../auth/AuthContext';
-import { colors, radius, shadow } from '../theme';
-import StreakCard from '../components/StreakCard';
-import ProgressToReward from '../components/ProgressToReward';
-import DailyBox from '../components/DailyBox';
-import ComboTracker from '../components/ComboTracker';
-import PageHeader from '../components/PageHeader';
-import PlatformIcon from '../components/PlatformIcon';
-import Icon from '../components/Icon';
-import UploadScreenshotModal from '../components/UploadScreenshotModal';
+import { useLanguage } from '../i18n/LanguageContext';
 import { openTaskLink } from '../services/TaskLinkService';
-
-// ponytail: default active platform filter set to 'all'; fallback logic for dynamic filter state.
-type PlatformFilter = 'all' | 'telegram' | 'youtube' | 'tiktok' | 'facebook' | 'x';
-type StatusFilter = 'all' | 'available' | 'in_progress' | 'completed';
+import PageHeader from '../components/PageHeader';
+import Icon from '../components/Icon';
+import PlatformIcon from '../components/PlatformIcon';
+import { colors, radius, shadow, spacing } from '../theme';
 
 type TabNav = BottomTabNavigationProp<RootTabParamList, 'Tasks'>;
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
 
-const PLATFORM_META: Record<string, { label: string; color: string; icon: string }> = {
-  all: { label: 'All Tasks', color: colors.primary, icon: 'layer-group' },
-  telegram: { label: 'Telegram', color: '#229ED9', icon: 'telegram' },
-  youtube: { label: 'YouTube', color: '#FF0000', icon: 'youtube' },
-  tiktok: { label: 'TikTok', color: '#000000', icon: 'tiktok' },
-  facebook: { label: 'Facebook', color: '#1877F2', icon: 'facebook' },
-  x: { label: 'X (Twitter)', color: '#14171A', icon: 'x-twitter' },
-  app: { label: 'View2Earn', color: '#7C3AED', icon: 'shield-halved' },
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  FOLLOW_PAGE: 'Follow page',
-  JOIN_CHANNEL: 'Join channel',
-  MULTI_TASK: 'Multi-task',
-  QUIZ: 'Answer quiz',
-  SURVEY: 'Complete survey',
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  FOLLOW: 'Follow',
-  JOIN: 'Join',
-  SUBSCRIBE: 'Subscribe',
-  LIKE: 'Like',
-  COMMENT: 'Comment',
-};
-
-type TaskStep = {
-  action: string;
-  label?: string;
-  name?: string;
-  targetUrl: string;
-};
-
 type Task = {
   _id: Id<'tasks'>;
+  name?: string;
   type: string;
   platform: string;
-  targetUrl: string;
-  name?: string;
-  pageId?: string;
   points: number;
+  targetUrl?: string;
   verifier: string;
-  steps?: TaskStep[];
+  pageId?: string;
+  steps?: { action: string; targetUrl: string; label?: string; name?: string }[];
 };
 
 type Verification = {
   _id: Id<'verifications'>;
   taskId: Id<'tasks'>;
+  userId: Id<'users'>;
   state: string;
-  holdUntil?: number;
+  claimedAt?: number;
+  submittedAt?: number;
 };
+
+type PlatformFilter = 'all' | 'youtube' | 'telegram' | 'tiktok' | 'facebook' | 'twitter' | 'instagram';
+type StatusFilter = 'all' | 'available' | 'completed';
+
+const PLATFORMS: { key: PlatformFilter; label: string; color: string; icon: string }[] = [
+  { key: 'all', label: 'All Tasks', color: colors.primary, icon: 'layer-group' },
+  { key: 'youtube', label: 'YouTube', color: '#EF4444', icon: 'youtube' },
+  { key: 'telegram', label: 'Telegram', color: '#0284C7', icon: 'telegram' },
+  { key: 'tiktok', label: 'TikTok', color: '#111827', icon: 'tiktok' },
+  { key: 'facebook', label: 'Facebook', color: '#1877F2', icon: 'facebook' },
+  { key: 'twitter', label: 'X (Twitter)', color: '#0F172A', icon: 'x-twitter' },
+  { key: 'instagram', label: 'Instagram', color: '#E1306C', icon: 'instagram' },
+];
 
 function targetName(url: string): string {
-  if (!url) return '';
-  const last = url.replace(/\/+$/, '').split('/').pop() ?? '';
-  return last.startsWith('@') ? last : `@${last}`;
-}
-
-// Delegates to smartOpenUrl which tries the native app deep-link scheme
-// first (tg://, vnd.youtube://, fb://, twitter://, etc.) and falls back to
-// the HTTPS URL — same WhatsApp-like behavior across all platforms.
-async function openUrl(platform: string, url: string, pageId?: string) {
-  if (!url) return;
-  await openTaskLink(url, platform, pageId);
-}
-
-async function openTask(task: Task, onQuizNav: () => void) {
-  if (task.type === 'QUIZ') {
-    onQuizNav();
-    return;
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    const last = u.pathname.replace(/\/+$/, '').split('/').pop() ?? '';
+    return last.replace(/^@/, '') || u.hostname;
+  } catch {
+    return 'Task Link';
   }
-  if (task.type === 'MULTI_TASK') {
-    const first = task.steps?.[0];
-    if (!first?.targetUrl) {
-      Alert.alert('Coming soon', 'This task type is coming soon — check back!');
-      return;
-    }
-    await openUrl(task.platform, first.targetUrl, task.pageId);
-    return;
-  }
-  if (!task.targetUrl) {
-    Alert.alert('Coming soon', 'This task type is coming soon — check back!');
-    return;
-  }
-  await openUrl(task.platform, task.targetUrl, task.pageId);
-}
-
-type ActionState = {
-  label: string;
-  disabled: boolean;
-  kind: 'claim' | 'upload' | 'verify' | 'done' | 'busy';
-  iconName: string;
-};
-
-function actionFor(verification: Verification | undefined, verifier: string): ActionState {
-  const telegram = verifier === 'telegram-bot';
-  if (!verification) {
-    return { label: 'Start Task', disabled: false, kind: 'claim', iconName: 'play' };
-  }
-  switch (verification.state) {
-    case 'USER_CLAIMED_DONE':
-      return telegram
-        ? { label: 'Verify Join', disabled: false, kind: 'verify', iconName: 'shield-check' }
-        : { label: 'Upload Proof', disabled: false, kind: 'upload', iconName: 'arrow-up-from-bracket' };
-    case 'REJECTED':
-      return telegram
-        ? { label: 'Retry Verify', disabled: false, kind: 'verify', iconName: 'rotate-right' }
-        : { label: 'Retry Proof', disabled: false, kind: 'upload', iconName: 'arrow-up-from-bracket' };
-    case 'PROOF_SUBMITTED':
-      return { label: 'Verifying…', disabled: true, kind: 'busy', iconName: 'spinner' };
-    case 'ADMIN_REVIEW':
-      return { label: 'In Review', disabled: true, kind: 'busy', iconName: 'clock' };
-    case 'PENDING_HOLD':
-      return { label: 'Holding', disabled: true, kind: 'busy', iconName: 'lock' };
-    case 'RELEASED':
-      return { label: 'Completed', disabled: true, kind: 'done', iconName: 'circle-check' };
-    default:
-      return { label: verification.state, disabled: true, kind: 'busy', iconName: 'clock' };
-  }
-}
-
-function TaskCard({
-  task,
-  verification,
-  dark,
-  onClaim,
-  onUpload,
-  onVerify,
-  onQuizNav,
-}: {
-  task: Task;
-  verification: Verification | undefined;
-  dark: boolean;
-  onClaim: (task: Task) => void;
-  onUpload: (verification: Verification) => void;
-  onVerify: (verification: Verification) => void;
-  onQuizNav: () => void;
-}) {
-  const meta = PLATFORM_META[task.platform] ?? {
-    label: task.platform,
-    color: '#6B7280',
-    icon: 'share-nodes',
-  };
-  const action = actionFor(verification, task.verifier);
-  const showAction = task.type !== 'QUIZ';
-  const multiAction = task.type === 'MULTI_TASK';
-  const steps = task.type === 'MULTI_TASK' ? task.steps ?? [] : [];
-
-  const handleCopyLink = async () => {
-    const urls =
-      task.type === 'MULTI_TASK'
-        ? (task.steps ?? []).map((s) => s.targetUrl).filter(Boolean)
-        : task.targetUrl
-        ? [task.targetUrl]
-        : [];
-    if (urls.length === 0) return;
-    try {
-      await Share.share({ message: urls.join('\n'), url: urls[0] });
-    } catch {}
-  };
-
-  return (
-    <View style={[styles.card, dark && styles.cardDark]}>
-      {/* Top Header & Platform Badge */}
-      <TouchableOpacity
-        style={styles.cardHeader}
-        activeOpacity={0.75}
-        onPress={() => openTask(task, onQuizNav)}>
-        <View style={[styles.platformBadge, { backgroundColor: meta.color }]}>
-          <PlatformIcon platform={task.platform} size={20} color="#FFF" />
-        </View>
-
-        <View style={styles.cardInfo}>
-          <Text style={[styles.taskTitle, dark && styles.textLight]} numberOfLines={1}>
-            {task.name || (task.targetUrl ? targetName(task.targetUrl) : TYPE_LABELS[task.type] ?? task.type)}
-          </Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.platformName}>{meta.label}</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Text style={styles.taskType}>{TYPE_LABELS[task.type] ?? task.type}</Text>
-          </View>
-        </View>
-
-        <View style={styles.rewardPill}>
-          <Icon name="coins" iconStyle="solid" size={13} color="#D97706" />
-          <Text style={styles.rewardValue}>+{task.points}</Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Multi-Task Steps Section */}
-      {Boolean(steps.length > 0) ? (
-        <View style={[styles.stepsBox, dark && styles.stepsBoxDark]}>
-          <Text style={styles.stepsHeader}>Complete {steps.length} Steps to Claim:</Text>
-          {steps.map((step, i) => {
-            const actionLabel = step.label || ACTION_LABELS[step.action] || step.action;
-            const stepName = step.name || (step.targetUrl ? targetName(step.targetUrl) : '');
-            return (
-              <TouchableOpacity
-                key={i}
-                style={[styles.stepItem, dark && styles.stepItemDark]}
-                activeOpacity={0.8}
-                onPress={() => openUrl(task.platform, step.targetUrl, task.pageId)}>
-                <View style={styles.stepNumBadge}>
-                  <Text style={styles.stepNumText}>{i + 1}</Text>
-                </View>
-                <Text style={[styles.stepTitle, dark && styles.textLight]} numberOfLines={1}>
-                  {actionLabel} {stepName ? `· ${stepName}` : ''}
-                </Text>
-                <Icon name="arrow-up-right-from-square" iconStyle="solid" size={12} color={colors.primary} />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {/* Action Footer */}
-      {Boolean(showAction) ? (
-        <View style={styles.actionFooter}>
-          <TouchableOpacity
-            style={[
-              styles.actionBtn,
-              action.kind === 'done' && styles.actionBtnDone,
-              action.kind === 'upload' && styles.actionBtnUpload,
-              action.kind === 'verify' && styles.actionBtnVerify,
-              action.disabled && action.kind !== 'done' && styles.actionBtnBusy,
-            ]}
-            disabled={action.disabled}
-            onPress={() => {
-              if (action.kind === 'claim') onClaim(task);
-              else if (action.kind === 'upload' && verification) onUpload(verification);
-              else if (action.kind === 'verify' && verification) onVerify(verification);
-            }}>
-            <Icon
-              name={action.iconName}
-              iconStyle="solid"
-              size={14}
-              color={action.kind === 'done' ? '#15803D' : '#FFF'}
-            />
-            <Text style={[styles.actionBtnText, action.kind === 'done' && styles.actionBtnTextDone]}>
-              {action.label}
-            </Text>
-          </TouchableOpacity>
-
-          {Boolean(task.targetUrl || multiAction) && action.kind === 'claim' ? (
-            <TouchableOpacity style={styles.shareBtn} onPress={handleCopyLink}>
-              <Icon name="share-nodes" iconStyle="solid" size={14} color={colors.textFaint} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  );
 }
 
 export default function TasksScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
-  const [uploading, setUploading] = useState(false);
+  const { t } = useLanguage();
+  const stackNav = useNavigation<StackNav>();
+
   const [activePlatform, setActivePlatform] = useState<PlatformFilter>('all');
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('all');
-  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
-  const [showRewardsDrawer, setShowRewardsDrawer] = useState(true);
-
   const [uploadTarget, setUploadTarget] = useState<Verification | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
-  const tabNav = useNavigation<TabNav>();
-  const stackNav = useNavigation<StackNav>();
+  // Queries & Mutations
+  const tasks = useQuery(api.tasks.list, userId ? { userId } : 'skip');
+  const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
+  const verifications = useQuery(api.verifications.listMine, userId ? { userId } : 'skip');
+
   const claim = useMutation(api.verifications.claim);
   const generateUploadUrl = useMutation(api.verifications.generateUploadUrl);
   const submitProof = useMutation(api.verifications.submitProof);
   const verifyTelegram = useMutation(api.verifications.verifyTelegram);
 
-  const tasks = useQuery(api.tasks.list, userId ? { userId } : 'skip');
-  const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
-  const limits = useQuery(api.tasks.myLimits, userId ? { userId } : 'skip');
-  const verifications = useQuery(api.verifications.listMine, userId ? { userId } : 'skip');
-  const flags = useQuery(api.features.getFlags) || {};
+  const verificationByTask = new Map<string, Verification>();
+  if (Array.isArray(verifications)) {
+    for (const v of verifications) {
+      if (v && v.taskId) {
+        verificationByTask.set(v.taskId, v as Verification);
+      }
+    }
+  }
 
-  const verificationByTask = new Map<string, Verification>(
-    (verifications ?? []).map((v) => [v.taskId, v])
-  );
-
-  const handleQuizNav = () => {
+  // Directly open the task link & claim
+  const handleOpenAndClaim = async (task: Task) => {
     if (!userId) return;
-    stackNav.navigate('Quiz', { userId, ecosystem: 'SIDRA' });
+
+    if (task.type === 'QUIZ') {
+      stackNav.navigate('Quiz', { userId, ecosystem: 'SIDRA' });
+      return;
+    }
+
+    const targetUrl = task.steps?.[0]?.targetUrl || task.targetUrl;
+    if (!targetUrl) {
+      Alert.alert('Task Link', 'No destination link found for this task.');
+      return;
+    }
+
+    const currentV = verificationByTask.get(task._id);
+
+    // Auto-claim if not already claimed
+    if (!currentV) {
+      try {
+        await claim({ taskId: task._id, userId });
+      } catch (e) {
+        // Silently continue to open the link if already claimed or allowed
+      }
+    }
+
+    // Immediately open the exact destination page
+    await openTaskLink(targetUrl, task.platform, task.pageId);
   };
 
-  const executeClaim = async (task: Task) => {
-    if (!userId) return;
+  // Telegram bot verification
+  const handleVerifyTelegram = async (verification: Verification) => {
     try {
-      await claim({ taskId: task._id, userId });
-      await openTask(task, handleQuizNav);
-    } catch (e) {
-      let msg = String(e).replace('[CONVEX] ', '').replace(/Uncaught Error:\s*/, '');
-      Alert.alert('Could not claim', msg);
+      await verifyTelegram({ verificationId: verification._id });
+      Alert.alert('Success', 'Telegram join verified successfully!');
+    } catch (e: any) {
+      const msg = String(e?.message || e).replace('[CONVEX] ', '');
+      if (msg.includes('Telegram account') || msg.includes('Link Telegram')) {
+        Alert.alert(
+          'Telegram Not Linked',
+          'Please link your Telegram account in Settings to verify tasks automatically.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Link Telegram', onPress: () => stackNav.navigate('LinkedAccounts') },
+          ]
+        );
+      } else {
+        Alert.alert('Verification', msg);
+      }
     }
   };
 
-  const executeUpload = async (verification: Verification) => {
-    if (uploading) return;
+  // Image upload picker
+  const handlePickImage = async () => {
     try {
       const picked = await launchImageLibrary({
         mediaType: 'photo',
-        maxWidth: 1280,
-        maxHeight: 2560,
-        quality: 0.7,
+        quality: 0.8,
         selectionLimit: 1,
       });
-      const asset = picked.assets?.[0];
-      if (picked.didCancel || !asset?.uri) return;
+      const uri = picked.assets?.[0]?.uri;
+      if (uri) {
+        setSelectedImageUri(uri);
+      }
+    } catch (e) {
+      Alert.alert('Image Picker', 'Could not access gallery.');
+    }
+  };
 
-      setUploading(true);
+  // Submit proof
+  const handleUploadSubmit = async () => {
+    if (!uploadTarget || !selectedImageUri || uploading) return;
+    setUploading(true);
+    try {
       const uploadUrl = await generateUploadUrl();
-      const mimeType = asset.type ?? 'image/jpeg';
+      const response = await fetch(selectedImageUri);
+      const blob = await response.blob();
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload = () => resolve(xhr.response);
-        xhr.onerror = () => reject(new Error('Could not read image file'));
-        xhr.responseType = 'blob';
-        xhr.open('GET', asset.uri!, true);
-        xhr.send(null);
-      });
-
-      const result = await fetch(uploadUrl, {
+      const uploadRes = await fetch(uploadUrl, {
         method: 'POST',
-        headers: { 'Content-Type': mimeType },
+        headers: { 'Content-Type': 'image/jpeg' },
         body: blob,
       });
 
-      if (!result.ok) throw new Error(`Upload server error (${result.status})`);
-      const { storageId } = (await result.json()) as { storageId: Id<'_storage'> };
-      await submitProof({ verificationId: verification._id, storageId });
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const { storageId } = (await uploadRes.json()) as { storageId: Id<'_storage'> };
+
+      await submitProof({ verificationId: uploadTarget._id, storageId });
+      Alert.alert('Proof Submitted', 'Your screenshot was submitted for instant review.');
       setUploadTarget(null);
-    } catch (e) {
-      Alert.alert('Upload failed', String(e).replace('[CONVEX] ', ''));
+      setSelectedImageUri(null);
+    } catch (e: any) {
+      Alert.alert('Upload Error', e?.message || 'Could not upload proof.');
     } finally {
       setUploading(false);
     }
   };
 
-  const executeVerify = async (verification: Verification) => {
-    try {
-      await verifyTelegram({ verificationId: verification._id });
-    } catch (e: any) {
-      const rawMsg = String(e?.message || e).replace('[CONVEX] ', '').replace(/Uncaught Error:\s*/, '');
-      if (rawMsg.includes('Telegram account') || rawMsg.includes('Link Telegram')) {
-        Alert.alert(
-          'Telegram Account Required',
-          'Link your Telegram account first to verify channel-join tasks automatically via the bot.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Link Telegram Now',
-              onPress: () => stackNav.navigate('LinkedAccounts'),
-            },
-          ],
-        );
-      } else {
-        Alert.alert('Could not verify', rawMsg);
-      }
-    }
-  };
-
-  const openUploadModal = (verification: Verification) => {
-    setUploadTarget(verification);
-  };
-
-  // Filter tasks based on platform & completion status
-  const filteredTasks = (tasks ?? []).filter((t) => {
+  // Filter tasks
+  const filteredTasks = (Array.isArray(tasks) ? tasks : []).filter((t) => {
+    if (!t || !t._id) return false;
     if (activePlatform !== 'all' && t.platform !== activePlatform) return false;
     const v = verificationByTask.get(t._id);
     if (activeStatus === 'completed') return v?.state === 'RELEASED';
-    if (activeStatus === 'in_progress') return v && v.state !== 'RELEASED';
-    if (activeStatus === 'available') return !v;
+    if (activeStatus === 'available') return v?.state !== 'RELEASED';
     return true;
   });
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader
-        title="Tasks"
-        subtitle="Complete quick tasks & earn points"
+        title={t('tasks')}
+        subtitle="Tap any task to open exact page & earn"
         right={
-          <View style={styles.headerRightRow}>
-            <TouchableOpacity style={styles.marketPill} onPress={() => stackNav.navigate('Marketplace')}>
-              <Icon name="rocket" iconStyle="solid" size={13} color="#FFF" />
-              <Text style={styles.marketPillText}>Promote</Text>
+          <View style={styles.headerRight}>
+            <TouchableOpacity style={styles.promoteBtn} onPress={() => stackNav.navigate('Marketplace')}>
+              <Icon name="rocket" iconStyle="solid" size={12} color="#FFF" />
+              <Text style={styles.promoteBtnText}>Promote</Text>
             </TouchableOpacity>
-            <View style={styles.ptsBadge}>
-              <Icon name="coins" iconStyle="solid" size={13} color="#FBBF24" />
-              <Text style={styles.ptsBadgeText}>{balance === undefined ? '…' : balance}</Text>
-            </View>
-          </View>
-        }
-      />
-
-      <FlatList
-        data={filteredTasks}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
-        renderItem={({ item }) => (
-          <TaskCard
-            task={item}
-            verification={verificationByTask.get(item._id)}
-            dark={dark}
-            onClaim={executeClaim}
-            onUpload={openUploadModal}
-            onVerify={executeVerify}
-            onQuizNav={handleQuizNav}
-          />
-        )}
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            {/* Daily Limits Summary Bar */}
-            {limits?.some((l) => l.used > 0 || l.remaining < l.limit) ? (
-              <View style={styles.limitsContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.limitsScroll}>
-                  {limits.map((l) => {
-                    const meta = PLATFORM_META[l.platform] ?? { label: l.platform, color: '#6B7280' };
-                    const maxed = l.remaining === 0;
-                    return (
-                      <View key={l.platform} style={[styles.limitChip, maxed && styles.limitChipMaxed]}>
-                        <View style={[styles.limitDot, { backgroundColor: meta.color }]} />
-                        <Text style={[styles.limitText, maxed && styles.limitTextMaxed]}>
-                          {meta.label}: {l.remaining}/{l.limit} left
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            {/* Daily Rewards Expandable Card Header */}
-            {userId ? (
-              <View style={[styles.rewardsSection, dark && styles.rewardsSectionDark]}>
-                <TouchableOpacity
-                  style={styles.rewardsSectionHeader}
-                  activeOpacity={0.8}
-                  onPress={() => setShowRewardsDrawer(!showRewardsDrawer)}>
-                  <View style={styles.rewardsHeaderLeft}>
-                    <Icon name="fire" iconStyle="solid" size={16} color="#F59E0B" />
-                    <Text style={[styles.rewardsTitle, dark && styles.textLight]}>Daily Rewards & Streaks</Text>
-                  </View>
-                  <Icon
-                    name={showRewardsDrawer ? 'chevron-up' : 'chevron-down'}
-                    iconStyle="solid"
-                    size={14}
-                    color={colors.textFaint}
-                  />
-                </TouchableOpacity>
-
-                {showRewardsDrawer ? (
-                  <View style={styles.cardsGrid}>
-                    <StreakCard userId={userId} />
-                    <DailyBox userId={userId} />
-                    <ComboTracker userId={userId} />
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Platform Dropdown Selector */}
-            <View style={styles.filterSection}>
-              <TouchableOpacity
-                style={[styles.platformDropdownBtn, dark && styles.platformDropdownBtnDark]}
-                onPress={() => setShowPlatformDropdown(true)}
-                activeOpacity={0.8}>
-                <View style={styles.platformDropdownLeft}>
-                  <PlatformIcon
-                    platform={activePlatform === 'all' ? 'app' : activePlatform}
-                    size={18}
-                    color={PLATFORM_META[activePlatform]?.color ?? colors.primary}
-                  />
-                  <Text style={[styles.platformDropdownLabel, dark && styles.textLight]}>
-                    {PLATFORM_META[activePlatform]?.label ?? 'All Platforms'}
-                  </Text>
-                </View>
-                <View style={styles.platformDropdownRight}>
-                  <Text style={styles.platformDropdownCount}>
-                    {activePlatform === 'all'
-                      ? (tasks?.length ?? 0)
-                      : (tasks?.filter((t) => t.platform === activePlatform).length ?? 0)}{' '}
-                    tasks
-                  </Text>
-                  <Icon name="chevron-down" iconStyle="solid" size={13} color={dark ? '#C4B5FD' : colors.textMuted} />
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Platform Dropdown Modal */}
-            <Modal
-              visible={showPlatformDropdown}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setShowPlatformDropdown(false)}>
-              <TouchableOpacity
-                style={styles.dropdownModalOverlay}
-                activeOpacity={1}
-                onPress={() => setShowPlatformDropdown(false)}>
-                <View style={[styles.dropdownCard, dark && styles.dropdownCardDark]}>
-                  <Text style={[styles.dropdownTitle, dark && styles.textLight]}>Select Platform</Text>
-                  <View style={styles.dropdownDivider} />
-                  {(['all', 'telegram', 'youtube', 'tiktok', 'facebook', 'x'] as PlatformFilter[]).map((p) => {
-                    const meta = PLATFORM_META[p];
-                    const isSelected = activePlatform === p;
-                    const count =
-                      p === 'all'
-                        ? tasks?.length ?? 0
-                        : tasks?.filter((t) => t.platform === p).length ?? 0;
-                    return (
-                      <TouchableOpacity
-                        key={p}
-                        style={[
-                          styles.dropdownOptionRow,
-                          dark && styles.dropdownOptionRowDark,
-                          isSelected && styles.dropdownOptionSelected,
-                        ]}
-                        onPress={() => {
-                          setActivePlatform(p);
-                          setShowPlatformDropdown(false);
-                        }}>
-                        <View style={styles.dropdownOptionLeft}>
-                          <PlatformIcon platform={p === 'all' ? 'app' : p} size={18} color={meta.color} />
-                          <Text style={[styles.dropdownOptionLabel, dark && styles.textLight, isSelected && { color: meta.color, fontWeight: '800' }]}>
-                            {meta.label}
-                          </Text>
-                        </View>
-                        <View style={styles.dropdownOptionRight}>
-                          <Text style={styles.dropdownOptionCount}>{count}</Text>
-                          {Boolean(isSelected) ? (
-                            <Icon name="check" iconStyle="solid" size={14} color={meta.color} />
-                          ) : null}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </TouchableOpacity>
-            </Modal>
-
-            {/* Status Filter Chips */}
-            <View style={styles.statusRow}>
-              {(['all', 'available', 'in_progress', 'completed'] as StatusFilter[]).map((s) => {
-                const isActive = activeStatus === s;
-                const label = s === 'all' ? 'All Status' : s === 'available' ? 'Available' : s === 'in_progress' ? 'In Progress' : 'Completed';
-                return (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.statusChip, isActive && styles.statusChipActive]}
-                    onPress={() => setActiveStatus(s)}>
-                    <Text style={[styles.statusChipText, isActive && styles.statusChipTextActive]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        }
-        ListEmptyComponent={
-          tasks === undefined ? (
-            <View style={styles.emptyContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.emptyText}>Loading available tasks…</Text>
-            </View>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Icon name="clipboard-check" iconStyle="solid" size={40} color={colors.textFaint} />
-              <Text style={[styles.emptyTitle, dark && styles.textLight]}>No tasks found</Text>
-              <Text style={styles.emptyText}>
-                {activePlatform !== 'all' || activeStatus !== 'all'
-                  ? 'Try selecting a different filter above.'
-                  : 'Check back soon — new tasks are added daily.'}
+            <View style={styles.balancePill}>
+              <Icon name="coins" iconStyle="solid" size={13} color="#F59E0B" />
+              <Text style={styles.balanceText}>
+                {balance === undefined ? '…' : balance.toLocaleString()} PTS
               </Text>
             </View>
-          )
+          </View>
         }
       />
 
-      <UploadScreenshotModal
-        visible={!!uploadTarget}
-        uploading={uploading}
-        onUpload={() => {
-          if (uploadTarget) executeUpload(uploadTarget);
-        }}
-        onClose={() => {
-          if (!uploading) setUploadTarget(null);
+      {/* Platform Filter Bar */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}>
+          {PLATFORMS.map((p) => {
+            const isActive = activePlatform === p.key;
+            return (
+              <TouchableOpacity
+                key={p.key}
+                style={[
+                  styles.filterChip,
+                  dark && styles.filterChipDark,
+                  isActive && { backgroundColor: p.color, borderColor: p.color },
+                ]}
+                onPress={() => setActivePlatform(p.key)}
+                activeOpacity={0.8}>
+                <PlatformIcon platform={p.key === 'all' ? 'website' : p.key} size={13} color={isActive ? '#FFF' : dark ? colors.textDark : colors.text} />
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    dark && styles.textLight,
+                    isActive && styles.filterChipTextActive,
+                  ]}>
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Status Toggle (All vs Available vs Completed) */}
+      <View style={styles.statusRow}>
+        {(['all', 'available', 'completed'] as StatusFilter[]).map((st) => (
+          <TouchableOpacity
+            key={st}
+            style={[styles.statusBtn, activeStatus === st && styles.statusBtnActive]}
+            onPress={() => setActiveStatus(st)}>
+            <Text
+              style={[
+                styles.statusBtnText,
+                activeStatus === st && styles.statusBtnTextActive,
+                dark && styles.textLight,
+              ]}>
+              {st === 'all' ? 'All' : st === 'available' ? 'Available' : 'Completed'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Task List */}
+      <FlatList
+        data={filteredTasks}
+        keyExtractor={(item) => item?._id ?? String(Math.random())}
+        contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyBox}>
+            <Icon name="clipboard-check" iconStyle="solid" size={36} color={colors.textFaint} />
+            <Text style={styles.emptyTitle}>No Tasks Found</Text>
+            <Text style={styles.emptySub}>
+              {activeStatus === 'completed'
+                ? 'You have not completed any tasks in this category yet.'
+                : 'All available tasks in this category are completed! Check back soon.'}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => {
+          const v = verificationByTask.get(item._id);
+          const isDone = v?.state === 'RELEASED';
+          const isPendingProof = v?.state === 'USER_CLAIMED_DONE' || v?.state === 'REJECTED';
+          const isTelegramBot = item.verifier === 'telegram-bot';
+          const title = item.name || (item.targetUrl ? targetName(item.targetUrl) : 'Social Engagement');
+          const platformInfo = PLATFORMS.find((p) => p.key === item.platform) || PLATFORMS[0];
+
+          return (
+            <TouchableOpacity
+              style={[styles.taskCard, dark && styles.cardDark, isDone && styles.taskCardDone]}
+              activeOpacity={0.85}
+              onPress={() => handleOpenAndClaim(item)}>
+              {/* Top Row: Icon, Title & Reward */}
+              <View style={styles.taskCardHeader}>
+                <View style={[styles.platformCircle, { backgroundColor: platformInfo.color }]}>
+                  <PlatformIcon platform={item.platform} size={18} color="#FFF" />
+                </View>
+
+                <View style={styles.taskInfo}>
+                  <Text style={[styles.taskTitle, dark && styles.textLight]} numberOfLines={1}>
+                    {title}
+                  </Text>
+                  <Text style={styles.taskSub} numberOfLines={1}>
+                    {platformInfo.label} • {item.type.replace('_', ' ')}
+                  </Text>
+                </View>
+
+                <View style={styles.pointsPill}>
+                  <Icon name="coins" iconStyle="solid" size={12} color="#F59E0B" />
+                  <Text style={styles.pointsValue}>+{item.points}</Text>
+                </View>
+              </View>
+
+              {/* Action Buttons Row */}
+              <View style={styles.taskActionRow}>
+                {isDone ? (
+                  <View style={styles.doneBadge}>
+                    <Icon name="circle-check" iconStyle="solid" size={14} color="#10B981" />
+                    <Text style={styles.doneBadgeText}>Completed</Text>
+                  </View>
+                ) : isPendingProof ? (
+                  <View style={styles.pendingActionGroup}>
+                    {isTelegramBot ? (
+                      <TouchableOpacity
+                        style={styles.verifyBtn}
+                        activeOpacity={0.8}
+                        onPress={() => handleVerifyTelegram(v)}>
+                        <Icon name="shield-check" iconStyle="solid" size={13} color="#FFF" />
+                        <Text style={styles.verifyBtnText}>Verify Join</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.uploadBtn}
+                        activeOpacity={0.8}
+                        onPress={() => {
+                          setUploadTarget(v);
+                          setSelectedImageUri(null);
+                        }}>
+                        <Icon name="arrow-up-from-bracket" iconStyle="solid" size={13} color="#FFF" />
+                        <Text style={styles.uploadBtnText}>Upload Proof</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.reopenLinkBtn}
+                      activeOpacity={0.8}
+                      onPress={() => handleOpenAndClaim(item)}>
+                      <Icon name="arrow-up-right-from-square" iconStyle="solid" size={12} color={colors.primary} />
+                      <Text style={styles.reopenLinkText}>Open Page</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.openTaskBtn}
+                    activeOpacity={0.8}
+                    onPress={() => handleOpenAndClaim(item)}>
+                    <Text style={styles.openTaskBtnText}>Open & Complete</Text>
+                    <Icon name="arrow-up-right-from-square" iconStyle="solid" size={12} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
         }}
       />
+
+      {/* Upload Proof Modal */}
+      <Modal visible={Boolean(uploadTarget)} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, dark && styles.cardDark]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, dark && styles.textLight]}>Submit Task Proof</Text>
+              <TouchableOpacity onPress={() => setUploadTarget(null)}>
+                <Icon name="xmark" iconStyle="solid" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSub}>
+              Upload a screenshot showing you completed the task (follow, like, or subscribe).
+            </Text>
+
+            {selectedImageUri ? (
+              <View style={styles.previewContainer}>
+                <Image source={{ uri: selectedImageUri }} style={styles.previewImage} resizeMode="cover" />
+                <TouchableOpacity style={styles.changeImgBtn} onPress={handlePickImage}>
+                  <Text style={styles.changeImgText}>Change Screenshot</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.pickerBox} activeOpacity={0.8} onPress={handlePickImage}>
+                <Icon name="image" iconStyle="solid" size={32} color={colors.primary} />
+                <Text style={styles.pickerText}>Select Screenshot from Gallery</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setUploadTarget(null);
+                  setSelectedImageUri(null);
+                }}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalSubmitBtn,
+                  (!selectedImageUri || uploading) && styles.modalSubmitBtnDisabled,
+                ]}
+                disabled={!selectedImageUri || uploading}
+                onPress={handleUploadSubmit}>
+                {uploading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Submit for Verification</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -645,121 +460,59 @@ const styles = StyleSheet.create({
   containerDark: {
     backgroundColor: colors.bgDark,
   },
-  headerRightRow: {
+  textLight: {
+    color: colors.textDark,
+  },
+
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  marketPill: {
+  promoteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-  },
-  marketPillText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  ptsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-  },
-  ptsBadgeText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  headerBlock: {
-    marginBottom: 16,
-    gap: 14,
-  },
-  limitsContainer: {
-    marginBottom: 4,
-  },
-  limitsScroll: {
-    gap: 8,
-  },
-  limitChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: 12,
+    backgroundColor: '#8B5CF6',
+    paddingHorizontal: 10,
     paddingVertical: 6,
+    borderRadius: radius.pill,
+    gap: 5,
   },
-  limitChipMaxed: {
-    backgroundColor: '#FEE2E2',
+  promoteBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFF',
   },
-  limitDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  balancePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    gap: 5,
   },
-  limitText: {
+  balanceText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: colors.primaryDeep,
-  },
-  limitTextMaxed: {
-    color: '#B91C1C',
-  },
-  rewardsSection: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadow.card,
-  },
-  rewardsSectionDark: {
-    backgroundColor: colors.surfaceDark,
-    borderColor: colors.borderDark,
-  },
-  rewardsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rewardsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  rewardsTitle: {
-    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
   },
-  cardsGrid: {
-    marginTop: 12,
-    gap: 10,
+
+  filterSection: {
+    paddingVertical: 8,
   },
-  filterSection: {},
   filterScroll: {
+    paddingHorizontal: 16,
     gap: 8,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -768,319 +521,299 @@ const styles = StyleSheet.create({
     borderColor: colors.borderDark,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.textMuted,
+    color: colors.text,
   },
   filterChipTextActive: {
     color: '#FFF',
     fontWeight: '800',
   },
+
   statusRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  statusChip: {
-    paddingHorizontal: 12,
+  statusBtn: {
+    flex: 1,
     paddingVertical: 6,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(150, 150, 150, 0.1)',
+    alignItems: 'center',
+    borderRadius: radius.pill,
   },
-  statusChipActive: {
+  statusBtnActive: {
     backgroundColor: colors.primarySoft,
   },
-  statusChipText: {
+  statusBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.textFaint,
+    color: colors.textMuted,
   },
-  statusChipTextActive: {
+  statusBtnTextActive: {
     color: colors.primaryDeep,
     fontWeight: '800',
   },
-  card: {
+
+  list: {
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    lineHeight: 18,
+  },
+
+  taskCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: radius.xl,
+    padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: 12,
     ...shadow.card,
   },
   cardDark: {
     backgroundColor: colors.surfaceDark,
     borderColor: colors.borderDark,
   },
-  cardHeader: {
+  taskCardDone: {
+    opacity: 0.7,
+  },
+
+  taskCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  platformBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+  platformCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardInfo: {
+  taskInfo: {
     flex: 1,
-    marginHorizontal: 12,
   },
   taskTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: colors.text,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  platformName: {
+  taskSub: {
     fontSize: 12,
-    fontWeight: '700',
     color: colors.textMuted,
+    marginTop: 2,
+    textTransform: 'capitalize',
   },
-  metaDot: {
-    fontSize: 10,
-    color: colors.textFaint,
-  },
-  taskType: {
-    fontSize: 12,
-    color: colors.textFaint,
-  },
-  rewardPill: {
+  pointsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderRadius: radius.pill,
+    gap: 4,
   },
-  rewardValue: {
+  pointsValue: {
     fontSize: 13,
     fontWeight: '900',
     color: '#D97706',
   },
-  stepsBox: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+
+  taskActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  openTaskBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
     gap: 6,
   },
-  stepsBoxDark: {
-    backgroundColor: colors.surfaceDark,
-  },
-  stepsHeader: {
-    fontSize: 11,
+  openTaskBtnText: {
+    fontSize: 13,
     fontWeight: '800',
-    color: colors.textFaint,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  stepItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    gap: 8,
-  },
-  stepItemDark: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  stepNumBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepNumText: {
     color: '#FFF',
-    fontSize: 11,
-    fontWeight: '800',
   },
-  stepTitle: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  actionFooter: {
+  doneBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 14,
+    gap: 6,
+    paddingVertical: 6,
   },
-  actionBtn: {
+  doneBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+
+  pendingActionGroup: {
     flex: 1,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  uploadBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    ...shadow.raised,
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    gap: 6,
   },
-  actionBtnUpload: {
-    backgroundColor: '#2563EB',
-  },
-  actionBtnVerify: {
-    backgroundColor: '#059669',
-  },
-  actionBtnBusy: {
-    backgroundColor: colors.textFaint,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  actionBtnDone: {
-    backgroundColor: colors.successSoft,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  actionBtnText: {
+  uploadBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
     color: '#FFF',
-    fontSize: 14,
-    fontWeight: '800',
   },
-  actionBtnTextDone: {
-    color: '#15803D',
-  },
-  shareBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(150, 150, 150, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-    gap: 10,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: 'center',
-  },
-  textLight: {
-    color: colors.textDark,
-  },
-  platformDropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    ...shadow.card,
-  },
-  platformDropdownBtnDark: {
-    backgroundColor: colors.surfaceDark,
-    borderColor: colors.borderDark,
-  },
-  platformDropdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  platformDropdownLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  platformDropdownRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  platformDropdownCount: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  dropdownModalOverlay: {
+  verifyBtn: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    gap: 6,
   },
-  dropdownCard: {
-    width: '100%',
-    maxWidth: 380,
+  verifyBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  reopenLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+    gap: 6,
+  },
+  reopenLinkText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primaryDeep,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: 20,
-    ...shadow.float,
+    gap: 14,
+    ...shadow.raised,
   },
-  dropdownCardDark: {
-    backgroundColor: '#1E1B4B',
-    borderColor: 'rgba(139, 92, 246, 0.4)',
-    borderWidth: 1,
-  },
-  dropdownTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: colors.text,
-    textAlign: 'center',
-  },
-  dropdownDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 12,
-    opacity: 0.5,
-  },
-  dropdownOptionRow: {
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    marginBottom: 4,
   },
-  dropdownOptionRowDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.text,
   },
-  dropdownOptionSelected: {
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+  modalSub: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 18,
   },
-  dropdownOptionLeft: {
-    flexDirection: 'row',
+  pickerBox: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.primary,
+    borderRadius: radius.lg,
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    gap: 8,
+  },
+  pickerText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.primaryDeep,
+  },
+  previewContainer: {
     alignItems: 'center',
     gap: 10,
   },
-  dropdownOptionLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
+  previewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: radius.md,
   },
-  dropdownOptionRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  changeImgBtn: {
+    paddingVertical: 4,
   },
-  dropdownOptionCount: {
+  changeImgText: {
     fontSize: 12,
     fontWeight: '700',
+    color: colors.primary,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.textMuted,
+  },
+  modalSubmitBtn: {
+    flex: 2,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+  },
+  modalSubmitBtnDisabled: {
+    opacity: 0.5,
+  },
+  modalSubmitText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFF',
   },
 });

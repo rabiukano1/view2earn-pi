@@ -279,27 +279,15 @@ export function coachInsights(d: SmartDashboard): CoachInsight[] {
     });
   }
 
-  if (d.progress) {
-    if (d.progress.ready) {
-      out.push({
-        id: 'reward-ready',
-        icon: 'gift',
-        tint: '#7C3AED',
-        title: `You can redeem ${d.progress.target?.name ?? 'a reward'} now!`,
-        body: 'Head to the Rewards tab and cash in your points.',
-        action: 'Rewards',
-      });
-    } else if (d.progress.target) {
-      const diff = d.progress.target.pointsPrice - d.progress.balance;
-      out.push({
-        id: 'reward-next',
-        icon: 'ticket',
-        tint: '#7C3AED',
-        title: `${diff} pts from ${d.progress.target.name}`,
-        body: 'Keep earning — your next reward is in reach.',
-        action: 'Rewards',
-      });
-    }
+  if (d.stats.tasksCompleted < 5) {
+    out.push({
+      id: 'task-boost',
+      icon: 'rocket',
+      tint: '#7C3AED',
+      title: 'Boost your social engagement',
+      body: 'Complete daily community tasks to grow your rank and earn points.',
+      action: 'Tasks',
+    });
   }
 
   if (d.referral.count === 0) {

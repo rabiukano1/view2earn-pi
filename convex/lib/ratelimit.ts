@@ -11,6 +11,7 @@ const RULES: Record<string, Rule> = {
   quiz: { max: 5, windowMs: 60_000 },         // 5 quiz submits / minute
   redeem: { max: 5, windowMs: 5 * 60_000 },   // 5 redemptions / 5 minutes
   withdraw: { max: 3, windowMs: 24 * 60 * 60_000 }, // 3 Pi withdrawals / 24 hours
+  donate: { max: 10, windowMs: 60_000 },      // 10 donations / minute
 };
 
 export async function enforceRateLimit(

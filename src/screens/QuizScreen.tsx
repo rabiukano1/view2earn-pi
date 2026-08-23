@@ -17,12 +17,20 @@ import type { Id } from '../../convex/_generated/dataModel';
 import type { RootStackParamList } from '../navigation/types';
 import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../auth/AuthContext';
+import { useLanguage } from '../i18n/LanguageContext';
+import Icon from '../components/Icon';
 import { colors, radius, shadow } from '../theme';
 
 type Question = {
   _id: Id<'quizQuestions'>;
   question: string;
+  questionHa?: string | null;
   options: string[];
+  optionsHa?: string[] | null;
+  topic?: string | null;
+  courseTitle?: string | null;
+  lessonTitle?: string | null;
+  difficultyLabel?: string | null;
 };
 
 type Answer = {
@@ -38,6 +46,7 @@ export default function QuizScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<Props['route']>();
   const { userId } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [localEcosystem] = useState<'PI' | 'SIDRA'>('SIDRA');
 
   const params = route.params;
@@ -54,6 +63,7 @@ export default function QuizScreen() {
       correctIndex: number;
       selected: number;
       explanation: string;
+      explanationHa?: string;
       courseKey: string | null;
       courseTitle: string | null;
       lessonNumber: number | null;
@@ -61,7 +71,9 @@ export default function QuizScreen() {
     }[];
   } | null>(null);
 
-  const [shuffledOptions, setShuffledOptions] = useState<Record<string, { opt: string; originalIndex: number }[]>>({});
+  const [shuffledOptions, setShuffledOptions] = useState<
+    Record<string, { opt: string; optHa: string; originalIndex: number }[]>
+  >({});
 
   const questions = useQuery(
     api.quiz.getDailyQuiz,
@@ -78,16 +90,20 @@ export default function QuizScreen() {
   }, []);
 
   const loading = questions === undefined;
-  const current = questions?.[currentIndex];
+  const current = questions?.[currentIndex] as Question | undefined;
 
   useEffect(() => {
     if (questions) {
       setShuffledOptions((prev) => {
         const next = { ...prev };
         let changed = false;
-        questions.forEach((q) => {
+        questions.forEach((q: any) => {
           if (!next[q._id]) {
-            const arr = q.options.map((opt, i) => ({ opt, originalIndex: i }));
+            const arr = q.options.map((opt: string, i: number) => ({
+              opt,
+              optHa: q.optionsHa?.[i] || opt,
+              originalIndex: i,
+            }));
             for (let i = arr.length - 1; i > 0; i--) {
               const j = Math.floor(Math.random() * (i + 1));
               [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -117,15 +133,15 @@ export default function QuizScreen() {
 
   const executeSubmit = async () => {
     if (!userId || !questions || answers.length === 0) {
-      Alert.alert('Answer at least one question to submit');
+      Alert.alert(language === 'ha' ? 'Da fatan a amsa akalla tambaya daya' : 'Answer at least one question to submit');
       return;
     }
     setSubmitted(true);
     try {
-      const res = await submitQuiz({ userId, answers });
-      setResult(res);
+      const res = await submitQuiz({ userId, answers: answers as any });
+      setResult(res as any);
     } catch (e) {
-      Alert.alert('Error submitting quiz', String(e));
+      Alert.alert(language === 'ha' ? 'Kuskure wajen aika amsoshi' : 'Error submitting quiz', String(e));
       setSubmitted(false);
     }
   };
@@ -134,77 +150,101 @@ export default function QuizScreen() {
     executeSubmit();
   };
 
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'ha' : 'en');
+  };
+
   return (
     <View style={[styles.container, dark && styles.containerDark, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={[styles.backText, dark && styles.textLight]}>← Back</Text>
+          <Text style={[styles.backText, dark && styles.textLight]}>{t('prev').replace('←', '‹')}</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, dark && styles.textLight]}>Daily Quiz</Text>
-        <View style={styles.backButton} />
+        <Text style={[styles.headerTitle, dark && styles.textLight]}>{t('quizTitle')}</Text>
+        
+        {/* Language Switch Pill */}
+        <TouchableOpacity style={styles.langPill} onPress={toggleLanguage} activeOpacity={0.8}>
+          <Text style={styles.langPillText}>
+            {language === 'ha' ? '🇳🇬 HA' : '🇬🇧 EN'}
+          </Text>
+        </TouchableOpacity>
       </View>
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.textMuted}>{t('loading')}</Text>
         </View>
       ) : result ? (
         <ScrollView
-          contentContainerStyle={[styles.center, { paddingVertical: 30, paddingHorizontal: 20 }]}>
-          <Text style={styles.resultIcon}>{result.score > 0 ? '🎉' : '📚'}</Text>
-          <Text style={[styles.resultTitle, dark && styles.textLight]}>
-            {result.score > 0 ? 'Quiz Complete!' : 'Keep Learning!'}
+          contentContainerStyle={[styles.center, { paddingBottom: insets.bottom + 80, paddingHorizontal: 20 }]}
+          showsVerticalScrollIndicator={false}>
+          <Text style={styles.resultIcon}>
+            {result.score >= Math.ceil(result.total / 2) ? '🎉' : '📚'}
           </Text>
+          <Text style={[styles.resultTitle, dark && styles.textLight]}>{t('quizScore')}</Text>
           <Text style={styles.resultScore}>
             {result.score} / {result.total}
           </Text>
-          {Boolean(result.pointsEarned > 0) ? (
-            <Text style={styles.resultPoints}>+{result.pointsEarned} Points Earned!</Text>
-          ) : null}
+          {result.pointsEarned > 0 && (
+            <Text style={styles.resultPoints}>+{result.pointsEarned} PTS</Text>
+          )}
 
-          {Boolean(result.review && result.review.length > 0) ? (
+          {result.review?.length ? (
             <View style={styles.reviewWrap}>
-              <Text style={[styles.reviewTitle, dark && styles.textLight]}>Review your answers</Text>
+              <Text style={[styles.reviewTitle, dark && styles.textLight]}>
+                {t('reviewAnswers')}
+              </Text>
               {result.review.map((r, i) => {
-                const q = questions?.[i];
-                if (!q) return null;
                 const isCorrect = r.selected === r.correctIndex;
+                const originalQ = questions?.[i];
+                const qText = language === 'ha' && originalQ?.questionHa ? originalQ.questionHa : originalQ?.question || `Question ${i + 1}`;
+                const expText = language === 'ha' && (r as any).explanationHa ? (r as any).explanationHa : r.explanation;
+
                 return (
-                  <View key={i} style={styles.reviewItem}>
+                  <View
+                    key={i}
+                    style={[
+                      styles.reviewItem,
+                      dark && styles.cardDark,
+                      !isCorrect && { borderColor: 'rgba(239,68,68,0.35)' },
+                    ]}>
                     <Text style={[styles.reviewQuestion, dark && styles.textLight]}>
-                      {isCorrect ? '✓ ' : '✕ '}
-                      {q.question}
+                      {i + 1}. {qText}
                     </Text>
-                    {q.options.map((opt, oi) => {
-                      const isRight = oi === r.correctIndex;
-                      const isPicked = oi === r.selected;
+                    {(originalQ?.options ?? []).map((optText: string, optIdx: number) => {
+                      const wasSelected = r.selected === optIdx;
+                      const wasRight = r.correctIndex === optIdx;
+                      const optDisplay = language === 'ha' && originalQ?.optionsHa?.[optIdx] ? originalQ.optionsHa[optIdx] : optText;
+
                       return (
                         <View
-                          key={oi}
+                          key={optIdx}
                           style={[
                             styles.reviewOption,
-                            isRight && styles.reviewOptionRight,
-                            isPicked && !isRight && styles.reviewOptionPicked,
+                            wasRight && styles.reviewOptionRight,
+                            wasSelected && !wasRight && styles.reviewOptionPicked,
                           ]}>
                           <Text
                             style={[
                               styles.reviewOptionText,
+                              (wasRight || wasSelected) && styles.reviewOptionTextStrong,
                               dark && styles.textLight,
-                              (isRight || (isPicked && !isRight)) && styles.reviewOptionTextStrong,
                             ]}>
-                            {String.fromCharCode(65 + oi)}. {opt}
+                            {optDisplay}
                           </Text>
-                          {isRight ? (
+                          {wasRight ? (
                             <Text style={styles.reviewMarkRight}>✓</Text>
-                          ) : isPicked ? (
-                            <Text style={styles.reviewMarkWrong}>✕</Text>
+                          ) : wasSelected ? (
+                            <Text style={styles.reviewMarkWrong}>✗</Text>
                           ) : null}
                         </View>
                       );
                     })}
-                    {r.explanation ? (
+                    {expText ? (
                       <Text style={[styles.reviewExplanation, dark && styles.textMuted]}>
-                        <Text style={styles.reviewExplanationLabel}>Why? </Text>
-                        {r.explanation}
+                        <Text style={styles.reviewExplanationLabel}>{t('whyExplanation')} </Text>
+                        {expText}
                       </Text>
                     ) : null}
                     {Boolean(r.courseKey && r.lessonNumber) ? (
@@ -216,7 +256,7 @@ export default function QuizScreen() {
                           })
                         }>
                         <Text style={styles.learnMoreText}>
-                          📚 Learn more: {r.courseTitle} → {r.lessonTitle ?? `Lesson ${r.lessonNumber}`}
+                          📚 {t('learn')}: {r.courseTitle} → {r.lessonTitle ?? `Lesson ${r.lessonNumber}`}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
@@ -227,23 +267,34 @@ export default function QuizScreen() {
           ) : null}
 
           <TouchableOpacity style={styles.doneButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.doneButtonText}>Done</Text>
+            <Text style={styles.doneButtonText}>{t('done')}</Text>
           </TouchableOpacity>
         </ScrollView>
       ) : current ? (
         <View style={styles.quizContent}>
           <View style={styles.counterRow}>
             <Text style={styles.counter}>
-              Question {currentIndex + 1} of {questions.length}
+              {t('question')} {currentIndex + 1} {t('of')} {questions.length}
             </Text>
+            {current.topic || current.courseTitle ? (
+              <View style={styles.topicBadge}>
+                <Text style={styles.topicBadgeText} numberOfLines={1}>
+                  📖 {current.courseTitle || current.topic}
+                </Text>
+              </View>
+            ) : null}
           </View>
+
           <Text style={[styles.question, dark && styles.textLight]}>
-            {current.question}
+            {language === 'ha' && current.questionHa ? current.questionHa : current.question}
           </Text>
+
           <View style={styles.optionsContainer}>
-            {(shuffledOptions[current._id] ?? current.options.map((opt, i) => ({ opt, originalIndex: i }))).map((item) => {
+            {(shuffledOptions[current._id] ?? current.options.map((opt, i) => ({ opt, optHa: current.optionsHa?.[i] || opt, originalIndex: i }))).map((item) => {
               const selected =
                 answers.find((a) => a.questionId === current._id)?.selectedIndex === item.originalIndex;
+              const displayText = language === 'ha' && item.optHa ? item.optHa : item.opt;
+
               return (
                 <TouchableOpacity
                   key={item.originalIndex}
@@ -259,34 +310,45 @@ export default function QuizScreen() {
                       selected && styles.optionTextSelected,
                       dark && styles.textLight,
                     ]}>
-                    {item.opt}
+                    {displayText}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+
           <View style={styles.footer}>
             {currentIndex > 0 && (
               <TouchableOpacity
                 style={styles.navButton}
                 onPress={() => setCurrentIndex((i) => i - 1)}>
-                <Text style={styles.navButtonText}>← Prev</Text>
+                <Text style={styles.navButtonText}>{t('prev')}</Text>
               </TouchableOpacity>
             )}
             {currentIndex < questions.length - 1 ? (
               <TouchableOpacity
                 style={styles.navButton}
                 onPress={() => setCurrentIndex((i) => i + 1)}>
-                <Text style={styles.navButtonText}>Next →</Text>
+                <Text style={styles.navButtonText}>{t('next')}</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-                <Text style={styles.submitButtonText}>Submit Answers</Text>
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  answers.length === 0 && styles.navButtonDisabled,
+                ]}
+                disabled={answers.length === 0 || submitted}
+                onPress={handleSubmit}>
+                <Text style={styles.submitButtonText}>{t('submit')}</Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.center}>
+          <Text style={styles.textMuted}>{t('loading')}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -308,7 +370,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   backButton: {
-    width: 60,
+    minWidth: 50,
   },
   backText: {
     fontSize: 16,
@@ -319,6 +381,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: colors.text,
+  },
+  langPill: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+  },
+  langPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.primaryDeep,
   },
   textLight: {
     color: colors.textDark,
@@ -343,6 +416,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 18,
     elevation: 3,
+  },
+  cardDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
   },
   reviewQuestion: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 10, lineHeight: 21 },
   reviewOption: {
@@ -420,26 +497,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    gap: 8,
   },
   counter: {
     fontSize: 14,
     color: colors.textMuted,
     fontWeight: '700',
   },
-  answeredCount: {
-    fontSize: 13,
-    color: colors.primary,
-    fontWeight: '700',
+  topicBadge: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    maxWidth: '65%',
   },
-  scrollArea: {
-    flex: 1,
+  topicBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primaryDeep,
   },
   question: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     color: colors.text,
     marginBottom: 24,
-    lineHeight: 28,
+    lineHeight: 27,
   },
   optionsContainer: {
     gap: 10,

@@ -13,7 +13,7 @@ const KIND_META: Record<string, { label: string; icon: string; tint: string }> =
   task: { label: 'Tasks', icon: 'list-check', tint: '#3B82F6' },
   quiz: { label: 'Quiz', icon: 'brain', tint: '#06B6D4' },
   bonus: { label: 'Bonuses', icon: 'gift', tint: '#10B981' },
-  redeem: { label: 'Redemptions', icon: 'arrow-right-from-bracket', tint: '#EF4444' },
+  redeem: { label: 'Campaigns & Boosts', icon: 'bullhorn', tint: '#8B5CF6' },
   other: { label: 'Other', icon: 'circle', tint: '#71717A' },
 };
 

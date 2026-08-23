@@ -19,7 +19,6 @@ import { useAuth } from '../auth/AuthContext';
 import { colors, radius, spacing, shadow } from '../theme';
 import StreakCard from '../components/StreakCard';
 import DailyBox from '../components/DailyBox';
-import ProgressToReward from '../components/ProgressToReward';
 import Icon from '../components/Icon';
 import { levelInfo, formatPts, type SmartDashboard } from '../profile/smart';import {
   buildActivities,
@@ -122,12 +121,15 @@ function HomeScreenLevelCard({ onPress }: { onPress: () => void }) {
   );
 }
 
+import { useLanguage } from '../i18n/LanguageContext';
+
 export default function HomeScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const tabNav = useNavigation<TabNav>();
   const stackNav = useNavigation<StackNav>();
   const { userId } = useAuth();
+  const { t } = useLanguage();
 
   const recordSignals = useMutation(api.deviceSignals.record);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
@@ -140,28 +142,28 @@ export default function HomeScreen() {
 
   const exploreCategories = [
     {
-      title: '🔥 Earn Points',
-      subtitle: 'Quick ways to boost your balance',
+      title: t('earnPoints'),
+      subtitle: t('earnPointsSub'),
       items: [
-        ...(flags['feature:tasks'] !== false ? [{ icon: 'list-check', label: 'Tasks', desc: 'Social media tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') }] : []),
-        ...(flags['feature:quiz'] !== false ? [{ icon: 'brain', label: 'Daily Quiz', desc: 'Answer & score bonus', tint: '#6366F1', go: () => stackNav.navigate('Quiz', userId ? { userId, ecosystem: 'SIDRA' } : undefined) }] : []),
-        ...(flags['feature:spin'] !== false ? [{ icon: 'arrows-spin', label: 'Spin & Win', desc: 'Daily lucky wheel', tint: '#EC4899', go: () => stackNav.navigate('Spin', userId ? { userId } : undefined) }] : []),
-        ...(flags['feature:surveys'] !== false ? [{ icon: 'clipboard-list', label: 'Surveys', desc: 'Share your feedback', tint: '#F97316', go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined) }] : []),
+        ...(flags['feature:tasks'] !== false ? [{ icon: 'list-check', label: t('tasks'), desc: 'Social media tasks', tint: colors.primary, go: () => tabNav.navigate('Tasks') }] : []),
+        ...(flags['feature:quiz'] !== false ? [{ icon: 'brain', label: t('dailyQuiz'), desc: t('dailyQuizDesc'), tint: '#6366F1', go: () => stackNav.navigate('Quiz', userId ? { userId, ecosystem: 'SIDRA' } : undefined) }] : []),
+        ...(flags['feature:spin'] !== false ? [{ icon: 'arrows-spin', label: t('spinAndWin'), desc: t('spinDesc'), tint: '#EC4899', go: () => stackNav.navigate('Spin', userId ? { userId } : undefined) }] : []),
+        ...(flags['feature:surveys'] !== false ? [{ icon: 'clipboard-list', label: t('surveys'), desc: t('surveysDesc'), tint: '#F97316', go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined) }] : []),
       ],
     },
     {
-      title: '🚀 Growth & Marketplace',
-      subtitle: 'Promote your links and explore listings',
+      title: t('growthHub'),
+      subtitle: t('growthHubSub'),
       items: [
-        ...(flags['feature:promote'] !== false ? [{ icon: 'rocket', label: 'Promote Hub', desc: 'Promote your links', tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') }] : []),
+        ...(flags['feature:promote'] !== false ? [{ icon: 'rocket', label: t('promoteHub'), desc: t('promoteHubDesc'), tint: '#8B5CF6', go: () => stackNav.navigate('Marketplace') }] : []),
       ],
     },
     {
-      title: '🎓 Learn & Support',
-      subtitle: 'Guides and ways to help',
+      title: t('learnAndSupport'),
+      subtitle: t('learnSub'),
       items: [
-        ...(flags['feature:academy'] !== false ? [{ icon: 'graduation-cap', label: 'Learn', desc: 'How to earn guide', tint: '#F59E0B', go: () => stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined) }] : []),
-        ...(flags['feature:donate'] !== false ? [{ icon: 'heart', label: 'Donate π', desc: 'Support the pool', tint: '#EC4899', go: () => stackNav.navigate('Donate') }] : []),
+        ...(flags['feature:academy'] !== false ? [{ icon: 'graduation-cap', label: t('learn'), desc: t('learnDesc'), tint: '#F59E0B', go: () => stackNav.navigate('Academy', userId ? { userId, ecosystem: 'PI' } : undefined) }] : []),
+        ...(flags['feature:donate'] !== false ? [{ icon: 'heart', label: t('communityPool'), desc: t('communityPoolDesc'), tint: '#EC4899', go: () => stackNav.navigate('Donate') }] : []),
       ],
     },
   ];
@@ -173,8 +175,8 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Hero Header */}
         <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
-          <Text style={styles.heroHi}>Welcome back 👋</Text>
-          <Text style={styles.heroLabel}>Points Balance</Text>
+          <Text style={styles.heroHi}>{t('welcomeBack')}</Text>
+          <Text style={styles.heroLabel}>{t('pointsBalance')}</Text>
           <Text style={styles.heroBalance}>{balance === undefined ? '—' : balance}</Text>
         </View>
 

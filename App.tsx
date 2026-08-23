@@ -68,6 +68,44 @@ function Gate() {
   );
 }
 
+import { LanguageProvider } from './src/i18n/LanguageContext';
+
+import type { LinkingOptions } from '@react-navigation/native';
+import type { RootStackParamList } from './src/navigation/types';
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ['view2earn://', 'https://view2earn.app', 'https://www.view2earn.app'],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Home: 'home',
+          Tasks: 'tasks',
+          Settings: 'settings',
+          Profile: 'profile',
+        },
+      },
+      Login: 'login',
+      Marketplace: 'marketplace',
+      CreateListing: 'create-listing',
+      Academy: 'academy',
+      Quiz: 'quiz',
+      Spin: 'spin',
+      Level: 'level',
+      Surveys: 'surveys',
+      Terms: 'terms',
+      Policy: 'policy',
+      Referral: 'referral',
+      LinkedAccounts: 'linked-accounts',
+      Security: 'security',
+      Leaderboard: 'leaderboard',
+      Achievements: 'achievements',
+      Stats: 'stats',
+      Donate: 'donate',
+    },
+  },
+};
+
 function App() {
   React.useEffect(() => {
     initializeAdMob();
@@ -76,10 +114,12 @@ function App() {
   return (
     <ConvexAuthProvider client={convex} storage={tokenStorage}>
       <SafeAreaProvider>
-        <NavigationContainer>
-          <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-          <Gate />
-        </NavigationContainer>
+        <LanguageProvider>
+          <NavigationContainer linking={linking}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <Gate />
+          </NavigationContainer>
+        </LanguageProvider>
       </SafeAreaProvider>
     </ConvexAuthProvider>
   );

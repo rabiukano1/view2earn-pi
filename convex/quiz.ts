@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalAction, internalMutation, internalQuery, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
+import { requireAdmin } from "./admin";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { getNum } from "./rewardsConfig";
 import { appendLedger } from "./lib/ledger";
@@ -13,65 +14,95 @@ const BUILT_IN_QUESTIONS = {
   PI: [
     {
       question: "What is the consensus algorithm used by the Pi Network blockchain?",
+      questionHa: "Wanne tsarin yarjejeniya (consensus) blockchain na Pi Network yake amfani da shi?",
       options: ["Proof of Work (PoW)", "Stellar Consensus Protocol (SCP)", "Proof of Stake (PoS)", "Proof of Authority (PoA)"],
+      optionsHa: ["Proof of Work (PoW)", "Stellar Consensus Protocol (SCP)", "Proof of Stake (PoS)", "Proof of Authority (PoA)"],
       correctIndex: 1,
       explanation: "Pi Network builds on the Stellar Consensus Protocol (SCP) to enable eco-friendly mobile mining.",
+      explanationHa: "Pi Network yana gina ne akan Stellar Consensus Protocol (SCP) don ba da damar hakar kudin dijital a wayar salula cikin sauki.",
     },
     {
       question: "What is the primary role of Security Circles in Pi Network?",
+      questionHa: "Menene babban aikin Security Circles a cikin Pi Network?",
       options: ["Increase transaction fees", "Build global trust graphs to secure consensus", "Mine Bitcoin simultaneously", "Store private keys on cloud"],
+      optionsHa: ["Karin kudin hada-hada", "Gina amintacciyar hanyar tabbatar da tsaro a duniya", "Hakar Bitcoin a lokaci guda", "Ajiye lambobin sirri a gajimare"],
       correctIndex: 1,
       explanation: "Security circles consist of 3-5 trusted members that form a global trust graph for consensus.",
+      explanationHa: "Security Circles sun kunshi mutane 3-5 amintattu don tabbatar da tsaron hanyar hada-hada a duniya.",
     },
     {
       question: "What utility does Pi Browser provide in the Pi ecosystem?",
+      questionHa: "Wanne amfani Pi Browser yake da shi a cikin tsarin Pi?",
       options: ["Only plays videos", "Web3 browser for Pi apps, Pi Wallet, and Pi KYC", "A photo editor", "Mining bitcoin"],
+      optionsHa: ["Kallon bidiyo kawai", "Babban dakin Web3 na bude manhajojin Pi, Pi Wallet da Pi KYC", "Gyara hotuna", "Hakar bitcoin"],
       correctIndex: 1,
       explanation: "Pi Browser is the Web3 gateway containing Pi Apps, Pi Wallet, and the native Pi KYC solution.",
+      explanationHa: "Pi Browser shine kofar Web3 da ke dauke da aikace-aikacen Pi, Pi Wallet da kuma Pi KYC.",
     },
     {
       question: "What is the total maximum supply cap of Pi tokens?",
+      questionHa: "Menene adadin duka kudaden Pi da za a fitar a duniya?",
       options: ["21 Million", "100 Billion", "500 Billion", "Unlimited"],
+      optionsHa: ["Miliyan 21", "Biliyan 100", "Biliyan 500", "Babu iyaka"],
       correctIndex: 1,
       explanation: "The total supply of Pi is capped at 100 billion tokens for community, core team, and ecosystem reserves.",
+      explanationHa: "Adadin kudin Pi an tsara shi a kan biliyan 100 ga al'umma da masu bunkasa manhaja da asusun ajiya.",
     },
     {
       question: "How often do Pi Network users need to ping the app to confirm active presence?",
+      questionHa: "Kowane bayan wane lokaci ne ake bukatar danna alamar walƙiya a Pi?",
       options: ["Every 1 hour", "Every 24 hours", "Once a week", "Every 12 hours"],
+      optionsHa: ["Kowace awa 1", "Kowace awa 24", "Sau daya a mako", "Kowace awa 12"],
       correctIndex: 1,
       explanation: "Mining sessions last 24 hours, requiring users to press the lightning button daily.",
+      explanationHa: "Zaman hakar kudi yana daukar awa 24, wanda ke bukatar danna alamar walƙiya kullum don tabbatar da cewa kana nan.",
     },
   ],
   SIDRA: [
     {
       question: "What makes Sidra Chain distinct as a digital currency platform?",
+      questionHa: "Menene ya bambanta Sidra Chain a matsayin tsarin kudin dijital?",
       options: ["It is a meme token", "First Shariah-compliant decentralized financial platform", "Uses Proof of Work", "Has 50% inflation"],
+      optionsHa: ["Kudin barkwanci ne (meme)", "Manhajar DeFi ta farko mai bin tsarin Shari'ar Musulunci", "Yana amfani da Proof of Work", "Yana da hauhawar farashi da kashi 50%"],
       correctIndex: 1,
       explanation: "Sidra Chain is designed specifically to provide Islamic Shariah-compliant DeFi services.",
+      explanationHa: "Sidra Chain an gina shi ne musamman don bayar da tsarin hada-hadar kudi na DeFi bisa koyarwar Musulunci.",
     },
     {
       question: "What is the primary verification method used by Sidra Chain users?",
+      questionHa: "Wace hanya ce mafi mahimmanci wajen tantance masu amfani da Sidra Chain?",
       options: ["Face ID only", "P2P Face-to-Face & Document Verification", "Phone number only", "No verification required"],
+      optionsHa: ["Hoton fuska kawai", "Tantancewar P2P ido-da-ido da takardun shaida", "Lambar waya kawai", "Babu bukatar tantancewa"],
       correctIndex: 1,
       explanation: "Sidra KYC uses document verification paired with Peer-to-Peer (P2P) confirmation.",
+      explanationHa: "Tantancewar Sidra KYC tana amfani da takardun shaida tare da tabbatarwar abokan harka (P2P).",
     },
     {
       question: "Which backing mechanism does Sidra Chain aim to leverage for stability?",
+      questionHa: "Wane tsari Sidra Chain yake amfani da shi don daidaita kima?",
       options: ["Unbacked algorithmic minting", "Asset-backed and gold-backed Shariah principles", "US Dollar peg only", "No asset backing"],
+      optionsHa: ["Kirkirar kudi marar tushe", "Kaddarori da zinare bisa ka'idojin Shari'a", "Dala kadai", "Babu wata kaddara"],
       correctIndex: 1,
       explanation: "Sidra Chain focuses on asset-backed stability aligned with Islamic ethical finance.",
+      explanationHa: "Sidra Chain yana mai da hankali ne kan kaddarori da zinare don tabbatar da kwanciyar hankali da adalci a hada-hada.",
     },
     {
       question: "What is the purpose of Sidra Chain P2P verification?",
+      questionHa: "Menene manufar tantancewar P2P a Sidra Chain?",
       options: ["Pay gas fees", "Confirm real human identity between validated community members", "Mine tokens faster", "Trade NFTs"],
+      optionsHa: ["Biyan kudin gas", "Tabbatar da cewa ainihin mutum ne ba na'ura ba ta hanyar abokan harka", "Hakar kudi da sauri", "Kasuwancin NFT"],
       correctIndex: 1,
       explanation: "P2P verification ensures one real human per account by having verified peers confirm identity.",
+      explanationHa: "Tantancewar P2P tana tabbatar da cewa kowane asusu na ainihin mutum ne ta hanyar tabbatarwar abokin harka.",
     },
     {
       question: "What ethical financial principle guides Sidra Chain transactions?",
+      questionHa: "Wace ka'idar kudi ta addinin Musulunci ce ke jagorantar hada-hadar Sidra Chain?",
       options: ["Riba (usury/interest) prohibition", "High interest lending", "Unregulated gambling", "Hidden transaction fees"],
+      optionsHa: ["Haramcin Riba da caca", "Bada rancen kudi da kudin ruwa", "Wasan caca ba tare da tsari ba", "Boyayyen kudin hada-hada"],
       correctIndex: 0,
       explanation: "Sidra Chain operates under Shariah rules prohibiting Riba (interest) and speculative gambling.",
+      explanationHa: "Sidra Chain yana aiki ne a karkashin dokokin Shari'a da suka haramta riba da caca.",
     },
   ],
 };
@@ -287,19 +318,32 @@ export const getDailyQuiz = query({
       return list.map((q, idx) => ({
         _id: `builtin-${ecosystem}-${idx}` as any,
         question: q.question,
+        questionHa: q.questionHa,
         options: q.options,
+        optionsHa: q.optionsHa,
+        explanation: q.explanation,
+        explanationHa: q.explanationHa,
+        courseTitle: "General Knowledge",
+        lessonTitle: null,
+        topic: "Basics",
+        difficultyLabel: "EASY",
       }));
     }
 
-    // Published, course-linked questions are the primary bank.
-    const bank = allQuestions.filter((q) => q.status === "PUBLISHED" && q.courseId);
-    const fallback = allQuestions.filter((q) => q.status === "PUBLISHED" && !q.courseId);
-    const pool = bank.length > 0 ? bank : fallback;
-
-    const courses = await ctx.db.query("courses").collect();
-    const keyByCourse = new Map<string, string | null>(
-      courses.map((c) => [c._id, c.key]),
+    // All active published questions from the Knowledge Center & Question Bank
+    const pool = allQuestions.filter(
+      (q) => q.status === "PUBLISHED" || q.status === undefined || !q.status
     );
+
+    const activeBank = pool.length > 0 ? pool : allQuestions;
+
+    const [courses, lessons] = await Promise.all([
+      ctx.db.query("courses").collect(),
+      ctx.db.query("lessons").collect(),
+    ]);
+
+    const courseMap = new Map<string, any>(courses.map((c) => [c._id, c]));
+    const lessonMap = new Map<string, any>(lessons.map((l) => [l._id, l]));
 
     const settings = await ctx.db.query("quizSettings").first();
     const qCount = Math.max(1, Math.min(20, settings?.questionsPerQuiz ?? 5));
@@ -326,9 +370,9 @@ export const getDailyQuiz = query({
       for (const id of r.questionIds) seen.add(id);
     }
 
-    const chosen: typeof pool = [];
+    const chosen: typeof activeBank = [];
     const seed = `${userId}:${ecosystem}:${day}`;
-    const pick = (group: typeof pool, n: number) => {
+    const pick = (group: typeof activeBank, n: number) => {
       const fresh = group.filter((q) => !seen.has(q._id));
       if (fresh.length === 0) return [];
       const picked = shuffle(fresh, seed).slice(0, n);
@@ -342,34 +386,42 @@ export const getDailyQuiz = query({
     if (plan) {
       for (const p of plan) {
         if (chosen.length >= qCount) break;
-        const group = pool.filter((q) => keyByCourse.get(q.courseId!) === p.courseKey);
+        const group = activeBank.filter((q) => courseMap.get(q.courseId!)?.key === p.courseKey);
         if (group.length > 0) pick(group, p.count);
       }
       if (chosen.length < qCount) {
-        pick(pool.filter((q) => !seen.has(q._id)), qCount - chosen.length);
+        pick(activeBank.filter((q) => !seen.has(q._id)), qCount - chosen.length);
       }
     } else {
-      pick(pool, qCount);
+      pick(activeBank, qCount);
     }
 
     // Last resort: allow repeats only if the bank is genuinely too small.
-    if (chosen.length < qCount && pool.length > 0) {
+    if (chosen.length < qCount && activeBank.length > 0) {
       let i = 0;
-      while (chosen.length < qCount && i < pool.length * 3) {
-        chosen.push(pool[i % pool.length]);
+      while (chosen.length < qCount && i < activeBank.length * 3) {
+        chosen.push(activeBank[i % activeBank.length]);
         i++;
       }
     }
 
-    return chosen.slice(0, qCount).map((q) => ({
-      _id: q._id,
-      question: q.question,
-      options: q.options,
-      topic: q.topic ?? null,
-      difficultyLabel: q.difficultyLabel ?? null,
-      courseKey: q.courseId ? (keyByCourse.get(q.courseId) ?? null) : null,
-      sourceUrl: q.sourceUrl ?? null,
-    }));
+    return chosen.slice(0, qCount).map((q) => {
+      const course = q.courseId ? courseMap.get(q.courseId) : null;
+      const lesson = q.lessonId ? lessonMap.get(q.lessonId) : null;
+      return {
+        _id: q._id,
+        question: q.question,
+        questionHa: q.questionHa ?? null,
+        options: q.options,
+        optionsHa: q.optionsHa ?? null,
+        topic: q.topic ?? course?.shortTitle ?? null,
+        difficultyLabel: q.difficultyLabel ?? "EASY",
+        courseKey: course?.key ?? null,
+        courseTitle: course?.title ?? course?.shortTitle ?? null,
+        lessonTitle: lesson?.title ?? null,
+        sourceUrl: q.sourceUrl ?? null,
+      };
+    });
   },
 });
 
@@ -394,12 +446,13 @@ export const submitQuiz = mutation({
     const metas: Array<{
       correctIndex: number;
       explanation: string;
+      explanationHa?: string;
       courseId?: any;
       lessonId?: any;
     }> = [];
 
     for (const answer of args.answers) {
-      let meta: { correctIndex: number; explanation: string; courseId?: any; lessonId?: any };
+      let meta: { correctIndex: number; explanation: string; explanationHa?: string; courseId?: any; lessonId?: any };
 
       if (answer.questionId.startsWith("builtin-")) {
         // Built-in question lookup
@@ -410,6 +463,7 @@ export const submitQuiz = mutation({
         meta = {
           correctIndex: bq?.correctIndex ?? -1,
           explanation: bq?.explanation ?? "",
+          explanationHa: bq?.explanationHa ?? "",
         };
       } else {
         const question = await ctx.db.get(answer.questionId as any);
@@ -418,11 +472,12 @@ export const submitQuiz = mutation({
           meta = {
             correctIndex: q.correctIndex,
             explanation: q.explanation ?? "",
+            explanationHa: q.explanationHa ?? "",
             courseId: q.courseId,
             lessonId: q.lessonId,
           };
         } else {
-          meta = { correctIndex: -1, explanation: "" };
+          meta = { correctIndex: -1, explanation: "", explanationHa: "" };
         }
       }
 
@@ -475,6 +530,7 @@ export const submitQuiz = mutation({
     const review = metas.map((m, i) => ({
       correctIndex: m.correctIndex,
       explanation: m.explanation,
+      explanationHa: m.explanationHa || m.explanation,
       selected: args.answers[i].selectedIndex,
       ...links[i],
     }));
@@ -546,3 +602,126 @@ export const triggerQuestionGeneration = action({
     await ctx.runAction(internal.quiz.generateQuestions, { ecosystem, count: 10 });
   },
 });
+
+// ─── Admin Quiz & Knowledge Center Question Management ───────────────────────
+
+export const adminListQuestions = query({
+  args: {
+    token: v.string(),
+    ecosystem: v.optional(v.union(v.literal("PI"), v.literal("SIDRA"))),
+  },
+  handler: async (ctx, { token, ecosystem }) => {
+    requireAdmin(token);
+    const [all, courses, lessons] = await Promise.all([
+      ctx.db.query("quizQuestions").collect(),
+      ctx.db.query("courses").collect(),
+      ctx.db.query("lessons").collect(),
+    ]);
+
+    const courseMap = new Map<string, any>(courses.map((c) => [c._id, c]));
+    const lessonMap = new Map<string, any>(lessons.map((l) => [l._id, l]));
+
+    let filtered = all;
+    if (ecosystem) {
+      filtered = filtered.filter((q) => q.ecosystem === ecosystem);
+    }
+
+    return filtered.map((q) => ({
+      ...q,
+      courseTitle: q.courseId ? courseMap.get(q.courseId)?.shortTitle || courseMap.get(q.courseId)?.title || null : null,
+      lessonTitle: q.lessonId ? lessonMap.get(q.lessonId)?.title || null : null,
+    }));
+  },
+});
+
+export const adminCreateQuestion = mutation({
+  args: {
+    token: v.string(),
+    ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
+    category: v.optional(v.string()),
+    question: v.string(),
+    options: v.array(v.string()),
+    correctIndex: v.number(),
+    explanation: v.string(),
+    difficulty: v.optional(v.number()),
+    questionHa: v.optional(v.string()),
+    optionsHa: v.optional(v.array(v.string())),
+    explanationHa: v.optional(v.string()),
+    courseId: v.optional(v.id("courses")),
+    lessonId: v.optional(v.id("lessons")),
+    topic: v.optional(v.string()),
+    difficultyLabel: v.optional(v.union(v.literal("EASY"), v.literal("MEDIUM"), v.literal("HARD"))),
+    sourceUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, { token, ...fields }) => {
+    requireAdmin(token);
+    const now = Date.now();
+    return await ctx.db.insert("quizQuestions", {
+      category: fields.category || "general",
+      difficulty: fields.difficulty || 1,
+      difficultyLabel: fields.difficultyLabel || "EASY",
+      status: "PUBLISHED",
+      contentVersion: 1,
+      lastReviewedAt: now,
+      ...fields,
+    });
+  },
+});
+
+export const adminUpdateQuestion = mutation({
+  args: {
+    token: v.string(),
+    questionId: v.id("quizQuestions"),
+    question: v.optional(v.string()),
+    options: v.optional(v.array(v.string())),
+    correctIndex: v.optional(v.number()),
+    explanation: v.optional(v.string()),
+    difficulty: v.optional(v.number()),
+    questionHa: v.optional(v.string()),
+    optionsHa: v.optional(v.array(v.string())),
+    explanationHa: v.optional(v.string()),
+    courseId: v.optional(v.id("courses")),
+    lessonId: v.optional(v.id("lessons")),
+    topic: v.optional(v.string()),
+    difficultyLabel: v.optional(v.union(v.literal("EASY"), v.literal("MEDIUM"), v.literal("HARD"))),
+    sourceUrl: v.optional(v.string()),
+    status: v.optional(
+      v.union(
+        v.literal("DRAFT"),
+        v.literal("REVIEW"),
+        v.literal("PUBLISHED"),
+        v.literal("NEEDS_REVIEW"),
+        v.literal("OUTDATED"),
+        v.literal("ARCHIVED"),
+      ),
+    ),
+  },
+  handler: async (ctx, { token, questionId, ...fields }) => {
+    requireAdmin(token);
+    const existing = await ctx.db.get(questionId);
+    if (!existing) throw new Error("Question not found");
+
+    const patch: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) patch[key] = value;
+    }
+    patch.lastReviewedAt = Date.now();
+    patch.contentVersion = (existing.contentVersion ?? 1) + 1;
+
+    await ctx.db.patch(questionId, patch);
+    return questionId;
+  },
+});
+
+export const adminDeleteQuestion = mutation({
+  args: {
+    token: v.string(),
+    questionId: v.id("quizQuestions"),
+  },
+  handler: async (ctx, { token, questionId }) => {
+    requireAdmin(token);
+    await ctx.db.delete(questionId);
+    return { success: true };
+  },
+});
+

@@ -298,6 +298,13 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_paymentId", ["paymentId"]),
 
+  pointDonations: defineTable({
+    userId: v.id("users"),
+    points: v.number(),
+    memo: v.string(),
+    displayName: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
+
   referrals: defineTable({
     referrerId: v.id("users"),
     refereeId: v.id("users"),
@@ -346,6 +353,10 @@ export default defineSchema({
     correctIndex: v.number(),
     explanation: v.string(),
     difficulty: v.number(),
+    // Bilingual Hausa Support
+    questionHa: v.optional(v.string()),
+    optionsHa: v.optional(v.array(v.string())),
+    explanationHa: v.optional(v.string()),
     // Knowledge Center fields (learn-pi.md). All optional so the legacy quiz
     // engine and AI-generated questions keep working unchanged.
     courseId: v.optional(v.id("courses")),

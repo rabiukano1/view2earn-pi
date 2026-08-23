@@ -93,55 +93,39 @@ export function detectContentType(platform: string, url: string): string {
 }
 
 /**
- * Resolves short URLs (e.g., vm.tiktok.com, vt.tiktok.com) to their canonical destination.
- * Only follows redirects for trusted short domains to avoid open redirects.
- * Returns the final URL if resolved, otherwise the original URL.
+ * Resolves short URLs to their canonical full URLs by following redirects.
+ * TikTok specifically requires a browser-like User-Agent to avoid 403s.
  */
 export async function resolveShortUrl(url: string, platform: string): Promise<string> {
-  try {
-    const { hostname } = new URL(url);
-    
-    // Currently only resolving TikTok short links. Can be expanded.
-    if (platform === 'tiktok' && (hostname.startsWith('vm.') || hostname.startsWith('vt.'))) {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+  const isShort = url.includes('vm.tiktok.com') || url.includes('vt.tiktok.com') || url.includes('youtu.be') || url.includes('fb.watch');
+  if (!isShort) return url;
 
-      try {
-        const response = await fetch(url, { 
-          method: 'HEAD', 
-          redirect: 'follow',
-          signal: controller.signal 
-        });
-        clearTimeout(id);
-        
-        if (response.ok && response.url) {
-          // Validate that the resolved URL is still TikTok to prevent open redirects
-          const resolvedHost = new URL(response.url).hostname;
-          if (resolvedHost.includes('tiktok.com')) {
-            return response.url;
-          }
-        }
-      } catch (fetchErr) {
-        clearTimeout(id);
-        console.warn(`[TaskLinkService] Failed to resolve short link ${url}:`, fetchErr);
-      }
-    }
-    
-    return url;
-  } catch (e) {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+    });
+    // Response.url contains the final URL after all redirects are followed.
+    return response.url || url;
+  } catch (error) {
+    console.warn('[TaskLinkService] Failed to resolve short URL:', error);
     return url;
   }
 }
 
 /**
- * Central service for opening task links with platform‑aware deep linking and short‑link resolution.
+ * Central service for opening task links.
+ * Resolves short links first to determine the exact destination, then hands it off
+ * to smartOpenUrl to open the exact native app page directly.
  */
 export async function openTaskLink(url: string, platform?: string, pageId?: string): Promise<void> {
   if (!url) return;
 
   // Normalize URLs missing a protocol (e.g. "vm.tiktok.com/abc" → "https://vm.tiktok.com/abc").
-  // Some tasks were saved without https://, so this prevents silent failures downstream
-  // where new URL() would throw and the link would never open.
   let normalized = url.trim();
   if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(normalized) && normalized.includes('.')) {
     normalized = `https://${normalized}`;
@@ -153,20 +137,30 @@ export async function openTaskLink(url: string, platform?: string, pageId?: stri
   }
 
   const detectedPlatform = detectPlatform(normalized);
-  const resolvedUrl = await resolveShortUrl(normalized, detectedPlatform);
-  const contentType = detectContentType(detectedPlatform, resolvedUrl);
+
+  // Resolve short links (vm.tiktok.com, youtu.be, fb.watch, etc.) to canonical
+  // URLs with a 3-second timeout so users aren't stuck waiting.
+  let resolvedUrl = normalized;
+  try {
+    resolvedUrl = await Promise.race([
+      resolveShortUrl(normalized, detectedPlatform),
+      new Promise<string>((resolve) => setTimeout(() => resolve(normalized), 3000)),
+    ]);
+  } catch {
+    resolvedUrl = normalized;
+  }
+
+  const finalPlatform = detectPlatform(resolvedUrl);
 
   if (__DEV__) {
     console.log(`\n==================================================`);
     console.log(`[TaskLinkService] OPENING TASK LINK`);
     console.log(`Original URL:  ${url}`);
-    console.log(`Normalized:    ${normalized}`);
     console.log(`Resolved URL:  ${resolvedUrl}`);
-    console.log(`Platform:      ${detectedPlatform}`);
-    console.log(`Content Type:  ${contentType}`);
+    console.log(`Final Platform:${finalPlatform}`);
     console.log(`==================================================\n`);
   }
 
-  // Pass the resolved URL to our smart deep-link router
-  await smartOpenUrl(resolvedUrl, platform || detectedPlatform, pageId);
+  // Hand directly to the smart opener — it will use the resolved URL
+  await smartOpenUrl(resolvedUrl, platform || finalPlatform, pageId);
 }

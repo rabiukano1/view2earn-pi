@@ -28,36 +28,36 @@ export interface SplashSlide {
   subtitle: string;
   highlightColor: string;
   tags: string[];
-  type: 'watch' | 'wallet' | 'payout';
+  type: 'community' | 'tasks' | 'promote';
 }
 
 const SLIDES: SplashSlide[] = [
   {
     id: 'slide_1',
-    badge: 'WELCOME TO VIEW2EARN',
-    title: 'Engage, Learn\n& Earn Points',
-    subtitle: 'Turn your daily social interactions, micro-tasks, and quiz challenges into reward points across supported ecosystems.',
+    badge: 'COMMUNITY & ENGAGEMENT',
+    title: 'Boost All Socials\nIn One Place',
+    subtitle: 'Grow your presence on TikTok, YouTube, Instagram, Telegram, Facebook & X with real community engagement.',
     highlightColor: '#8B5CF6', // Purple
-    tags: ['Interactive Tasks', 'Daily Quizzes', 'Community Quests'],
-    type: 'watch',
+    tags: ['Social Media Boost', 'Community Quests', 'Daily Challenges'],
+    type: 'community',
   },
   {
     id: 'slide_2',
-    badge: 'DECENTRALIZED WALLET',
-    title: 'Multi-Asset\nEcosystem Perks',
-    subtitle: 'Seamlessly hold, swap, and manage PIPRO (Solana), VINTA, Sidra Coin, and Points in one secure vault.',
-    highlightColor: '#FBBF24', // Gold
-    tags: ['Pi & Solana Powered', 'Instant Swaps', 'Non-Custodial'],
-    type: 'wallet',
+    badge: 'TASKS & CHALLENGES',
+    title: 'Engage, Complete Tasks\n& Level Up',
+    subtitle: 'Participate in daily tasks, solve interactive quizzes, test your knowledge, and level up your creator rank.',
+    highlightColor: '#F59E0B', // Amber
+    tags: ['Interactive Tasks', 'Daily Quizzes', 'Streak Rewards'],
+    type: 'tasks',
   },
   {
     id: 'slide_3',
-    badge: 'SECURE REDEMPTIONS',
-    title: 'Fast & Secure\nRedemptions',
-    subtitle: 'Redeem your points anytime for supported digital assets and ecosystem perks with full transparency.',
-    highlightColor: '#10B981', // Emerald Green
-    tags: ['Transparent Terms', 'Fast Transfer', 'Verified Security'],
-    type: 'payout',
+    badge: 'CREATOR PROMOTION',
+    title: 'Promote Your Channels\n& Expand Reach',
+    subtitle: 'Launch engagement campaigns, connect with active community members, and expand your audience effortlessly.',
+    highlightColor: '#10B981', // Emerald
+    tags: ['Multi-Platform Growth', 'Organic Reach', 'Creator Network'],
+    type: 'promote',
   },
 ];
 
@@ -97,7 +97,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   };
 
   const renderHeroGraphic = (item: SplashSlide) => {
-    if (item.type === 'watch') {
+    if (item.type === 'community') {
       return (
         <View style={styles.heroContainer}>
           <View style={[styles.glowAura, { backgroundColor: '#8B5CF618', borderColor: '#8B5CF635' }]} />
@@ -107,37 +107,37 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
 
           {/* Floating Accents */}
           <View style={[styles.floatingChip, styles.topRightChip]}>
-            <Icon name="coins" iconStyle="solid" size={13} color="#D97706" />
-            <Text style={styles.chipText}>+50 PTS</Text>
+            <Icon name="users" iconStyle="solid" size={13} color="#8B5CF6" />
+            <Text style={styles.chipText}>Community Hub</Text>
           </View>
           <View style={[styles.floatingChip, styles.bottomLeftChip, { backgroundColor: '#8B5CF6' }]}>
-            <Icon name="play" iconStyle="solid" size={12} color="#FFF" />
-            <Text style={[styles.chipText, { color: '#FFF' }]}>Watch & Earn</Text>
+            <Icon name="rocket" iconStyle="solid" size={12} color="#FFF" />
+            <Text style={[styles.chipText, { color: '#FFF' }]}>Social Boost</Text>
           </View>
         </View>
       );
     }
 
-    if (item.type === 'wallet') {
+    if (item.type === 'tasks') {
       return (
         <View style={styles.heroContainer}>
-          <View style={[styles.glowAura, { backgroundColor: '#FBBF2418', borderColor: '#FBBF2435' }]} />
+          <View style={[styles.glowAura, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B35' }]} />
           <View style={[styles.logoBadgeContainer, dark && styles.logoBadgeDark]}>
             <Image source={LOGO_EMBLEM} style={styles.logoImage} resizeMode="contain" />
           </View>
 
-          {/* Floating Token Accents */}
+          {/* Floating Task & Quiz Accents */}
           <View style={[styles.floatingChip, styles.topLeftChip]}>
-            <View style={[styles.dotIndicator, { backgroundColor: '#8B5CF6' }]} />
-            <Text style={styles.chipText}>PIPRO · Solana</Text>
+            <Icon name="brain" iconStyle="solid" size={13} color="#6366F1" />
+            <Text style={styles.chipText}>Daily Quiz</Text>
           </View>
           <View style={[styles.floatingChip, styles.bottomRightChip]}>
-            <View style={[styles.dotIndicator, { backgroundColor: '#FBBF24' }]} />
-            <Text style={styles.chipText}>VINTA Token</Text>
+            <Icon name="fire" iconStyle="solid" size={13} color="#EF4444" />
+            <Text style={styles.chipText}>Daily Streak</Text>
           </View>
           <View style={[styles.floatingChip, styles.bottomLeftChip]}>
-            <View style={[styles.dotIndicator, { backgroundColor: '#10B981' }]} />
-            <Text style={styles.chipText}>Sidra Chain</Text>
+            <Icon name="star" iconStyle="solid" size={13} color="#F59E0B" />
+            <Text style={styles.chipText}>Level Up</Text>
           </View>
         </View>
       );
@@ -150,14 +150,14 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           <Image source={LOGO_EMBLEM} style={styles.logoImage} resizeMode="contain" />
         </View>
 
-        {/* Floating Security & Payout Accents */}
+        {/* Floating Promotion Accents */}
         <View style={[styles.floatingChip, styles.topRightChip, { backgroundColor: '#10B981' }]}>
-          <Icon name="shield-check" iconStyle="solid" size={13} color="#FFF" />
-          <Text style={[styles.chipText, { color: '#FFF' }]}>100% Verified</Text>
+          <Icon name="bullhorn" iconStyle="solid" size={13} color="#FFF" />
+          <Text style={[styles.chipText, { color: '#FFF' }]}>Promote Hub</Text>
         </View>
         <View style={[styles.floatingChip, styles.bottomLeftChip]}>
-          <Icon name="shield" iconStyle="solid" size={13} color="#10B981" />
-          <Text style={styles.chipText}>Fast Redemptions</Text>
+          <Icon name="chart-line" iconStyle="solid" size={13} color="#10B981" />
+          <Text style={styles.chipText}>Expand Reach</Text>
         </View>
       </View>
     );
@@ -358,11 +358,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: colors.text,
-  },
-  dotIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
   },
   topRightChip: {
     top: 10,

@@ -80,10 +80,10 @@ export default function SecurityScreen() {
       onPress: () => stackNav.navigate('Policy', { policy: 'cookies' }),
     },
     {
-      icon: 'gift',
+      icon: 'star',
       tint: colors.primary,
-      label: 'Rewards & Redemption',
-      sub: 'How points are earned & redeemed',
+      label: 'Engagement & Points Policy',
+      sub: 'How points and community activity work',
       onPress: () => stackNav.navigate('Policy', { policy: 'rewards' }),
     },
     {

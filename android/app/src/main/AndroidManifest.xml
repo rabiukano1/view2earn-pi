@@ -24,6 +24,8 @@
       android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
       android:value="true" />
 
+
+
     <activity
       android:name=".MainActivity"
       android:label="@string/app_name"
@@ -36,10 +38,25 @@
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="view2earn" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https" android:host="view2earn.app" />
+        <data android:scheme="https" android:host="www.view2earn.app" />
+      </intent-filter>
     </activity>
   </application>
 
   <queries>
+    <package android:name="com.zhiliaoapp.musically" />
+    
     <intent>
       <action android:name="android.intent.action.VIEW" />
       <data android:scheme="tg" />
@@ -48,6 +65,11 @@
     <intent>
       <action android:name="android.intent.action.VIEW" />
       <data android:scheme="vnd.youtube" />
+    </intent>
+
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="youtube" />
     </intent>
 
     <intent>

@@ -1,48 +1,84 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useColorScheme,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAction, useQuery } from 'convex/react';
 import { useNavigation, type CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
-import { colors, radius, shadow } from '../theme';
+import { colors, radius, shadow, spacing } from '../theme';
 import type { RootStackParamList, RootTabParamList } from '../navigation/types';
 import PageHeader from '../components/PageHeader';
 import Icon from '../components/Icon';
+import { useLanguage } from '../i18n/LanguageContext';
 import { openTaskLink } from '../services/TaskLinkService';
-import {
-  achievements,
-  coachInsights,
-  formatPts,
-  levelInfo,
-  smartScore,
-  type CoachInsight,
-  type SmartDashboard,
-} from '../profile/smart';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Settings'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-function SectionHeader({ icon, tint, title }: { icon: string; tint: string; title: string }) {
+type SettingsRowProps = {
+  icon: string;
+  tint: string;
+  label: string;
+  sub?: string;
+  badge?: string;
+  onPress: () => void;
+  isLast?: boolean;
+};
+
+function SettingsRow({ icon, tint, label, sub, badge, onPress, isLast }: SettingsRowProps) {
   const dark = useColorScheme() === 'dark';
   return (
-    <View style={styles.sectionHeader}>
-      <Icon name={icon} iconStyle="solid" size={15} color={tint} />
-      <Text style={[styles.sectionTitle, dark && styles.textLight]}>{title}</Text>
-    </View>
+    <>
+      <TouchableOpacity
+        style={[styles.row, dark && styles.rowDark]}
+        onPress={onPress}
+        activeOpacity={0.7}>
+        <View style={[styles.iconBox, { backgroundColor: tint + '18' }]}>
+          <Icon name={icon} iconStyle="solid" size={16} color={tint} />
+        </View>
+        <View style={styles.rowContent}>
+          <Text style={[styles.rowLabel, dark && styles.textLight]}>{label}</Text>
+          {sub ? (
+            <Text style={styles.rowSub} numberOfLines={1}>
+              {sub}
+            </Text>
+          ) : null}
+        </View>
+        {badge ? (
+          <View style={[styles.badgePill, { backgroundColor: tint + '1E' }]}>
+            <Text style={[styles.badgeText, { color: tint }]}>{badge}</Text>
+          </View>
+        ) : null}
+        <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
+      </TouchableOpacity>
+      {!isLast && <View style={[styles.divider, dark && styles.dividerDark]} />}
+    </>
   );
 }
 
 export default function SettingsScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const { userId } = useAuth();
   const nav = useNavigation<Nav>();
-  const data = useQuery(api.profile.smartDashboard, userId ? { userId } : 'skip');
+  const { userId } = useAuth();
+  const { signOut } = useAuthActions();
+  const { language, setLanguage, t } = useLanguage();
+
+  const user = useQuery(api.users.me);
+  const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
   const flags = useQuery(api.features.getFlags) || {};
   const generatePdf = useAction(api.reports.generatePdf);
 
@@ -51,223 +87,150 @@ export default function SettingsScreen() {
     try {
       const result = await generatePdf({ userId });
       if (result?.url) await openTaskLink(result.url);
-    } catch {}
+    } catch {
+      Alert.alert('Report', 'Could not generate activity report.');
+    }
   };
 
-  const d = (data ?? null) as SmartDashboard | null;
-  const score = d ? smartScore(d) : null;
-  const insights: CoachInsight[] = d ? coachInsights(d) : [];
-  const achv = d ? achievements(d) : [];
-  const unlocked = achv.filter((a) => a.unlocked);
-  const locked = achv.filter((a) => !a.unlocked).slice(0, 3);
-
-  const runCoachAction = (i: CoachInsight) => {
-    if (!i.action) return;
-    if (i.action === 'Home') nav.navigate('Home');
-    else if (i.action === 'Tasks' && flags['feature:tasks'] !== false) nav.navigate('Tasks');
-    else if (i.action === 'Spin' && flags['feature:spin'] !== false) nav.navigate('Spin', { userId: userId! });
-    else if (i.action === 'Quiz' && flags['feature:quiz'] !== false)
-      nav.navigate('Quiz', { userId: userId!, ecosystem: d?.user.ecosystem ?? 'SIDRA' });
-    else if (i.action === 'Referral') nav.navigate('Referral');
+  const handleSignOut = () => {
+    Alert.alert(t('signOut'), t('signOutConfirm'), [
+      { text: t('cancel'), style: 'cancel' },
+      {
+        text: t('signOut'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch {}
+        },
+      },
+    ]);
   };
 
-  const menuTiles = [
-    {
-      icon: 'shield-halved',
-      tint: '#EF4444',
-      label: 'Security & Settings',
-      sub: 'Biometric lock, policies & sign out',
-      onPress: () => nav.navigate('Security'),
-    },
-    {
-      icon: 'trophy',
-      tint: '#F59E0B',
-      label: 'Global Ranks',
-      sub: 'Leaderboard & top earners',
-      onPress: () => nav.navigate('Leaderboard'),
-    },
-    {
-      icon: 'gift',
-      tint: '#10B981',
-      label: 'Referral Program',
-      sub: `${d?.referral.count ?? 0} invited · ${d?.referral.qualifiedCount ?? 0} qualified`,
-      onPress: () => nav.navigate('Referral'),
-    },
-    {
-      icon: 'chart-simple',
-      tint: '#3B82F6',
-      label: 'Stats & Analytics',
-      sub: 'Earnings, trends & breakdown',
-      onPress: () => nav.navigate('Stats'),
-    },
-    {
-      icon: 'link',
-      tint: colors.primary,
-      label: 'Linked Accounts',
-      sub: 'Social profiles & Telegram',
-      onPress: () => nav.navigate('LinkedAccounts'),
-    },
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'ha' : 'en');
+  };
 
-    ...(flags['feature:donate'] !== false
-      ? [
-          {
-            icon: 'heart',
-            tint: '#EC4899',
-            label: 'Donate π (Pi Browser)',
-            sub: 'Support platform & test payments',
-            onPress: () => nav.navigate('Donate'),
-          },
-        ]
-      : []),
-    {
-      icon: 'file-pdf',
-      tint: '#EF4444',
-      label: 'Download Report',
-      sub: 'PDF activity report',
-      onPress: handleDownloadReport,
-    },
-  ];
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Member';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
-      <PageHeader title="Dashboard & Settings" />
+      <PageHeader title={t('dashboardSettings')} />
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}>
-
-        {/* Stats overview strip */}
-        <View style={styles.statsRow}>
-          <View style={[styles.statTile, dark && styles.cardDark]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              {d ? formatPts(d.stats.balance) : '…'}
-            </Text>
-            <Text style={styles.statLabel}>Balance</Text>
+        {/* Account Header Card */}
+        <View style={[styles.accountCard, dark && styles.cardDark]}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <View style={[styles.statTile, dark && styles.cardDark]}>
-            <Text style={[styles.statValue, { color: colors.success }]}>
-              {d ? formatPts(d.stats.totalEarned) : '…'}
+          <View style={styles.accountInfo}>
+            <Text style={[styles.accountName, dark && styles.textLight]} numberOfLines={1}>
+              {displayName}
             </Text>
-            <Text style={styles.statLabel}>Earned</Text>
+            <Text style={styles.accountEmail} numberOfLines={1}>
+              {user?.email || 'View2Earn Community Member'}
+            </Text>
           </View>
-          <View style={[styles.statTile, dark && styles.cardDark]}>
-            <Text style={[styles.statValue, { color: '#3B82F6' }]}>
-              {d ? formatPts(d.stats.tasksCompleted) : '…'}
+          <View style={styles.balanceTag}>
+            <Icon name="coins" iconStyle="solid" size={13} color="#F59E0B" />
+            <Text style={styles.balanceTagText}>
+              {balance === undefined ? '…' : balance.toLocaleString()} PTS
             </Text>
-            <Text style={styles.statLabel}>Tasks</Text>
-          </View>
-          <View style={[styles.statTile, dark && styles.cardDark]}>
-            <Text style={[styles.statValue, { color: '#F59E0B' }]}>
-              {d ? (d.rank.rank ? `#${d.rank.rank}` : '—') : '…'}
-            </Text>
-            <Text style={styles.statLabel}>Rank</Text>
           </View>
         </View>
 
-        {/* Smart coach panel */}
-        <View style={styles.sectionContainer}>
-          <SectionHeader icon="wand-magic-sparkles" tint={colors.primary} title="Smart Coach" />
-          <View style={[styles.coachCard, dark && styles.cardDark]}>
-            {score ? (
-              <View style={styles.scoreRow}>
-                <View style={styles.scoreRing}>
-                  <Text style={[styles.scoreValue, { color: colors.primary }]}>{score.score}</Text>
-                </View>
-                <View style={styles.scoreInfo}>
-                  <Text style={[styles.scoreLabel, dark && styles.textLight]}>
-                    Daily Smart Score · {score.label}
-                  </Text>
-                  <Text style={styles.scoreHint}>Based on today's activity so far</Text>
-                </View>
-              </View>
-            ) : null}
+        {/* Section 1: Preferences */}
+        <Text style={styles.sectionTitle}>{t('preferences')}</Text>
+        <View style={[styles.groupCard, dark && styles.cardDark]}>
+          <SettingsRow
+            icon="globe"
+            tint="#8B5CF6"
+            label={t('languageSetting')}
+            sub={t('languageSettingSub')}
+            badge={language === 'ha' ? '🇳🇬 Hausa' : '🇬🇧 English'}
+            onPress={toggleLanguage}
+            isLast
+          />
+        </View>
 
-            <View style={styles.insightList}>
-              {insights.map((i) => (
-                <TouchableOpacity
-                  key={i.id}
-                  style={[styles.insightRow, i.action ? styles.insightRowActive : null]}
-                  onPress={() => runCoachAction(i)}
-                  disabled={!i.action}
-                  activeOpacity={0.85}>
-                  <View style={[styles.insightIcon, { backgroundColor: i.tint + '1F' }]}>
-                    <Icon name={i.icon} iconStyle="solid" size={15} color={i.tint} />
-                  </View>
-                  <View style={styles.insightContent}>
-                    <Text style={[styles.insightTitle, dark && styles.textLight]}>{i.title}</Text>
-                    <Text style={styles.insightBody}>{i.body}</Text>
-                  </View>
-                  {Boolean(i.action) ? (
-                    <View style={[styles.insightArrow, { backgroundColor: i.tint + '1F' }]}>
-                      <Icon name="arrow-right" iconStyle="solid" size={11} color={i.tint} />
-                    </View>
-                  ) : null}
-                </TouchableOpacity>
-              ))}
+        {/* Section 2: Community & Growth */}
+        <Text style={styles.sectionTitle}>{t('communityAndGrowth')}</Text>
+        <View style={[styles.groupCard, dark && styles.cardDark]}>
+          {flags['feature:donate'] !== false && (
+            <SettingsRow
+              icon="heart"
+              tint="#EC4899"
+              label={t('communityPool')}
+              sub={t('communityPoolDesc')}
+              onPress={() => nav.navigate('Donate')}
+            />
+          )}
+          <SettingsRow
+            icon="gift"
+            tint="#10B981"
+            label={t('referralProgram')}
+            sub={t('referralProgramSub')}
+            onPress={() => nav.navigate('Referral')}
+          />
+          <SettingsRow
+            icon="trophy"
+            tint="#F59E0B"
+            label={t('globalRanks')}
+            sub={t('globalRanksSub')}
+            onPress={() => nav.navigate('Leaderboard')}
+          />
+          <SettingsRow
+            icon="link"
+            tint="#6366F1"
+            label={t('linkedAccounts')}
+            sub={t('linkedAccountsSub')}
+            onPress={() => nav.navigate('LinkedAccounts')}
+            isLast
+          />
+        </View>
+
+        {/* Section 3: Security & Privacy */}
+        <Text style={styles.sectionTitle}>{t('securityAndData')}</Text>
+        <View style={[styles.groupCard, dark && styles.cardDark]}>
+          <SettingsRow
+            icon="shield-halved"
+            tint={colors.primary}
+            label={t('securitySettings')}
+            sub={t('securitySettingsSub')}
+            onPress={() => nav.navigate('Security')}
+          />
+          <SettingsRow
+            icon="file-pdf"
+            tint="#EF4444"
+            label={t('downloadReport')}
+            sub={t('downloadReportSub')}
+            onPress={handleDownloadReport}
+            isLast
+          />
+        </View>
+
+        {/* Section 4: Sign Out */}
+        <View style={[styles.groupCard, dark && styles.cardDark, { marginTop: spacing.sm }]}>
+          <TouchableOpacity
+            style={[styles.row, styles.signOutRow]}
+            onPress={handleSignOut}
+            activeOpacity={0.7}>
+            <View style={[styles.iconBox, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+              <Icon name="right-from-bracket" iconStyle="solid" size={16} color="#EF4444" />
             </View>
-          </View>
-        </View>
-
-        {/* Achievements preview */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeaderBetween}>
-            <View style={styles.sectionHeader}>
-              <Icon name="medal" iconStyle="solid" size={15} color="#F59E0B" />
-              <Text style={[styles.sectionTitle, dark && styles.textLight]}>Achievements</Text>
+            <View style={styles.rowContent}>
+              <Text style={styles.signOutText}>{t('signOut')}</Text>
             </View>
-            <TouchableOpacity onPress={() => nav.navigate('Achievements')} activeOpacity={0.8}>
-              <Text style={styles.seeAllText}>See all</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.achvPreviewRow}>
-            {unlocked.slice(0, 3).map((a) => (
-              <View key={a.id} style={[styles.achvTile, dark && styles.cardDark]}>
-                <View style={[styles.achvTileIcon, { backgroundColor: a.tint + '1F' }]}>
-                  <Icon name={a.icon} iconStyle="solid" size={18} color={a.tint} />
-                </View>
-                <Text style={[styles.achvTileTitle, dark && styles.textLight]} numberOfLines={1}>
-                  {a.title}
-                </Text>
-              </View>
-            ))}
-            {locked.map((a) => (
-              <View key={a.id} style={[styles.achvTile, dark && styles.cardDark, styles.achvTileLocked]}>
-                <View style={[styles.achvTileIcon, { backgroundColor: colors.surfaceAlt }]}>
-                  <Icon name="lock" iconStyle="solid" size={16} color={colors.textFaint} />
-                </View>
-                <Text style={styles.achvTileTitleLocked} numberOfLines={1}>
-                  Locked
-                </Text>
-              </View>
-            ))}
-            {achv.length === 0 && (
-              <Text style={styles.achvEmpty}>Complete tasks to unlock badges</Text>
-            )}
-          </View>
+            <Icon name="chevron-right" iconStyle="solid" size={12} color="#EF4444" />
+          </TouchableOpacity>
         </View>
 
-        {/* Everything else lives in grouped screens */}
-        <View style={styles.sectionContainer}>
-          <SectionHeader icon="layer-group" tint={colors.textMuted} title="More" />
-          <View style={styles.menuGrid}>
-            {menuTiles.map((t) => (
-              <TouchableOpacity
-                key={t.label}
-                style={[styles.menuTile, dark && styles.cardDark]}
-                onPress={t.onPress}
-                activeOpacity={0.8}>
-                <View style={[styles.menuIconBg, { backgroundColor: t.tint + '1E' }]}>
-                  <Icon name={t.icon} iconStyle="solid" size={18} color={t.tint} />
-                </View>
-                <View style={styles.menuContent}>
-                  <Text style={[styles.menuLabel, dark && styles.textLight]}>{t.label}</Text>
-                  <Text style={styles.menuSub} numberOfLines={1}>
-                    {t.sub}
-                  </Text>
-                </View>
-                <Icon name="chevron-right" iconStyle="solid" size={12} color={colors.textFaint} />
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* App Footer Info */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>View2Earn • Community Engagement & Growth</Text>
+          <Text style={styles.footerSub}>v2.1.0</Text>
         </View>
       </ScrollView>
     </View>
@@ -275,99 +238,168 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  containerDark: { backgroundColor: colors.bgDark },
-  textLight: { color: colors.textDark },
-  scroll: { paddingHorizontal: 16, paddingTop: 6 },
-  cardDark: { backgroundColor: colors.surfaceDark },
-
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  statTile: {
+  container: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingVertical: 12,
-    alignItems: 'center',
-    ...shadow.card,
+    backgroundColor: colors.bg,
   },
-  statValue: { fontSize: 16, fontWeight: '900', letterSpacing: -0.3 },
-  statLabel: { fontSize: 10, fontWeight: '700', color: colors.textMuted, marginTop: 2 },
+  containerDark: {
+    backgroundColor: colors.bgDark,
+  },
+  scroll: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    gap: 12,
+  },
+  textLight: {
+    color: colors.textDark,
+  },
 
-  sectionContainer: { marginBottom: 20 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  sectionHeaderBetween: {
+  accountCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  seeAllText: { fontSize: 12, fontWeight: '800', color: colors.primary },
-
-  coachCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 6,
     ...shadow.card,
   },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-  scoreRing: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 4,
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+  cardDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scoreValue: { fontSize: 20, fontWeight: '900' },
-  scoreInfo: { flex: 1 },
-  scoreLabel: { fontSize: 14, fontWeight: '800', color: colors.text },
-  scoreHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  insightList: { gap: 10 },
-  insightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+  avatarText: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '900',
   },
-  insightRowActive: { backgroundColor: colors.primarySoft },
-  insightIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  insightContent: { flex: 1 },
-  insightTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
-  insightBody: { fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 16 },
-  insightArrow: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-
-  achvPreviewRow: { flexDirection: 'row', gap: 8 },
-  achvTile: {
+  accountInfo: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 12,
-    alignItems: 'center',
-    ...shadow.card,
+    marginLeft: 12,
   },
-  achvTileLocked: { opacity: 0.7 },
-  achvTileIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  achvTileTitle: { fontSize: 11, fontWeight: '800', color: colors.text },
-  achvTileTitleLocked: { fontSize: 11, fontWeight: '700', color: colors.textFaint },
-  achvEmpty: { fontSize: 12, color: colors.textMuted, textAlign: 'center', flex: 1 },
-
-  menuGrid: { gap: 10 },
-  menuTile: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: 14,
+  accountName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  accountEmail: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  balanceTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    gap: 5,
+  },
+  balanceTagText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#F59E0B',
+  },
+
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginLeft: 4,
+    marginTop: 4,
+  },
+  groupCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
     ...shadow.card,
   },
-  menuIconBg: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  menuContent: { flex: 1 },
-  menuLabel: { fontSize: 14, fontWeight: '800', color: colors.text },
-  menuSub: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  rowDark: {
+    backgroundColor: colors.surfaceDark,
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowContent: {
+    flex: 1,
+  },
+  rowLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  rowSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  badgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    marginRight: 4,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginLeft: 66,
+  },
+  dividerDark: {
+    backgroundColor: colors.borderDark,
+  },
+
+  signOutRow: {
+    paddingVertical: 14,
+  },
+  signOutText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#EF4444',
+  },
+
+  footer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 4,
+  },
+  footerText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  footerSub: {
+    fontSize: 11,
+    color: colors.textFaint,
+  },
 });
