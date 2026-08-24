@@ -27,8 +27,8 @@ export const ResendOTP = Email({
       body: JSON.stringify({
         from: process.env.AUTH_RESEND_FROM ?? "View2Earn <onboarding@resend.dev>",
         to: [email],
-        subject: "Your View2Earn sign-in code",
-        text: `Your sign-in code is ${token}\n\nIt expires in 15 minutes.`,
+        subject: "Your View2Earn verification code",
+        text: `Your verification code is ${token}\n\nIt expires in 15 minutes.`,
       }),
     });
     if (!res.ok) {

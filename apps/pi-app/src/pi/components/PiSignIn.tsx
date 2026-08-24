@@ -12,11 +12,19 @@ export function PiSignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
   const [inPi, setInPi] = useState<boolean | null>(null);
+  const [detectedCountry, setDetectedCountry] = useState("unknown");
 
   useEffect(() => {
     isPiBrowser()
       .then(setInPi)
       .catch(() => setInPi(false));
+      
+    fetch("https://ipapi.co/json/")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.country_name) setDetectedCountry(data.country_name);
+      })
+      .catch(() => {});
   }, []);
 
   const handleSignIn = async () => {
@@ -32,6 +40,7 @@ export function PiSignIn() {
       await signIn("pi", {
         accessToken: res.accessToken,
         uid: res.user.uid,
+        country: detectedCountry,
         ...(res.user.wallet_address ? { walletAddress: res.user.wallet_address } : {}),
       });
     } catch (e) {

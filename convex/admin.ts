@@ -315,12 +315,15 @@ export const listVerifications = query({
 
     return await Promise.all(
       rows.map(async (row) => {
-        const [user, task, screenshotUrl] = await Promise.all([
+        const [user, task, screenshotUrl, additionalScreenshotsUrls] = await Promise.all([
           ctx.db.get(row.userId),
           ctx.db.get(row.taskId),
           row.screenshotStorageId
             ? ctx.storage.getUrl(row.screenshotStorageId)
             : Promise.resolve(null),
+          row.additionalScreenshots && row.additionalScreenshots.length > 0
+            ? Promise.all(row.additionalScreenshots.map(id => ctx.storage.getUrl(id)))
+            : Promise.resolve([]),
         ]);
         return {
           _id: row._id,
@@ -334,6 +337,7 @@ export const listVerifications = query({
           taskName: task?.name || targetNameFromUrl(task?.targetUrl ?? "") || task?.targetUrl || "",
           points: task?.points ?? 0,
           screenshotUrl,
+          additionalScreenshotsUrls: additionalScreenshotsUrls.filter(Boolean),
         };
       }),
     );
@@ -381,8 +385,17 @@ export const rejectVerification = mutation({
         console.error("Storage purge error on reject:", e);
       }
     }
+    if (verification.additionalScreenshots) {
+      for (const storageId of verification.additionalScreenshots) {
+        try {
+          await ctx.storage.delete(storageId);
+        } catch (e) {
+          console.error("Storage purge error for additional screenshot on reject:", e);
+        }
+      }
+    }
 
-    await ctx.db.patch(verificationId, { state: "REJECTED", screenshotStorageId: undefined });
+    await ctx.db.patch(verificationId, { state: "REJECTED", screenshotStorageId: undefined, additionalScreenshots: undefined });
     await recomputeUserScore(ctx, verification.userId);
   },
 });

@@ -68,11 +68,12 @@ const PLATFORMS: { key: PlatformFilter; label: string; color: string; icon: stri
 
 function targetName(url: string): string {
   try {
-    const u = new URL(url.startsWith('http') ? url : `https://${url}`);
+    const u = new URL(url);
     const last = u.pathname.replace(/\/+$/, '').split('/').pop() ?? '';
     return last.replace(/^@/, '') || u.hostname;
-  } catch {
-    return 'Task Link';
+  } catch (e) {
+    // If it's not a valid URL (e.g. missing https://), just return it
+    return url.replace(/^@/, '');
   }
 }
 
@@ -84,10 +85,11 @@ export default function TasksScreen() {
   const stackNav = useNavigation<StackNav>();
 
   const [activePlatform, setActivePlatform] = useState<PlatformFilter>('all');
+  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
   const [activeStatus, setActiveStatus] = useState<StatusFilter>('all');
   const [uploadTarget, setUploadTarget] = useState<Verification | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [selectedImageUris, setSelectedImageUris] = useState<string[]>([]);
 
   // Queries & Mutations
   const tasks = useQuery(api.tasks.list, userId ? { userId } : 'skip');
@@ -103,10 +105,13 @@ export default function TasksScreen() {
   if (Array.isArray(verifications)) {
     for (const v of verifications) {
       if (v && v.taskId) {
-        verificationByTask.set(v.taskId, v as Verification);
+        verificationByTask.set(v.taskId, v as unknown as Verification);
       }
     }
   }
+
+  const uploadTargetTask = Array.isArray(tasks) ? tasks.find(t => t._id === uploadTarget?.taskId) : null;
+  const isXMultiTask = uploadTargetTask?.platform === "x" && uploadTargetTask?.type === "MULTI_TASK";
 
   // Directly open the task link & claim
   const handleOpenAndClaim = async (task: Task) => {
@@ -117,7 +122,8 @@ export default function TasksScreen() {
       return;
     }
 
-    const targetUrl = task.steps?.[0]?.targetUrl || task.targetUrl;
+    const isThisXMultiTask = task.platform === "x" && task.type === "MULTI_TASK";
+    const targetUrl = isThisXMultiTask ? task.targetUrl : (task.steps?.[0]?.targetUrl || task.targetUrl);
     if (!targetUrl) {
       Alert.alert('Task Link', 'No destination link found for this task.');
       return;
@@ -166,39 +172,65 @@ export default function TasksScreen() {
       const picked = await launchImageLibrary({
         mediaType: 'photo',
         quality: 0.8,
-        selectionLimit: 1,
+        selectionLimit: isXMultiTask ? 3 : 1,
       });
-      const uri = picked.assets?.[0]?.uri;
-      if (uri) {
-        setSelectedImageUri(uri);
+      const uris = picked.assets?.map(a => a.uri).filter(Boolean) as string[];
+      if (uris && uris.length > 0) {
+        if (isXMultiTask) {
+          setSelectedImageUris(prev => {
+             const combined = [...prev, ...uris];
+             return combined.slice(0, 3);
+          });
+        } else {
+          setSelectedImageUris([uris[0]]);
+        }
       }
     } catch (e) {
       Alert.alert('Image Picker', 'Could not access gallery.');
     }
   };
 
+  const removeImage = (index: number) => {
+    setSelectedImageUris(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Submit proof
   const handleUploadSubmit = async () => {
-    if (!uploadTarget || !selectedImageUri || uploading) return;
+    if (!uploadTarget || selectedImageUris.length === 0 || uploading) return;
+    if (isXMultiTask && selectedImageUris.length < 3) {
+      Alert.alert('Missing Screenshots', 'Please select exactly 3 screenshots for this task (Follow, Comment, Like/Repost).');
+      return;
+    }
+
     setUploading(true);
     try {
-      const uploadUrl = await generateUploadUrl();
-      const response = await fetch(selectedImageUri);
-      const blob = await response.blob();
+      const uploadedIds: Id<'_storage'>[] = [];
+      for (const uri of selectedImageUris) {
+        const uploadUrl = await generateUploadUrl();
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/jpeg' },
+          body: blob,
+        });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const { storageId } = (await uploadRes.json()) as { storageId: Id<'_storage'> };
+        uploadedIds.push(storageId);
+      }
 
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: blob,
+      const mainStorageId = uploadedIds[0];
+      const additionalStorageIds = uploadedIds.slice(1);
+
+      await submitProof({ 
+        verificationId: uploadTarget._id, 
+        storageId: mainStorageId,
+        additionalStorageIds: additionalStorageIds.length > 0 ? additionalStorageIds : undefined
       });
-
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      const { storageId } = (await uploadRes.json()) as { storageId: Id<'_storage'> };
-
-      await submitProof({ verificationId: uploadTarget._id, storageId });
-      Alert.alert('Proof Submitted', 'Your screenshot was submitted for instant review.');
+      
+      Alert.alert('Proof Submitted', 'Your screenshots were submitted for review.');
       setUploadTarget(null);
-      setSelectedImageUri(null);
+      setSelectedImageUris([]);
     } catch (e: any) {
       Alert.alert('Upload Error', e?.message || 'Could not upload proof.');
     } finally {
@@ -237,38 +269,57 @@ export default function TasksScreen() {
         }
       />
 
-      {/* Platform Filter Bar */}
-      <View style={styles.filterSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}>
-          {PLATFORMS.map((p) => {
-            const isActive = activePlatform === p.key;
-            return (
-              <TouchableOpacity
-                key={p.key}
-                style={[
-                  styles.filterChip,
-                  dark && styles.filterChipDark,
-                  isActive && { backgroundColor: p.color, borderColor: p.color },
-                ]}
-                onPress={() => setActivePlatform(p.key)}
-                activeOpacity={0.8}>
-                <PlatformIcon platform={p.key === 'all' ? 'website' : p.key} size={13} color={isActive ? '#FFF' : dark ? colors.textDark : colors.text} />
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    dark && styles.textLight,
-                    isActive && styles.filterChipTextActive,
-                  ]}>
-                  {p.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+      {/* Platform Dropdown */}
+      <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md, marginBottom: spacing.sm, zIndex: 10 }}>
+        <TouchableOpacity
+          style={[
+            styles.dropdownButton,
+            dark && styles.dropdownButtonDark,
+          ]}
+          activeOpacity={0.8}
+          onPress={() => setShowPlatformDropdown(true)}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <PlatformIcon platform={activePlatform === 'all' ? 'website' : activePlatform} size={16} color={dark ? '#E2E8F0' : colors.text} />
+            <Text style={[styles.dropdownButtonText, dark && styles.textLight, { marginLeft: 8 }]}>
+              {PLATFORMS.find(p => p.key === activePlatform)?.label || 'All Tasks'}
+            </Text>
+          </View>
+          <Icon name="chevron-down" iconStyle="solid" size={12} color={dark ? '#94A3B8' : '#64748B'} />
+        </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showPlatformDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPlatformDropdown(false)}>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1} 
+          onPress={() => setShowPlatformDropdown(false)}>
+          <View style={[styles.dropdownList, dark && styles.cardDark]}>
+            <Text style={[styles.dropdownTitle, dark && styles.textLight]}>Select Platform</Text>
+            {PLATFORMS.map((p) => {
+              const isActive = activePlatform === p.key;
+              return (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.dropdownItem, isActive && (dark ? styles.dropdownItemActiveDark : styles.dropdownItemActive)]}
+                  onPress={() => {
+                    setActivePlatform(p.key);
+                    setShowPlatformDropdown(false);
+                  }}>
+                  <PlatformIcon platform={p.key === 'all' ? 'website' : p.key} size={16} color={isActive ? p.color : (dark ? '#94A3B8' : '#64748B')} />
+                  <Text style={[styles.dropdownItemText, dark && styles.textLight, isActive && { color: p.color, fontWeight: '700' }]}>
+                    {p.label}
+                  </Text>
+                  {isActive && <Icon name="check" iconStyle="solid" size={14} color={p.color} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Status Toggle (All vs Available vs Completed) */}
       <View style={styles.statusRow}>
@@ -310,13 +361,14 @@ export default function TasksScreen() {
           const v = verificationByTask.get(item._id);
           const isDone = v?.state === 'RELEASED';
           const isPendingProof = v?.state === 'USER_CLAIMED_DONE' || v?.state === 'REJECTED';
+          const inReview = v?.state === 'PROOF_SUBMITTED' || v?.state === 'ADMIN_REVIEW' || v?.state === 'PENDING_HOLD';
           const isTelegramBot = item.verifier === 'telegram-bot';
           const title = item.name || (item.targetUrl ? targetName(item.targetUrl) : 'Social Engagement');
           const platformInfo = PLATFORMS.find((p) => p.key === item.platform) || PLATFORMS[0];
 
           return (
             <TouchableOpacity
-              style={[styles.taskCard, dark && styles.cardDark, isDone && styles.taskCardDone]}
+              style={[styles.taskCard, dark && styles.cardDark, (isDone || inReview) && styles.taskCardDone]}
               activeOpacity={0.85}
               onPress={() => handleOpenAndClaim(item)}>
               {/* Top Row: Icon, Title & Reward */}
@@ -330,7 +382,7 @@ export default function TasksScreen() {
                     {title}
                   </Text>
                   <Text style={styles.taskSub} numberOfLines={1}>
-                    {platformInfo.label} • {item.type.replace('_', ' ')}
+                    {platformInfo.label} • {(item.type || '').replace('_', ' ')}
                   </Text>
                 </View>
 
@@ -346,6 +398,11 @@ export default function TasksScreen() {
                   <View style={styles.doneBadge}>
                     <Icon name="circle-check" iconStyle="solid" size={14} color="#10B981" />
                     <Text style={styles.doneBadgeText}>Completed</Text>
+                  </View>
+                ) : inReview ? (
+                  <View style={styles.doneBadge}>
+                    <Icon name="clock" iconStyle="solid" size={14} color="#F59E0B" />
+                    <Text style={[styles.doneBadgeText, { color: '#F59E0B' }]}>In Review</Text>
                   </View>
                 ) : isPendingProof ? (
                   <View style={styles.pendingActionGroup}>
@@ -363,7 +420,7 @@ export default function TasksScreen() {
                         activeOpacity={0.8}
                         onPress={() => {
                           setUploadTarget(v);
-                          setSelectedImageUri(null);
+                          setSelectedImageUris([]);
                         }}>
                         <Icon name="arrow-up-from-bracket" iconStyle="solid" size={13} color="#FFF" />
                         <Text style={styles.uploadBtnText}>Upload Proof</Text>
@@ -404,20 +461,35 @@ export default function TasksScreen() {
             </View>
 
             <Text style={styles.modalSub}>
-              Upload a screenshot showing you completed the task (follow, like, or subscribe).
+              {isXMultiTask 
+                ? "Upload 3 screenshots showing you completed the tasks (e.g. Follow, Comment, Like/Repost)." 
+                : "Upload a screenshot showing you completed the task (follow, like, or subscribe)."}
             </Text>
 
-            {selectedImageUri ? (
+            {selectedImageUris.length > 0 ? (
               <View style={styles.previewContainer}>
-                <Image source={{ uri: selectedImageUri }} style={styles.previewImage} resizeMode="cover" />
-                <TouchableOpacity style={styles.changeImgBtn} onPress={handlePickImage}>
-                  <Text style={styles.changeImgText}>Change Screenshot</Text>
-                </TouchableOpacity>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 5 }}>
+                  {selectedImageUris.map((uri, index) => (
+                    <View key={index} style={{ position: 'relative' }}>
+                      <Image source={{ uri }} style={[styles.previewImage, { width: 120, height: 180 }]} resizeMode="cover" />
+                      <TouchableOpacity 
+                        style={{ position: 'absolute', top: 5, right: 5, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 6 }} 
+                        onPress={() => removeImage(index)}>
+                        <Icon name="xmark" iconStyle="solid" size={14} color="#FFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+                {selectedImageUris.length < (isXMultiTask ? 3 : 1) && (
+                  <TouchableOpacity style={styles.changeImgBtn} onPress={handlePickImage}>
+                    <Text style={styles.changeImgText}>Add Another Screenshot ({selectedImageUris.length}/{isXMultiTask ? 3 : 1})</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               <TouchableOpacity style={styles.pickerBox} activeOpacity={0.8} onPress={handlePickImage}>
                 <Icon name="image" iconStyle="solid" size={32} color={colors.primary} />
-                <Text style={styles.pickerText}>Select Screenshot from Gallery</Text>
+                <Text style={styles.pickerText}>Select {isXMultiTask ? "3 Screenshots" : "Screenshot"}</Text>
               </TouchableOpacity>
             )}
 
@@ -426,7 +498,7 @@ export default function TasksScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => {
                   setUploadTarget(null);
-                  setSelectedImageUri(null);
+                  setSelectedImageUris([]);
                 }}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -434,9 +506,9 @@ export default function TasksScreen() {
               <TouchableOpacity
                 style={[
                   styles.modalSubmitBtn,
-                  (!selectedImageUri || uploading) && styles.modalSubmitBtnDisabled,
+                  (selectedImageUris.length === 0 || uploading || (isXMultiTask && selectedImageUris.length < 3)) && styles.modalSubmitBtnDisabled,
                 ]}
-                disabled={!selectedImageUri || uploading}
+                disabled={selectedImageUris.length === 0 || uploading || (isXMultiTask && selectedImageUris.length < 3)}
                 onPress={handleUploadSubmit}>
                 {uploading ? (
                   <ActivityIndicator size="small" color="#FFF" />
@@ -505,29 +577,57 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 8,
   },
-  filterChip: {
+  dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
+    justifyContent: 'space-between',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  filterChipDark: {
+  dropdownButtonDark: {
     backgroundColor: colors.surfaceDark,
     borderColor: colors.borderDark,
   },
-  filterChipText: {
-    fontSize: 12,
+  dropdownButtonText: {
+    fontSize: 14,
     fontWeight: '700',
     color: colors.text,
   },
-  filterChipTextActive: {
-    color: '#FFF',
+  dropdownList: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 16,
+    gap: 4,
+  },
+  dropdownTitle: {
+    fontSize: 16,
     fontWeight: '800',
+    color: colors.text,
+    marginBottom: 8,
+    paddingHorizontal: 8,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: radius.lg,
+    gap: 12,
+  },
+  dropdownItemActive: {
+    backgroundColor: colors.bg,
+  },
+  dropdownItemActiveDark: {
+    backgroundColor: colors.bgDark,
+  },
+  dropdownItemText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
   },
 
   statusRow: {

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, Image } from 'react-native';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { isLockEnabled, promptBiometric } from './biometric';
 import Icon from '../components/Icon';
 import { colors, shadow } from '../theme';
@@ -11,6 +12,7 @@ import { api } from '../../convex/_generated/api';
 export default function BiometricGate({ children }: { children: React.ReactNode }) {
   const [locked, setLocked] = useState<boolean | null>(null); // null = still checking
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuthActions();
   const user = useQuery(api.users.me);
 
   const unlock = useCallback(async () => {
@@ -44,10 +46,9 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
         <View style={styles.header}>
           <Image source={require('../assets/icon.png')} style={styles.logo} />
           <View style={styles.headerRight}>
-            <Text style={styles.headerRightText}>Lost your phone?</Text>
-            <TouchableOpacity style={styles.lockRow}>
-              <Icon name="lock" iconStyle="solid" size={12} color="#0052CC" />
-              <Text style={styles.lockText}>Lock your account</Text>
+            <TouchableOpacity style={styles.lockRow} onPress={() => signOut()} activeOpacity={0.7}>
+              <Icon name="right-from-bracket" iconStyle="solid" size={13} color={colors.danger} />
+              <Text style={styles.lockText}>Sign out</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -55,26 +56,26 @@ export default function BiometricGate({ children }: { children: React.ReactNode 
         {/* Welcome */}
         <View style={styles.welcomeContainer}>
           <Text style={styles.welcomeText}>Welcome Back,</Text>
-          <Text style={styles.nameText}>{user?.name ? user.name.toUpperCase() : 'USER'}</Text>
+          <Text style={styles.nameText}>{user?.name ? user.name.toUpperCase() : (user?.username ? user.username.toUpperCase() : 'MEMBER')}</Text>
         </View>
 
         {/* Fingerprint Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Fingerprint Unlock</Text>
+          <Text style={styles.cardTitle}>Biometric Unlock</Text>
           <TouchableOpacity style={styles.fingerprintBox} onPress={unlock} activeOpacity={0.8}>
-            <Icon name="fingerprint" iconStyle="solid" size={54} color="#0052CC" />
+            <Icon name="fingerprint" iconStyle="solid" size={54} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
         {/* Passcode Button */}
         <TouchableOpacity style={styles.passcodeBtn} onPress={unlock} activeOpacity={0.8}>
-          <Text style={styles.passcodeBtnText}>Use Passcode Instead</Text>
+          <Text style={styles.passcodeBtnText}>Use Passcode / Biometrics</Text>
         </TouchableOpacity>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Licensed by the <Text style={{fontWeight: '700'}}>Central Bank of Nigeria</Text> and insured by the <Text style={{fontWeight: '700'}}>NDIC</Text>. Read our <Text style={{fontWeight: '700'}}>Privacy Policy ↗</Text>
+            Protected by secure device biometric encryption.
           </Text>
         </View>
 
@@ -107,20 +108,18 @@ const styles = StyleSheet.create({
   headerRight: {
     alignItems: 'flex-end',
   },
-  headerRightText: {
-    color: '#6B7280',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
   lockRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: '#FEE2E2',
   },
   lockText: {
-    color: '#0052CC',
-    fontSize: 14,
+    color: colors.danger,
+    fontSize: 13,
     fontWeight: '700',
   },
   welcomeContainer: {
@@ -155,21 +154,21 @@ const styles = StyleSheet.create({
   fingerprintBox: {
     width: 100,
     height: 100,
-    backgroundColor: '#EBF2FF',
+    backgroundColor: colors.primarySoft,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   passcodeBtn: {
-    backgroundColor: '#EBF2FF',
+    backgroundColor: colors.primarySoft,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
   passcodeBtnText: {
-    color: '#0052CC',
+    color: colors.primaryDeep,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   footer: {
     marginTop: 'auto',

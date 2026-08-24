@@ -7,12 +7,26 @@ import { PiProvider } from "./PiProvider";
 // Sign-in methods: email+password, email OTP (Resend), Telegram,
 // and Pi Network (Pi Browser, plan §7.1). Sidra KYC is added later.
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [Password(), ResendOTP, TelegramProvider, PiProvider],
-  // Short-lived sessions: expire after 10 minutes of inactivity and force a
-  // fresh Pi/OTP sign-in after 1 hour total (default is 30 days each).
+  providers: [
+    Password({ 
+      verify: ResendOTP,
+      reset: ResendOTP,
+      profile: (params) => {
+        const email = params.email as string;
+        const profile: Record<string, any> & { email: string } = { email };
+        if (params.name) profile.name = params.name as string;
+        if (params.country) profile.country = params.country as string;
+        return profile;
+      }
+    }), 
+    ResendOTP, 
+    TelegramProvider, 
+    PiProvider
+  ],
+  // Long-lived mobile sessions: 90 days total duration, 30 days inactive duration.
   session: {
-    totalDurationMs: 60 * 60 * 1000,
-    inactiveDurationMs: 10 * 60 * 1000,
+    totalDurationMs: 90 * 24 * 60 * 60 * 1000,
+    inactiveDurationMs: 30 * 24 * 60 * 60 * 1000,
   },
   callbacks: {
     // Central user creation for every provider — fills our app fields so each
@@ -26,6 +40,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const telegramUserId = profile.telegramId as string | undefined;
       const piUid = profile.piUid as string | undefined;
       const piWalletAddress = profile.piWalletAddress as string | undefined;
+      const country = profile.country as string | undefined;
       return await ctx.db.insert("users", {
         email,
         name,
@@ -44,7 +59,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         fraudScore: 0,
         deviceFingerprint: "auth",
         signupIp: "unknown",
-        country: "unknown",
+        country: country || "unknown",
         telegramUserId,
         piWalletAddress,
       });

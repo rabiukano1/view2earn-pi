@@ -108,16 +108,34 @@ button { font: inherit; }
 .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
 .brand-sub { font-size: 11px; color: var(--sidebar-text); margin-top: -2px; }
 
-.sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+.sidebar nav { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 4px; 
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sidebar-active) transparent;
+  padding-right: 4px;
+}
+
+.sidebar nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar nav::-webkit-scrollbar-thumb {
+  background-color: var(--sidebar-active);
+  border-radius: 4px;
+}
 
 .nav-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #55555e;
+  letter-spacing: 0.08em;
+  color: #6c6c75;
   padding: 0 10px;
-  margin: 4px 0 6px;
+  margin: 4px 0 10px;
 }
 
 .sidebar nav a {
@@ -138,9 +156,9 @@ button { font: inherit; }
 .sidebar nav a:hover { background: var(--sidebar-active); color: #e8e8ec; }
 
 .sidebar nav a.active {
-  background: var(--sidebar-active);
+  background: linear-gradient(90deg, var(--sidebar-active), transparent);
   color: #fff;
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .sidebar-foot {

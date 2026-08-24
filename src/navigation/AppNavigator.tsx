@@ -30,6 +30,7 @@ import StatsScreen from '../screens/StatsScreen';
 import LevelScreen from '../screens/LevelScreen';
 
 import LoginScreen from '../screens/LoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import { useAuth } from '../auth/AuthContext';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -129,7 +130,6 @@ interface AppNavigatorProps {
 
 export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
   const { userId } = useAuth();
-  const flags = useQuery(api.features.getFlags) || {};
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -162,6 +162,7 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="Login">
             {(props) => <LoginScreen {...props} onShowSplash={onShowSplash} />}
           </Stack.Screen>
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Terms" component={TermsScreen} />
           <Stack.Screen name="Policy" component={PolicyScreen} />
         </>

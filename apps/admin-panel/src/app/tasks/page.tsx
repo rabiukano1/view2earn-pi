@@ -31,7 +31,7 @@ const EMPTY_STEP: StepForm = { action: "FOLLOW", label: "", name: "", targetUrl:
 
 const EMPTY: TaskForm = {
   type: "FOLLOW_PAGE",
-  platform: "facebook",
+  platform: "x",
   name: "",
   targetUrl: "",
   pageId: "",
@@ -78,15 +78,15 @@ function PlatformIcon({ platform, color, className }: { platform: string; color?
 }
 
 const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
-  facebook: { label: "Facebook", color: "#1877F2" },
-  tiktok: { label: "TikTok", color: "#25F4EE" },
-  telegram: { label: "Telegram", color: "#229ED9" },
+  app: { label: "App View2Earn", color: "#10B981" },
+  x: { label: "X (Twitter)", color: "#1DA1F2" },
   youtube: { label: "YouTube", color: "#FF0000" },
-  instagram: { label: "Instagram", color: "#E4405F" },
-  x: { label: "X (Twitter)", color: "#FFFFFF" },
-  linkedin: { label: "LinkedIn", color: "#0A66C2" },
+  tiktok: { label: "TikTok", color: "#000000" },
+  instagram: { label: "Instagram", color: "#E1306C" },
+  facebook: { label: "Facebook", color: "#1877F2" },
+  telegram: { label: "Telegram", color: "#0088CC" },
   whatsapp: { label: "WhatsApp", color: "#25D366" },
-  app: { label: "In-App Quiz/Survey", color: "#7C3AED" },
+  linkedin: { label: "LinkedIn", color: "#0A66C2" },
 };
 
 const DEFAULT_ACTIONS: [string, string][] = [
@@ -129,10 +129,11 @@ const PLATFORM_ACTIONS: Record<string, [string, string][]> = {
     ["SHARE", "Share"],
   ],
   x: [
-    ["FOLLOW", "Follow"],
-    ["LIKE", "Like"],
-    ["REPOST", "Repost"],
     ["COMMENT", "Comment"],
+    ["REPOST", "Repost"],
+    ["LIKE", "Like"],
+    ["BOOKMARK", "Bookmark"],
+    ["FOLLOW", "Follow"],
   ],
 };
 
@@ -146,16 +147,50 @@ function actionsFor(platform: string): [string, string][] {
 const CHANNEL_PLATFORMS = new Set(["telegram", "facebook", "youtube"]);
 
 function taskTypesFor(platform: string): [string, string][] {
-  const base: [string, string][] = [
-    ["FOLLOW_PAGE", "Follow / Like Page"],
-    ["JOIN_CHANNEL", "Join Channel"],
-    ["MULTI_TASK", "Multi-task (bundle steps)"],
+  if (platform === "app") return [
     ["QUIZ", "Quiz"],
-    ["SURVEY", "Survey"],
+    ["SURVEY", "Survey"]
   ];
-  if (platform === "app") return base.filter(([v]) => v === "QUIZ" || v === "SURVEY");
-  if (!CHANNEL_PLATFORMS.has(platform)) return base.filter(([v]) => v !== "JOIN_CHANNEL");
-  return base;
+  if (platform === "x") return [
+    ["FOLLOW", "Follow"],
+    ["MULTI_TASK", "Multi-task (bundle steps)"]
+  ];
+  if (platform === "facebook") return [
+    ["FOLLOW_PAGE", "Follow Page"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["JOIN_GROUP", "Join Group"],
+    ["MULTI_TASK", "Multi-task (Coming Soon)"]
+  ];
+  if (platform === "youtube") return [
+    ["SUBSCRIBE", "Subscribe"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["WATCH", "Watch Video"],
+    ["MULTI_TASK", "Multi-task (Coming Soon)"]
+  ];
+  if (platform === "tiktok") return [
+    ["FOLLOW", "Follow"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["WATCH", "Watch Video"],
+    ["MULTI_TASK", "Multi-task (Coming Soon)"]
+  ];
+  if (platform === "instagram") return [
+    ["FOLLOW", "Follow"],
+    ["LIKE", "Like"],
+    ["COMMENT", "Comment"],
+    ["SHARE", "Share"],
+    ["MULTI_TASK", "Multi-task (Coming Soon)"]
+  ];
+  if (platform === "telegram") return [
+    ["JOIN_CHANNEL", "Join Channel"],
+    ["COMMENT", "Comment"],
+    ["MULTI_TASK", "Multi-task (Coming Soon)"]
+  ];
+  
+  // For any other platforms (LinkedIn, WhatsApp, etc.), return empty array to indicate they are hidden
+  return [];
 }
 
 function previewLabel(form: TaskForm): string {
@@ -195,6 +230,7 @@ function nameFromUrl(url: string): string {
     .replace(/^instagram\.com\//, "")
     .replace(/^x\.com\//, "")
     .replace(/^twitter\.com\//, "")
+    .replace(/^youtube\.com\/(@|channel\/|c\/)?/, "")
     .replace(/[?#].*$/, "")
     .replace(/\/+$/, "")
     .replace(/^@/, "");
@@ -454,224 +490,364 @@ export default function TasksPage() {
 
       {/* Modern Add / Edit Task Modal */}
       <Modal title={editing ? "✏️ Edit Task Campaign" : "✨ Create New Task Campaign"} open={open} onClose={() => setOpen(false)}>
-        <div className="space-y-5">
-          {/* Platform Selector Grid */}
-          <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Select Platform</label>
-            <div className="grid grid-cols-4 gap-2">
-              {Object.entries(PLATFORM_CONFIG).map(([key, cfg]) => {
-                const active = form.platform === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`p-2.5 rounded-xl border flex items-center space-x-2 text-left transition-all ${
-                      active
-                        ? "bg-purple-600/20 border-purple-500 text-white shadow-md shadow-purple-500/10"
-                        : "bg-slate-800/50 border-slate-700/60 text-slate-400 hover:border-slate-600"
-                    }`}
-                    onClick={() => onPlatformChange(key)}>
-                    <span
-                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: active ? `${cfg.color}33` : "rgba(148,163,184,0.12)" }}>
-                      <PlatformIcon platform={key} color={cfg.color} className="w-4 h-4" />
-                    </span>
-                    <span className="text-xs font-bold truncate">{cfg.label}</span>
-                  </button>
-                );
-              })}
+        <div className="space-y-8 pb-4">
+          
+          {/* Section 1: Platform Selection */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-6 h-px bg-slate-700"></span>
+              Select Platform
+              <span className="flex-1 h-px bg-slate-700/50"></span>
+            </h3>
+            <div className="p-5 bg-slate-900/40 backdrop-blur-sm rounded-2xl border border-slate-700/50">
+              <Field label="Platform" hint="Choose the platform for this campaign">
+                <select 
+                  value={form.platform} 
+                  onChange={(e) => onPlatformChange(e.target.value)}
+                  className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50 transition-shadow w-full p-2.5 rounded-lg"
+                >
+                  {Object.entries(PLATFORM_CONFIG).map(([key, cfg]) => (
+                    <option key={key} value={key}>
+                      {cfg.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
           </div>
 
-          <div className="form-grid">
-            <Field label="Task Type">
-              <select value={form.type} onChange={(e) => set({ type: e.target.value })}>
-                {taskTypesFor(form.platform).map(([value, text]) => (
-                  <option key={value} value={value}>
-                    {value} — {text}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Verification Provider">
-              <select value={form.verifier} onChange={(e) => set({ verifier: e.target.value })}>
-                <option value="screenshot-ai">screenshot-ai (AI Vision Auto-Review)</option>
-                <option value="telegram-bot">telegram-bot (Direct API)</option>
-                <option value="bio-code">bio-code (Bio Verification)</option>
-                <option value="quiz">quiz (Instant Verification)</option>
-              </select>
-            </Field>
-          </div>
-
-          {form.type === "MULTI_TASK" ? (
-            <div className="p-4 bg-slate-900/60 rounded-xl border border-purple-500/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">
-                  Bundle Steps — User completes every step & uploads 1 screenshot
-                </span>
-                <button
-                  className="btn btn-primary btn-sm"
-                  type="button"
-                  onClick={() =>
-                    setForm((f) => ({
-                      ...f,
-                      steps: [...f.steps, { ...EMPTY_STEP, action: actionsFor(f.platform)[0][0] }],
-                    }))
-                  }>
-                  + Add Step
-                </button>
-              </div>
-              {form.steps.length === 0 && (
-                <p className="text-xs text-slate-400 py-2">No steps yet — click "+ Add Step" to build the multi-task bundle.</p>
-              )}
-              {form.steps.map((step, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
-                  <div className="col-span-2">
-                    <select value={step.action} onChange={(e) => onStepActionChange(i, e.target.value)}>
-                      {actionsFor(form.platform).map(([value, text]) => (
-                        <option key={value} value={value}>{text}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-3">
-                    <input
-                      value={step.name}
-                      onChange={(e) => onStepNameChange(i, e.target.value)}
-                      placeholder="Handle / Username"
-                    />
-                  </div>
-                  <div className="col-span-4">
-                    <input
-                      value={step.targetUrl}
-                      onChange={(e) => setStep(i, { targetUrl: e.target.value })}
-                      placeholder="Full Target Link"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <input
-                      value={step.label}
-                      onChange={(e) => setStep(i, { label: e.target.value })}
-                      placeholder="Instruction"
-                    />
-                  </div>
-                  <div className="col-span-1 text-right">
-                    <button
-                      className="btn btn-danger btn-sm p-1.5 text-xs"
-                      type="button"
-                      onClick={() =>
-                        setForm((f) => ({ ...f, steps: f.steps.filter((_, idx) => idx !== i) }))
-                      }>
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))}
+          {taskTypesFor(form.platform).length === 0 ? (
+            <div className="p-8 bg-slate-900/60 backdrop-blur-sm rounded-2xl border border-slate-700/50 text-center space-y-4 shadow-xl">
+              <div className="text-4xl animate-bounce">🚧</div>
+              <h3 className="text-xl font-bold text-slate-100">Task Creation Coming Soon</h3>
+              <p className="text-slate-400 text-sm max-w-sm mx-auto">
+                We are currently building the custom task flows and API integrations for {PLATFORM_CONFIG[form.platform]?.label.replace(" (Coming Soon)", "")}. Please check back later!
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              <Field
-                label={form.platform === "app" ? "Campaign / Quiz Name" : "Page Name (shown in verification screen)"}
-                hint={
-                  form.platform === "app"
-                    ? "Shown to users in app task feed"
-                    : "Type handle or username — URL below is auto-filled from it"
-                }>
-                <input
-                  value={form.name}
-                  onChange={(e) => onNameChange(e.target.value)}
-                  placeholder={PLACEHOLDERS[form.platform] ?? "Page name"}
-                  autoFocus
-                />
-              </Field>
-              <Field
-                label="Target URL"
-                hint="Opened when the user taps the task — auto-filled from the page name, edit to override">
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1"
-                    value={form.targetUrl}
-                    onChange={(e) => set({ targetUrl: e.target.value })}
-                    placeholder="https://..."
-                  />
-                  <button
-                    className="btn btn-secondary btn-sm shrink-0"
-                    type="button"
-                    disabled={!form.targetUrl}
-                    onClick={() => openWebTaskLink(form.platform, form.targetUrl)}
-                    title={`Test link: ${form.targetUrl || "none"}`}>
-                    {form.targetUrl ? platformEmoji(form.targetUrl) : "🌐"} Test
-                  </button>
+            <>
+              {/* Section 2: Campaign Details */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-6 h-px bg-slate-700"></span>
+                  Campaign Details
+                  <span className="flex-1 h-px bg-slate-700/50"></span>
+                </h3>
+                <div className="p-5 bg-slate-900/40 backdrop-blur-sm rounded-2xl border border-slate-700/50 form-grid">
+                  <Field label="Task Type" hint="What should the user do?">
+                    <select 
+                      value={form.type} 
+                      onChange={(e) => set({ type: e.target.value })}
+                      className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50 transition-shadow"
+                    >
+                      {taskTypesFor(form.platform).map(([value, text]) => (
+                        <option key={value} value={value}>
+                          {text}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Verification Provider" hint="How is the proof checked?">
+                    <select 
+                      value={form.verifier} 
+                      onChange={(e) => set({ verifier: e.target.value })}
+                      className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50 transition-shadow"
+                    >
+                      <option value="screenshot-ai">screenshot-ai (AI Vision Auto-Review)</option>
+                      <option value="telegram-bot">telegram-bot (Direct API)</option>
+                      <option value="bio-code">bio-code (Bio Verification)</option>
+                      <option value="quiz">quiz (Instant Verification)</option>
+                    </select>
+                  </Field>
                 </div>
-              </Field>
-              {form.targetUrl && (
-                <p className="text-[11px] text-slate-400">
-                  {platformLabel(form.targetUrl)} link — opens in a new tab so you can verify before publishing.
-                </p>
-              )}
-              {form.platform === "facebook" && (
-                <Field label="Facebook Page ID (Optional — Deep-link helper for FB Lite)">
-                  <input
-                    value={form.pageId}
-                    onChange={(e) => set({ pageId: e.target.value })}
-                    placeholder="e.g. 100064860796750"
-                  />
-                </Field>
-              )}
-            </div>
+              </div>
+
+              {/* Section 3: Action Configuration */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-6 h-px bg-slate-700"></span>
+                  Action Configuration
+                  <span className="flex-1 h-px bg-slate-700/50"></span>
+                </h3>
+
+                {form.type === "MULTI_TASK" ? (
+                  <div className="p-5 bg-slate-900/60 backdrop-blur-sm rounded-2xl border border-purple-500/20 space-y-4 shadow-lg">
+                    {form.platform === "x" && (
+                      <div className="space-y-4 bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                        <Field label="Quick Select Actions" hint="Click to toggle steps. Campaign title auto-generates!">
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {actionsFor("x").map(([action, label]) => {
+                              const isSelected = form.steps.some((s) => s.action === action);
+                              return (
+                                <button
+                                  key={action}
+                                  type="button"
+                                  className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all duration-300 ${
+                                    isSelected
+                                      ? "bg-purple-600 border-purple-500 text-white shadow-[0_0_12px_rgba(168,85,247,0.4)] transform -translate-y-0.5"
+                                      : "bg-slate-800/80 border-slate-700 text-slate-400 hover:border-slate-500 hover:bg-slate-700 hover:-translate-y-0.5"
+                                  }`}
+                                  onClick={() => {
+                                    let newSteps;
+                                    if (isSelected) {
+                                      newSteps = form.steps.filter((s) => s.action !== action);
+                                    } else {
+                                      newSteps = [...form.steps, { action, label: "", name: "", targetUrl: form.targetUrl }];
+                                    }
+                                    const newName = newSteps
+                                      .map((s) => actionsFor("x").find(([a]) => a === s.action)?.[1] ?? s.action)
+                                      .join(" + ");
+                                    setForm((f) => ({ ...f, steps: newSteps, name: newName }));
+                                  }}>
+                                  {isSelected ? "✓ " : "+ "}{label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </Field>
+                        {form.name && (
+                          <div className="px-4 py-3 bg-emerald-950/30 border border-emerald-500/30 rounded-lg flex items-center gap-3">
+                            <span className="text-emerald-400 text-lg">✨</span>
+                            <div>
+                              <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-500/80">Auto-Generated Title</div>
+                              <div className="text-sm font-semibold text-emerald-300">{form.name}</div>
+                            </div>
+                          </div>
+                        )}
+                        <Field label="Master Post URL" hint="Auto-fills the URL for all Comment, Repost, Like, and Bookmark steps below">
+                          <div className="flex gap-2">
+                            <input
+                              className="flex-1 bg-slate-900 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                              value={form.targetUrl}
+                              onChange={(e) => {
+                                 const val = e.target.value;
+                                 setForm(f => ({
+                                   ...f,
+                                   targetUrl: val,
+                                   steps: f.steps.map(s => (s.action !== "FOLLOW" ? { ...s, targetUrl: val } : s))
+                                 }));
+                              }}
+                              placeholder="https://x.com/username/status/123456789"
+                            />
+                            <button
+                              className="btn btn-secondary shrink-0 transition-transform hover:scale-105"
+                              type="button"
+                              disabled={!form.targetUrl}
+                              onClick={() => openWebTaskLink(form.platform, form.targetUrl)}
+                              title={`Test link: ${form.targetUrl || "none"}`}>
+                              {form.targetUrl ? platformEmoji(form.targetUrl) : "🌐"} Test
+                            </button>
+                          </div>
+                        </Field>
+                      </div>
+                    )}
+                    
+                    <div className="pt-2">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+                          Bundle Steps Overview
+                        </span>
+                        <button
+                          className="btn btn-primary btn-sm shadow-[0_0_10px_rgba(168,85,247,0.3)]"
+                          type="button"
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              steps: [...f.steps, { ...EMPTY_STEP, action: actionsFor(f.platform)[0][0] }],
+                            }))
+                          }>
+                          + Add Step
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {form.steps.length === 0 && (
+                          <div className="text-center py-6 border border-dashed border-slate-700 rounded-xl bg-slate-900/30">
+                            <p className="text-sm text-slate-500">No steps yet — click "+ Add Step" or use Quick Select to build the bundle.</p>
+                          </div>
+                        )}
+                        {form.steps.map((step, i) => (
+                          <div key={i} className="flex flex-col md:flex-row gap-3 items-center p-3 bg-slate-900/80 rounded-xl border border-slate-700/50 hover:border-purple-500/30 transition-colors group">
+                            <div className="w-full md:w-40 shrink-0">
+                              <select 
+                                value={step.action} 
+                                onChange={(e) => onStepActionChange(i, e.target.value)}
+                                className="w-full bg-slate-950 border-slate-700 text-sm"
+                              >
+                                {actionsFor(form.platform).map(([value, text]) => (
+                                  <option key={value} value={value}>{text}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="w-full md:flex-1 relative">
+                              <input
+                                className="w-full bg-slate-950 border-slate-700 text-sm pr-8"
+                                value={step.name}
+                                onChange={(e) => onStepNameChange(i, e.target.value)}
+                                placeholder={form.platform === "x" && step.action !== "FOLLOW" ? "Not needed" : "Handle / Username"}
+                              />
+                            </div>
+                            <button
+                              className="w-full md:w-10 h-10 flex items-center justify-center bg-slate-800 text-slate-500 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                              onClick={() => setForm((f) => ({ ...f, steps: f.steps.filter((_, idx) => idx !== i) }))}>
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : form.platform !== "app" ? (
+                  <div className="p-5 bg-slate-900/40 backdrop-blur-sm rounded-2xl border border-slate-700/50 space-y-4">
+                    <Field label={`${PLATFORM_CONFIG[form.platform]?.label.replace(" (Coming Soon)", "")} Name`} hint="Display name (e.g. Elon Musk or View2Earn)">
+                      <input
+                        className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                        value={form.name}
+                        onChange={(e) => set({ name: e.target.value })}
+                        placeholder="Page or Channel Name"
+                        autoFocus
+                      />
+                    </Field>
+                    <Field label="Username / Handle or Link" hint={`Automatically builds the URL. You can paste just the username or the full link.`}>
+                      <div className="flex gap-2">
+                        <span className="w-12 bg-slate-900 text-slate-400 rounded-lg border border-slate-700 flex items-center justify-center font-bold">@</span>
+                        <input
+                          className="flex-1 bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                          value={nameFromUrl(form.targetUrl)}
+                          onChange={(e) => set({ targetUrl: buildTargetUrl(form.platform, e.target.value) })}
+                          placeholder="username"
+                        />
+                        <button
+                          className="btn btn-secondary shrink-0 transition-transform hover:scale-105"
+                          type="button"
+                          disabled={!form.targetUrl}
+                          onClick={() => openWebTaskLink(form.platform, form.targetUrl)}
+                          title={`Test link: ${form.targetUrl || "none"}`}>
+                          {form.targetUrl ? platformEmoji(form.targetUrl) : "🌐"} Test
+                        </button>
+                      </div>
+                    </Field>
+                    {form.targetUrl && (
+                      <p className="text-[11px] text-slate-400 pl-14">
+                        Target URL: <span className="text-purple-300 font-mono">{form.targetUrl}</span>
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-5 bg-slate-900/40 backdrop-blur-sm rounded-2xl border border-slate-700/50 space-y-4">
+                    <Field
+                      label="Campaign / Quiz Name"
+                      hint="Shown to users in app task feed">
+                      <input
+                        className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                        value={form.name}
+                        onChange={(e) => onNameChange(e.target.value)}
+                        placeholder="Quiz name"
+                        autoFocus
+                      />
+                    </Field>
+                    <Field
+                      label="Target URL (Optional)"
+                      hint="Opened when the user taps the task">
+                      <div className="flex gap-2">
+                        <input
+                          className="flex-1 bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                          value={form.targetUrl}
+                          onChange={(e) => set({ targetUrl: e.target.value })}
+                          placeholder="https://..."
+                        />
+                        <button
+                          className="btn btn-secondary shrink-0 transition-transform hover:scale-105"
+                          type="button"
+                          disabled={!form.targetUrl}
+                          onClick={() => openWebTaskLink(form.platform, form.targetUrl)}
+                          title={`Test link: ${form.targetUrl || "none"}`}>
+                          {form.targetUrl ? platformEmoji(form.targetUrl) : "🌐"} Test
+                        </button>
+                      </div>
+                    </Field>
+                  </div>
+                )}
+              </div>
+
+              {/* Live Preview Bar */}
+              <div className="p-4 bg-gradient-to-r from-purple-900/40 to-slate-900/40 rounded-xl border border-purple-500/30 flex items-center justify-between shadow-[0_4px_20px_-5px_rgba(168,85,247,0.15)] relative overflow-hidden">
+                <div className="absolute inset-0 bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
+                <div className="flex items-center space-x-4 z-10">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-inner"
+                    style={{
+                      backgroundColor: `${PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}20`,
+                      border: `1px solid ${PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}40`,
+                    }}>
+                    <PlatformIcon
+                      platform={form.platform}
+                      color={PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}
+                      className="w-6 h-6 drop-shadow-md"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-slate-400 mb-0.5 tracking-wider">Mobile App Preview</div>
+                    <div className="text-sm font-bold text-white leading-tight">{previewLabel(form)}</div>
+                    <div className="text-[11px] text-purple-300 font-mono mt-0.5 max-w-[200px] truncate">
+                      {form.targetUrl || "https://..."}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right z-10 flex flex-col items-end">
+                  <div className="text-[10px] uppercase font-bold text-emerald-500 mb-0.5 tracking-wider">Reward</div>
+                  <span className="badge badge-green font-bold text-sm px-3 py-1 shadow-[0_0_10px_rgba(16,185,129,0.2)]">+{form.points} PTS</span>
+                </div>
+              </div>
+
+              {/* Section 4: Reward & Delivery */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-6 h-px bg-slate-700"></span>
+                  Reward & Delivery
+                  <span className="flex-1 h-px bg-slate-700/50"></span>
+                </h3>
+                <div className="p-5 bg-slate-900/40 backdrop-blur-sm rounded-2xl border border-slate-700/50 form-grid">
+                  <Field
+                    label={form.type === "MULTI_TASK" ? "Total Points Reward" : "Points Reward"}
+                    hint="Awarded to user upon verified completion">
+                    <input 
+                      type="number" 
+                      className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50 text-emerald-400 font-bold"
+                      value={form.points} 
+                      onChange={(e) => set({ points: Number(e.target.value) })} 
+                    />
+                  </Field>
+                  <Field label="Max User Completions" hint="Stop campaign after this many users">
+                    <input
+                      type="number"
+                      className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                      value={form.maxCompletions}
+                      onChange={(e) => set({ maxCompletions: Number(e.target.value) })}
+                    />
+                  </Field>
+                  <Field label="Campaign Duration (Days)" hint="Automatically expires after X days">
+                    <input
+                      type="number"
+                      className="bg-slate-950 border-slate-700 focus:ring-2 focus:ring-purple-500/50"
+                      value={form.expiresDays}
+                      onChange={(e) => set({ expiresDays: Number(e.target.value) })}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </>
           )}
 
-          {/* Live Mobile Card Preview Box */}
-          <div className="p-3 bg-purple-950/30 rounded-xl border border-purple-500/30 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                style={{
-                  backgroundColor: `${PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}26`,
-                }}>
-                <PlatformIcon
-                  platform={form.platform}
-                  color={PLATFORM_CONFIG[form.platform]?.color ?? "#7C3AED"}
-                  className="w-4 h-4"
-                />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-white">{previewLabel(form)}</div>
-                <div className="text-[11px] text-purple-300 font-mono">
-                  {form.targetUrl || "https://..."}
-                </div>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="badge badge-green font-bold">+{form.points} PTS</span>
-            </div>
-          </div>
-
-          <div className="form-grid">
-            <Field
-              label={form.type === "MULTI_TASK" ? "Total Points Reward" : "Points Reward"}
-              hint="Awarded to user upon verified completion">
-              <input type="number" value={form.points} onChange={(e) => set({ points: Number(e.target.value) })} />
-            </Field>
-            <Field label="Max User Completions">
-              <input
-                type="number"
-                value={form.maxCompletions}
-                onChange={(e) => set({ maxCompletions: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Campaign Duration (Days)">
-              <input
-                type="number"
-                value={form.expiresDays}
-                onChange={(e) => set({ expiresDays: Number(e.target.value) })}
-              />
-            </Field>
-          </div>
-
-          <div className="modal-actions border-t border-slate-800 pt-4">
-            <button className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn-primary shadow-lg shadow-purple-500/20" onClick={save}>
-              {editing ? "Save Task Changes" : "Publish Task Campaign"}
+          <div className="modal-actions pt-6 mt-6 border-t border-slate-800/80 flex items-center justify-end gap-3 sticky bottom-0 bg-[#0f1115] pb-2 z-20">
+            <button className="btn btn-ghost hover:bg-slate-800" onClick={() => setOpen(false)}>Cancel</button>
+            <button 
+              className="btn btn-primary px-8 py-2.5 shadow-[0_4px_20px_rgba(168,85,247,0.4)] hover:shadow-[0_4px_25px_rgba(168,85,247,0.6)] transform transition-all hover:-translate-y-0.5 font-bold text-[15px]" 
+              onClick={save}
+              disabled={taskTypesFor(form.platform).length === 0}
+            >
+              {editing ? "Save Changes" : "🚀 Publish Campaign"}
             </button>
           </div>
         </div>

@@ -65,12 +65,23 @@ export default function ReviewPage() {
               <tr key={r._id}>
                 <td>
                   {r.screenshotUrl ? (
-                    <img
-                      src={r.screenshotUrl}
-                      alt="proof screenshot"
-                      className="shot-thumb"
-                      onClick={() => setPreview(r.screenshotUrl)}
-                    />
+                    <div className="flex gap-2 flex-wrap max-w-[120px]">
+                      <img
+                        src={r.screenshotUrl}
+                        alt="proof screenshot"
+                        className="shot-thumb"
+                        onClick={() => setPreview(r.screenshotUrl!)}
+                      />
+                      {r.additionalScreenshotsUrls?.map((url: string, i: number) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt="additional proof"
+                          className="shot-thumb"
+                          onClick={() => setPreview(url)}
+                        />
+                      ))}
+                    </div>
                   ) : (
                     <span className="badge badge-gray">none</span>
                   )}

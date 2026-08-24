@@ -60,6 +60,7 @@ export const PiProvider = ConvexCredentials({
       piUid: verified.uid,
     };
     if (walletAddress) profile.piWalletAddress = walletAddress;
+    if (credentials.country) profile.country = credentials.country as string;
 
     const created = await createAccount(ctx, {
       provider: "pi",

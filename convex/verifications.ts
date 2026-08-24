@@ -191,6 +191,7 @@ export const submitProof = mutation({
   args: {
     verificationId: v.id("verifications"),
     storageId: v.id("_storage"),
+    additionalStorageIds: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (ctx, args) => {
     const verification = await ctx.db.get(args.verificationId);
@@ -205,10 +206,24 @@ export const submitProof = mutation({
       throw new Error(`Cannot submit proof from state ${verification.state}`);
     }
     await enforceRateLimit(ctx, verification.userId, "upload");
+    
+    const task = await ctx.db.get(verification.taskId);
+    if (!task) {
+      throw new Error("Task not found");
+    }
+
+    const isXMultiTask = task.platform === "x" && task.type === "MULTI_TASK";
+
     await ctx.db.patch(args.verificationId, {
-      state: "PROOF_SUBMITTED",
+      state: isXMultiTask ? "ADMIN_REVIEW" : "PROOF_SUBMITTED",
       screenshotStorageId: args.storageId,
+      additionalScreenshots: args.additionalStorageIds,
     });
+
+    if (isXMultiTask) {
+      // Direct to manual review for 3-screenshot X multi-tasks. No AI, no hold.
+      return;
+    }
 
     // Layer 4 behavioral signal (plan §7.9): proof arriving bot-fast after the
     // claim is a flag, not a hard block — the raised score forces verification.
@@ -457,12 +472,22 @@ export const releaseImmediately = internalMutation({
         console.error("Storage purge error on releaseImmediately:", e);
       }
     }
+    if (verification.additionalScreenshots) {
+      for (const storageId of verification.additionalScreenshots) {
+        try {
+          await ctx.storage.delete(storageId);
+        } catch (e) {
+          console.error("Storage purge error for additional screenshot:", e);
+        }
+      }
+    }
 
     await ctx.db.patch(args.verificationId, {
       state: "RELEASED",
       sampled: true,
       aiConfidence: args.confidence,
       screenshotStorageId: undefined,
+      additionalScreenshots: undefined,
     });
 
     await ctx.runMutation(internal.points.creditHelper, {
@@ -531,10 +556,20 @@ export const release = internalMutation({
         console.error("Storage purge error on release:", e);
       }
     }
+    if (verification.additionalScreenshots) {
+      for (const storageId of verification.additionalScreenshots) {
+        try {
+          await ctx.storage.delete(storageId);
+        } catch (e) {
+          console.error("Storage purge error for additional screenshot on release:", e);
+        }
+      }
+    }
 
     await ctx.db.patch(args.verificationId, {
       state: "RELEASED",
       screenshotStorageId: undefined,
+      additionalScreenshots: undefined,
     });
     await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
@@ -591,9 +626,21 @@ export const purgeOldScreenshots = internalMutation({
       .collect();
 
     for (const v of verifications) {
-      if (v._creationTime < cutoff && v.screenshotStorageId) {
-        await ctx.storage.delete(v.screenshotStorageId);
-        await ctx.db.patch(v._id, { screenshotStorageId: undefined });
+      if (v._creationTime < cutoff) {
+        let patched = false;
+        if (v.screenshotStorageId) {
+          await ctx.storage.delete(v.screenshotStorageId);
+          patched = true;
+        }
+        if (v.additionalScreenshots) {
+          for (const storageId of v.additionalScreenshots) {
+            await ctx.storage.delete(storageId);
+          }
+          patched = true;
+        }
+        if (patched) {
+          await ctx.db.patch(v._id, { screenshotStorageId: undefined, additionalScreenshots: undefined });
+        }
       }
     }
   },

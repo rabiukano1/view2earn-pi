@@ -32,9 +32,17 @@ function LinkCard() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string>("");
   const [inPi, setInPi] = useState<boolean | null>(null);
+  const [detectedCountry, setDetectedCountry] = useState("unknown");
 
   useEffect(() => {
     isPiBrowser().then(setInPi).catch(() => setInPi(false));
+    
+    fetch("https://ipapi.co/json/")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.country_name) setDetectedCountry(data.country_name);
+      })
+      .catch(() => {});
   }, []);
 
   const handleLink = async () => {
@@ -53,7 +61,7 @@ function LinkCard() {
         ...(res.user.wallet_address ? { walletAddress: res.user.wallet_address } : {}),
         ...(res.user.username ? { piUsername: res.user.username } : {}),
       });
-      await signIn("pi", { accessToken: res.accessToken, uid: res.user.uid });
+      await signIn("pi", { accessToken: res.accessToken, uid: res.user.uid, country: detectedCountry });
       setDone(true);
     } catch (e) {
       setError(cleanErrorMessage(String((e as Error)?.message ?? e)));

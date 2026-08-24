@@ -5,15 +5,15 @@ import { useAdminQuery, useAdminMutation } from "../useAdmin";
 import { api } from "../../../../../convex/_generated/api";
 
 const FEATURE_KEYS = [
-  { key: "feature:tasks", label: "Tasks (Tab & Home)" },
-  { key: "feature:quiz", label: "Daily Quiz" },
-  { key: "feature:spin", label: "Spin & Win" },
-  { key: "feature:surveys", label: "Surveys" },
-  { key: "feature:wallet", label: "Wallet Tab" },
-  { key: "feature:rewards", label: "Rewards (Tab & Home)" },
-  { key: "feature:promote", label: "Promote Hub" },
-  { key: "feature:academy", label: "Academy (Learn)" },
-  { key: "feature:donate", label: "Donate Pi" },
+  { key: "feature:tasks", label: "Tasks", app: "Mobile App", place: "Tab Bar & Home Screen" },
+  { key: "feature:quiz", label: "Daily Quiz", app: "Mobile App", place: "Home Screen & Tasks" },
+  { key: "feature:spin", label: "Spin & Win", app: "Mobile App", place: "Home Screen" },
+  { key: "feature:surveys", label: "Surveys", app: "Mobile App", place: "Tasks Tab" },
+  { key: "feature:wallet", label: "Wallet Tab", app: "Mobile App", place: "Tab Bar" },
+  { key: "feature:rewards", label: "Rewards", app: "Mobile App", place: "Tab Bar & Home Screen" },
+  { key: "feature:promote", label: "Promote Hub", app: "Mobile App", place: "Home Screen (Top Action)" },
+  { key: "feature:academy", label: "Academy (Learn)", app: "Mobile App", place: "Home Screen" },
+  { key: "feature:donate", label: "Donate Pi", app: "Mobile App", place: "Wallet Tab / Balances" },
 ];
 
 export default function FeaturesPage() {
@@ -49,12 +49,13 @@ export default function FeaturesPage() {
           <thead>
             <tr>
               <th>Feature</th>
+              <th>App & Place</th>
               <th>Status</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {FEATURE_KEYS.map(({ key, label }) => {
+            {FEATURE_KEYS.map(({ key, label, app, place }) => {
               const setting = platformSettings.find((s) => s.key === key);
               const isActive = setting?.value !== "false"; // Default true
               return (
@@ -63,6 +64,11 @@ export default function FeaturesPage() {
                     <strong>{label}</strong>
                     <br />
                     <small style={{ color: "#64748B" }}>Key: {key}</small>
+                  </td>
+                  <td>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{app}</span>
+                    <br />
+                    <small style={{ color: "#64748B" }}>{place}</small>
                   </td>
                   <td>
                     <span

@@ -89,6 +89,7 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
 function MainTabs() {
   return (
     <Tab.Navigator
+      id="MainTabs"
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Wallet" component={WalletScreen} />
@@ -101,7 +102,7 @@ function MainTabs() {
 
 export default function AppNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator id="RootStack" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
       <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />

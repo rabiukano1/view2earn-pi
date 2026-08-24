@@ -8,7 +8,7 @@
  * Instagram, and Facebook actively block Custom Tabs with 404 pages.
  */
 
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 
 // ---- Helpers ----------------------------------------------------------------
 
@@ -50,7 +50,7 @@ function youtube(url: string): string[] | null {
 }
 
 function tiktok(url: string): string[] | null {
-  const { host, path, search } = parseSafe(url);
+  const { host, path } = parseSafe(url);
   if (!host.includes('tiktok.com')) return null;
   // Short links (vm./vt.) don't contain video IDs — skip native scheme
   if (host.startsWith('vm.') || host.startsWith('vt.')) return null;
@@ -87,7 +87,22 @@ function twitter(url: string): string[] | null {
   const parts = path.replace(/^\/+/, '').split('/');
   const username = parts[0];
   if (!username || ['i', 'intent', 'search', 'hashtag', 'settings'].includes(username)) return null;
-  if (parts[1] === 'status' && parts[2]) return [`twitter://status?id=${parts[2]}`];
+  if (parts[1] === 'status' && parts[2]) {
+    const id = parts[2];
+    const web = `https://x.com/${username}/status/${id}`;
+    // The legacy `twitter://status?id=` deep link no longer resolves to a
+    // specific post in recent X builds (it bounces to the home feed), and a
+    // bare https:// URL can route to the browser. On Android, force the X app
+    // package to handle the post URL via an intent, with a web fallback.
+    if (Platform.OS === 'android') {
+      return [
+        `intent://x.com/${username}/status/${id}#Intent;scheme=https;package=com.twitter.android;S.browser_fallback_url=${encodeURIComponent(web)};end`,
+        web,
+      ];
+    }
+    // iOS universal links open the HTTPS post URL reliably in the app.
+    return null;
+  }
   return [`twitter://user?screen_name=${username}`];
 }
 
@@ -134,26 +149,6 @@ export async function openInPiBrowser(url: string): Promise<void> {
 
 // ---- Public API -------------------------------------------------------------
 
-import InAppBrowser from 'react-native-inappbrowser-reborn';
-
-/**
- * Opens InAppBrowser as a fallback, mimicking the user's requested behavior.
- */
-const openInAppBrowser = async (url: string) => {
-  try {
-    if (await InAppBrowser.isAvailable()) {
-      await InAppBrowser.open(url, {
-        toolbarColor: '#075E54', // The requested color
-        showTitle: true,
-      });
-    } else {
-      await Linking.openURL(url);
-    }
-  } catch (error) {
-    Alert.alert('Error', 'Failed to open browser');
-  }
-};
-
 /**
  * Opens ANY URL using the requested flow: Native App -> InAppBrowser -> System Browser.
  */
@@ -190,6 +185,14 @@ export async function smartOpenUrl(url: string, platform?: string, pageId?: stri
     
     for (const nativeUrl of list) {
       try {
+        // Android `intent://` URIs resolve to their own target package and
+        // carry a browser fallback, so open them directly — canOpenURL rejects
+        // the custom scheme and would skip them.
+        if (nativeUrl.startsWith('intent:')) {
+          console.log(`[smartOpenUrl v4] Opening intent: ${nativeUrl}`);
+          await Linking.openURL(nativeUrl);
+          return; // Success, exit completely
+        }
         console.log(`[smartOpenUrl v4] Checking native: ${nativeUrl}`);
         const supported = await Linking.canOpenURL(nativeUrl);
         
@@ -206,5 +209,9 @@ export async function smartOpenUrl(url: string, platform?: string, pageId?: stri
 
   // Step 2: If native apps are not installed, fallback to the requested InAppBrowser
   console.log(`[smartOpenUrl v4] App not installed, falling back to browser: ${resolved}`);
-  await openInAppBrowser(resolved);
+  try {
+    await Linking.openURL(resolved);
+  } catch {
+    Alert.alert('Could not open link', `Please open manually:\n${resolved}`);
+  }
 }

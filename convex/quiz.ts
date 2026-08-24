@@ -347,17 +347,18 @@ export const getDailyQuiz = query({
 
     const settings = await ctx.db.query("quizSettings").first();
     const qCount = Math.max(1, Math.min(20, settings?.questionsPerQuiz ?? 5));
-    const mode = settings?.mode ?? "MIXED";
 
-    // Plan: array of {courseKey, count} or null → take from the whole pool.
-    let plan: { courseKey: string; count: number }[] | null = null;
-    if (mode === "COURSE_OF_THE_DAY") {
-      const scheduled = settings?.schedule?.find((s) => s.day === day);
-      const key = scheduled?.courseKey ?? "MIXED";
-      if (key !== "MIXED") plan = [{ courseKey: key, count: qCount }];
-    }
-    if (!plan && (settings?.distribution?.length ?? 0) > 0) {
-      plan = settings!.distribution;
+    // Force "Every day use one course"
+    // Find all published courses to round-robin through
+    const publishedCourses = courses.filter(c => c.status === "PUBLISHED" || !c.status).sort((a, b) => a.sortOrder - b.sortOrder);
+    let selectedCourse = null;
+    
+    if (publishedCourses.length > 0) {
+      // Use the 'day' (0-6) to pick a course. If we have more than 7 courses, 
+      // we'd use a different offset, but for simplicity we'll just modulo the day.
+      // A better seed would be the actual UTC epoch day to rotate through ALL courses.
+      const epochDay = Math.floor(Date.now() / 86400000);
+      selectedCourse = publishedCourses[epochDay % publishedCourses.length];
     }
 
     // Recently-seen question ids, so the same question isn't re-served.
@@ -383,16 +384,17 @@ export const getDailyQuiz = query({
       return picked;
     };
 
-    if (plan) {
-      for (const p of plan) {
-        if (chosen.length >= qCount) break;
-        const group = activeBank.filter((q) => courseMap.get(q.courseId!)?.key === p.courseKey);
-        if (group.length > 0) pick(group, p.count);
-      }
+    if (selectedCourse) {
+      // Pick questions STRICTLY from the selected Course of the Day
+      const group = activeBank.filter((q) => q.courseId === selectedCourse!._id);
+      if (group.length > 0) pick(group, qCount);
+      
+      // If we don't have enough questions for this course, fallback to general pool
       if (chosen.length < qCount) {
-        pick(activeBank.filter((q) => !seen.has(q._id)), qCount - chosen.length);
+        pick(activeBank.filter((q) => !seen.has(q._id) && q.courseId !== selectedCourse!._id), qCount - chosen.length);
       }
     } else {
+      // No courses exist yet, fallback to mixed pool
       pick(activeBank, qCount);
     }
 

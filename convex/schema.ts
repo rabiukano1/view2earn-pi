@@ -134,6 +134,7 @@ export default defineSchema({
     platform: v.optional(v.string()),
     state: v.string(),
     screenshotStorageId: v.optional(v.id("_storage")),
+    additionalScreenshots: v.optional(v.array(v.id("_storage"))),
     screenshotPhash: v.optional(v.string()),
     sampled: v.optional(v.boolean()),
     aiConfidence: v.optional(v.number()),

@@ -38,6 +38,14 @@ export const deleteMyAccount = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
+    
+    // Clean up auth records to prevent null pointer exceptions on re-signup
+    const accounts = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", q => q.eq("userId", userId)).collect();
+    for (const a of accounts) await ctx.db.delete(a._id);
+    
+    const sessions = await ctx.db.query("authSessions").withIndex("userId", q => q.eq("userId", userId)).collect();
+    for (const s of sessions) await ctx.db.delete(s._id);
+
     await ctx.db.delete(userId);
   },
 });

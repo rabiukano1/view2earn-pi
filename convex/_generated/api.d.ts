@@ -19,6 +19,7 @@ import type * as ads from "../ads.js";
 import type * as auth from "../auth.js";
 import type * as backfill from "../backfill.js";
 import type * as bonus from "../bonus.js";
+import type * as cleanup from "../cleanup.js";
 import type * as combos from "../combos.js";
 import type * as countDelta from "../countDelta.js";
 import type * as cpx from "../cpx.js";
@@ -90,6 +91,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   backfill: typeof backfill;
   bonus: typeof bonus;
+  cleanup: typeof cleanup;
   combos: typeof combos;
   countDelta: typeof countDelta;
   cpx: typeof cpx;

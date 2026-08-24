@@ -1,6 +1,5 @@
 import { Alert, Platform, Share, ToastAndroid, Linking } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import InAppBrowser from 'react-native-inappbrowser-reborn';
 
 const resolveUrl = async (url: string): Promise<string> => {
   try {
@@ -55,12 +54,12 @@ export const openSocialLink = async (originalUrl: string) => {
     if (canOpen && deepLink !== url) {
       await Linking.openURL(deepLink); // 3. Open App
     } else {
-      await InAppBrowser.open(url, { toolbarColor: '#075E54', showTitle: true }); // 4. Fallback
+      await Linking.openURL(url); // 4. Fallback natively
     }
   } catch (err) {
     Alert.alert('Error', 'Cannot open link');
     try {
-      await InAppBrowser.open(originalUrl, { toolbarColor: '#075E54' });
+      await Linking.openURL(originalUrl);
     } catch {}
   }
 };

@@ -133,6 +133,7 @@ export default function HomeScreen() {
 
   const recordSignals = useMutation(api.deviceSignals.record);
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
+  const me = useQuery(api.users.me);
   const flags = useQuery(api.features.getFlags) || {};
 
   useEffect(() => {
@@ -175,7 +176,9 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Hero Header */}
         <View style={[styles.hero, { paddingTop: insets.top + spacing.xl }]}>
-          <Text style={styles.heroHi}>{t('welcomeBack')}</Text>
+          <Text style={styles.heroHi}>
+            {t('welcomeBack')}{me?.name ? `, ${me.name}` : (me?.username ? `, ${me.username}` : '')}
+          </Text>
           <Text style={styles.heroLabel}>{t('pointsBalance')}</Text>
           <Text style={styles.heroBalance}>{balance === undefined ? '—' : balance}</Text>
         </View>

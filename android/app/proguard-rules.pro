@@ -8,3 +8,23 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# React Native Biometrics
+-keep class com.rnbiometrics.** { *; }
+
+# React Native Screens
+-keep class com.swmansion.rnscreens.** { *; }
+
+# React Native Vector Icons
+-keep class com.oblador.vectoricons.** { *; }
+
+# React Native InAppBrowser
+-keep class com.proyecto26.inappbrowser.** { *; }
+
+# React Native WebView
+-keep class com.reactnativecommunity.webview.** { *; }
+
+# React Native Google Mobile Ads
+-keep class com.google.android.gms.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**
+

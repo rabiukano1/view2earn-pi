@@ -177,87 +177,238 @@ export default function QuizScreen() {
         </View>
       ) : result ? (
         <ScrollView
-          contentContainerStyle={[styles.center, { paddingBottom: insets.bottom + 80, paddingHorizontal: 20 }]}
+          contentContainerStyle={[styles.reviewContainer, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}>
-          <Text style={styles.resultIcon}>
-            {result.score >= Math.ceil(result.total / 2) ? '🎉' : '📚'}
-          </Text>
-          <Text style={[styles.resultTitle, dark && styles.textLight]}>{t('quizScore')}</Text>
-          <Text style={styles.resultScore}>
-            {result.score} / {result.total}
-          </Text>
-          {result.pointsEarned > 0 && (
-            <Text style={styles.resultPoints}>+{result.pointsEarned} PTS</Text>
-          )}
+          
+          {/* Score Hero Banner */}
+          <View style={[styles.heroCard, dark && styles.cardDark]}>
+            <View style={styles.heroBadgeRow}>
+              <View style={[
+                styles.heroIconCircle,
+                result.score === result.total 
+                  ? styles.heroIconGold 
+                  : result.score >= Math.ceil(result.total / 2) 
+                    ? styles.heroIconPurple 
+                    : styles.heroIconBlue
+              ]}>
+                <Icon 
+                  name={
+                    result.score === result.total 
+                      ? 'trophy' 
+                      : result.score >= Math.ceil(result.total / 2) 
+                        ? 'award' 
+                        : 'lightbulb'
+                  } 
+                  iconStyle="solid" 
+                  size={28} 
+                  color={
+                    result.score === result.total 
+                      ? '#F59E0B' 
+                      : result.score >= Math.ceil(result.total / 2) 
+                        ? colors.primary 
+                        : '#3B82F6'
+                  } 
+                />
+              </View>
+            </View>
 
+            <Text style={[styles.heroTitle, dark && styles.textLight]}>
+              {language === 'ha' ? 'An Kammala Tambayoyin!' : 'Quiz Completed!'}
+            </Text>
+            
+            <Text style={styles.heroSubtitle}>
+              {result.score === result.total 
+                ? (language === 'ha' ? '🌟 Amsa Duka Daidai! Gwaninta!' : '🌟 Perfect Score! Outstanding job!')
+                : result.score >= Math.ceil(result.total / 2)
+                  ? (language === 'ha' ? '👏 Aiki Mai Kyau! Ka kware sosai!' : '👏 Well Done! Great effort!')
+                  : (language === 'ha' ? '💡 Ci Gaba Da Koyo! Zaka iya fi haka.' : '💡 Keep Practicing! You can do better!')}
+            </Text>
+
+            {/* Score Stats Grid */}
+            <View style={styles.statsGrid}>
+              <View style={[styles.statBox, dark && styles.statBoxDark]}>
+                <Text style={styles.statLabel}>{language === 'ha' ? 'Maki' : 'Score'}</Text>
+                <Text style={[styles.statValue, { color: colors.primary }]}>
+                  {result.score} / {result.total}
+                </Text>
+              </View>
+
+              <View style={[styles.statBox, dark && styles.statBoxDark]}>
+                <Text style={styles.statLabel}>{language === 'ha' ? 'Daidaito' : 'Accuracy'}</Text>
+                <Text style={[styles.statValue, { color: result.score >= Math.ceil(result.total / 2) ? colors.success : colors.danger }]}>
+                  {Math.round((result.score / result.total) * 100)}%
+                </Text>
+              </View>
+
+              {result.pointsEarned > 0 ? (
+                <View style={[styles.statBox, styles.statBoxGold, dark && styles.statBoxGoldDark]}>
+                  <Text style={[styles.statLabel, { color: '#B45309' }]}>{language === 'ha' ? 'Kyauta' : 'Reward'}</Text>
+                  <Text style={[styles.statValue, { color: '#D97706' }]}>
+                    +{result.pointsEarned} PTS
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Review Answers List */}
           {result.review?.length ? (
             <View style={styles.reviewWrap}>
-              <Text style={[styles.reviewTitle, dark && styles.textLight]}>
-                {t('reviewAnswers')}
-              </Text>
+              <View style={styles.reviewHeaderRow}>
+                <View style={styles.reviewHeaderLeft}>
+                  <Icon name="list-check" iconStyle="solid" size={16} color={colors.primary} />
+                  <Text style={[styles.reviewSectionTitle, dark && styles.textLight]}>
+                    {t('reviewAnswers')}
+                  </Text>
+                </View>
+                <View style={styles.reviewCountPill}>
+                  <Text style={styles.reviewCountText}>
+                    {result.review.length} {language === 'ha' ? 'Tambayoyi' : 'Questions'}
+                  </Text>
+                </View>
+              </View>
+
               {result.review.map((r, i) => {
                 const isCorrect = r.selected === r.correctIndex;
                 const originalQ = questions?.[i];
                 const qText = language === 'ha' && originalQ?.questionHa ? originalQ.questionHa : originalQ?.question || `Question ${i + 1}`;
                 const expText = language === 'ha' && (r as any).explanationHa ? (r as any).explanationHa : r.explanation;
+                const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
                 return (
                   <View
                     key={i}
                     style={[
-                      styles.reviewItem,
+                      styles.reviewCard,
                       dark && styles.cardDark,
-                      !isCorrect && { borderColor: 'rgba(239,68,68,0.35)' },
+                      isCorrect ? styles.reviewCardCorrect : styles.reviewCardWrong,
                     ]}>
-                    <Text style={[styles.reviewQuestion, dark && styles.textLight]}>
-                      {i + 1}. {qText}
-                    </Text>
-                    {(originalQ?.options ?? []).map((optText: string, optIdx: number) => {
-                      const wasSelected = r.selected === optIdx;
-                      const wasRight = r.correctIndex === optIdx;
-                      const optDisplay = language === 'ha' && originalQ?.optionsHa?.[optIdx] ? originalQ.optionsHa[optIdx] : optText;
+                    
+                    {/* Question Header Pill Bar */}
+                    <View style={styles.qHeaderRow}>
+                      <View style={styles.qIndexPill}>
+                        <Text style={styles.qIndexText}>{language === 'ha' ? 'Tambaya' : 'Q'}{i + 1}</Text>
+                      </View>
+                      
+                      <View style={[
+                        styles.statusBadge, 
+                        isCorrect ? styles.statusBadgeCorrect : styles.statusBadgeWrong
+                      ]}>
+                        <Icon 
+                          name={isCorrect ? 'circle-check' : 'circle-xmark'} 
+                          iconStyle="solid" 
+                          size={12} 
+                          color={isCorrect ? '#059669' : '#DC2626'} 
+                        />
+                        <Text style={[
+                          styles.statusBadgeText, 
+                          isCorrect ? styles.statusTextCorrect : styles.statusTextWrong
+                        ]}>
+                          {isCorrect 
+                            ? (language === 'ha' ? 'Daidai' : 'Correct') 
+                            : (language === 'ha' ? 'Kuskure' : 'Incorrect')}
+                        </Text>
+                      </View>
+                    </View>
 
-                      return (
-                        <View
-                          key={optIdx}
-                          style={[
-                            styles.reviewOption,
-                            wasRight && styles.reviewOptionRight,
-                            wasSelected && !wasRight && styles.reviewOptionPicked,
-                          ]}>
-                          <Text
+                    {/* Question Text */}
+                    <Text style={[styles.qText, dark && styles.textLight]}>
+                      {qText}
+                    </Text>
+
+                    {/* Options List */}
+                    <View style={styles.optionsList}>
+                      {(originalQ?.options ?? []).map((optText: string, optIdx: number) => {
+                        const wasSelected = r.selected === optIdx;
+                        const wasRight = r.correctIndex === optIdx;
+                        const optDisplay = language === 'ha' && originalQ?.optionsHa?.[optIdx] ? originalQ.optionsHa[optIdx] : optText;
+                        const letter = LETTERS[optIdx] || String(optIdx + 1);
+
+                        return (
+                          <View
+                            key={optIdx}
                             style={[
-                              styles.reviewOptionText,
-                              (wasRight || wasSelected) && styles.reviewOptionTextStrong,
-                              dark && styles.textLight,
+                              styles.modernOption,
+                              dark && styles.modernOptionDark,
+                              wasRight && styles.optionIsRight,
+                              wasSelected && !wasRight && styles.optionIsWrong,
                             ]}>
-                            {optDisplay}
-                          </Text>
-                          {wasRight ? (
-                            <Text style={styles.reviewMarkRight}>✓</Text>
-                          ) : wasSelected ? (
-                            <Text style={styles.reviewMarkWrong}>✗</Text>
-                          ) : null}
-                        </View>
-                      );
-                    })}
+                            
+                            {/* Letter Avatar */}
+                            <View style={[
+                              styles.letterCircle,
+                              dark && styles.letterCircleDark,
+                              wasRight && styles.letterCircleRight,
+                              wasSelected && !wasRight && styles.letterCircleWrong,
+                            ]}>
+                              <Text style={[
+                                styles.letterText,
+                                dark && styles.textLight,
+                                (wasRight || wasSelected) && styles.letterTextActive,
+                              ]}>
+                                {letter}
+                              </Text>
+                            </View>
+
+                            {/* Option Text */}
+                            <Text style={[
+                              styles.optionLabel,
+                              dark && styles.textLight,
+                              wasRight && styles.optionLabelRight,
+                              wasSelected && !wasRight && styles.optionLabelWrong,
+                            ]}>
+                              {optDisplay}
+                            </Text>
+
+                            {/* Status Tag on Right */}
+                            {wasRight ? (
+                              <View style={styles.tagRight}>
+                                <Icon name="check" iconStyle="solid" size={11} color="#059669" />
+                                <Text style={styles.tagRightText}>{language === 'ha' ? 'Daidai' : 'Correct'}</Text>
+                              </View>
+                            ) : wasSelected ? (
+                              <View style={styles.tagWrong}>
+                                <Icon name="xmark" iconStyle="solid" size={11} color="#DC2626" />
+                                <Text style={styles.tagWrongText}>{language === 'ha' ? 'Zabinka' : 'Your Choice'}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Explanation Box */}
                     {expText ? (
-                      <Text style={[styles.reviewExplanation, dark && styles.textMuted]}>
-                        <Text style={styles.reviewExplanationLabel}>{t('whyExplanation')} </Text>
-                        {expText}
-                      </Text>
+                      <View style={[styles.explanationCard, dark && styles.explanationCardDark]}>
+                        <View style={styles.explanationHeader}>
+                          <Icon name="lightbulb" iconStyle="solid" size={13} color="#D97706" />
+                          <Text style={styles.explanationTitle}>
+                            {language === 'ha' ? 'Bayani / Dalili:' : 'Why is this correct?'}
+                          </Text>
+                        </View>
+                        <Text style={[styles.explanationBody, dark && styles.textDarkMuted]}>
+                          {expText}
+                        </Text>
+                      </View>
                     ) : null}
+
+                    {/* Academy Course Link CTA */}
                     {Boolean(r.courseKey && r.lessonNumber) ? (
                       <TouchableOpacity
-                        style={styles.learnMore}
+                        style={[styles.academyCta, dark && styles.academyCtaDark]}
+                        activeOpacity={0.8}
                         onPress={() =>
                           navigation.navigate('Academy', {
                             ecosystem: ecosystem,
                           })
                         }>
-                        <Text style={styles.learnMoreText}>
-                          📚 {t('learn')}: {r.courseTitle} → {r.lessonTitle ?? `Lesson ${r.lessonNumber}`}
-                        </Text>
+                        <View style={styles.academyCtaLeft}>
+                          <Icon name="graduation-cap" iconStyle="solid" size={14} color={colors.primary} />
+                          <Text style={styles.academyCtaText} numberOfLines={1}>
+                            {language === 'ha' ? 'Koyi a' : 'Study'}: {r.courseTitle} → {r.lessonTitle ?? `Lesson ${r.lessonNumber}`}
+                          </Text>
+                        </View>
+                        <Icon name="chevron-right" iconStyle="solid" size={11} color={colors.primary} />
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -266,8 +417,15 @@ export default function QuizScreen() {
             </View>
           ) : null}
 
-          <TouchableOpacity style={styles.doneButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.doneButtonText}>{t('done')}</Text>
+          {/* Done CTA Button */}
+          <TouchableOpacity 
+            style={styles.continueBtn} 
+            activeOpacity={0.85}
+            onPress={() => navigation.goBack()}>
+            <Icon name="check" iconStyle="solid" size={16} color="#FFFFFF" />
+            <Text style={styles.continueBtnText}>
+              {language === 'ha' ? 'An Gama' : 'Done & Return'}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       ) : current ? (
@@ -403,89 +561,386 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   textMuted: { color: colors.textMuted },
-  reviewWrap: { width: '100%', marginTop: 18, gap: 14 },
-  reviewTitle: { fontSize: 18, fontWeight: '800', color: colors.text, textAlign: 'center' },
-  reviewItem: {
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    borderRadius: radius.md,
-    padding: 14,
+  textDarkMuted: { color: '#94A3B8' },
+
+  // Modernized Review Container
+  reviewContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+
+  // Hero Card
+  heroCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.14)',
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    elevation: 3,
+    borderColor: colors.border,
+    ...shadow.card,
+  },
+  heroBadgeRow: {
+    marginBottom: 12,
+  },
+  heroIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroIconGold: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  heroIconPurple: {
+    backgroundColor: colors.primarySoft,
+    borderWidth: 2,
+    borderColor: 'rgba(124, 58, 237, 0.25)',
+  },
+  heroIconBlue: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 18,
+    paddingHorizontal: 12,
+  },
+
+  // Stats Grid
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statBoxDark: {
+    backgroundColor: colors.surfaceAltDark,
+  },
+  statBoxGold: {
+    backgroundColor: '#FEF3C7',
+  },
+  statBoxGoldDark: {
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  // Review Section Header
+  reviewWrap: {
+    width: '100%',
+    gap: 14,
+    marginBottom: 20,
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  reviewHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reviewSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  reviewCountPill: {
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  reviewCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.primaryDeep,
+  },
+
+  // Question Card
+  reviewCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
   },
   cardDark: {
     backgroundColor: colors.surfaceDark,
     borderColor: colors.borderDark,
   },
-  reviewQuestion: { fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 10, lineHeight: 21 },
-  reviewOption: {
+  reviewCardCorrect: {
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  reviewCardWrong: {
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+
+  qHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.12)',
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    padding: 9,
-    paddingHorizontal: 12,
-    marginBottom: 6,
+    marginBottom: 10,
   },
-  reviewOptionRight: { borderColor: colors.success, backgroundColor: 'rgba(236,253,245,0.95)' },
-  reviewOptionPicked: { borderColor: colors.danger, backgroundColor: 'rgba(254,242,242,0.95)' },
-  reviewOptionText: { fontSize: 13, color: colors.textMuted, flex: 1 },
-  reviewOptionTextStrong: { color: colors.text, fontWeight: '700' },
-  reviewMarkRight: { color: colors.success, fontWeight: '900', marginLeft: 8 },
-  reviewMarkWrong: { color: colors.danger, fontWeight: '900', marginLeft: 8 },
-  reviewExplanation: {
-    fontSize: 13,
+  qIndexPill: {
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  qIndexText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: colors.textMuted,
-    lineHeight: 19,
-    marginTop: 6,
-    padding: 8,
-    paddingLeft: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-    backgroundColor: 'rgba(237,233,254,0.8)',
-    borderRadius: radius.sm,
   },
-  reviewExplanationLabel: { fontWeight: '800', color: colors.text },
-  learnMore: { marginTop: 8, alignSelf: 'flex-start' },
-  learnMoreText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
-  resultIcon: {
-    fontSize: 52,
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
   },
-  resultTitle: {
-    fontSize: 24,
+  statusBadgeCorrect: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusBadgeWrong: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  statusTextCorrect: {
+    color: '#059669',
+  },
+  statusTextWrong: {
+    color: '#DC2626',
+  },
+
+  qText: {
+    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
+    lineHeight: 22,
+    marginBottom: 14,
   },
-  resultScore: {
-    fontSize: 34,
+
+  // Options List
+  optionsList: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  modernOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    gap: 10,
+  },
+  modernOptionDark: {
+    backgroundColor: colors.surfaceAltDark,
+  },
+  optionIsRight: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: '#10B981',
+  },
+  optionIsWrong: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: '#EF4444',
+  },
+  letterCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  letterCircleDark: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.borderDark,
+  },
+  letterCircleRight: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  letterCircleWrong: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+  letterText: {
+    fontSize: 12,
     fontWeight: '800',
-    color: colors.primary,
-    letterSpacing: -0.5,
+    color: colors.textMuted,
   },
-  resultPoints: {
-    fontSize: 18,
-    color: colors.success,
+  letterTextActive: {
+    color: '#FFFFFF',
+  },
+  optionLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    lineHeight: 18,
+  },
+  optionLabelRight: {
+    fontWeight: '800',
+    color: '#065F46',
+  },
+  optionLabelWrong: {
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  tagRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  tagRightText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  tagWrong: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  tagWrongText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+
+  // Explanation Card
+  explanationCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderRadius: radius.md,
+    padding: 12,
+    borderLeftWidth: 3.5,
+    borderLeftColor: '#F59E0B',
+    marginTop: 4,
+  },
+  explanationCardDark: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
+  explanationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  explanationTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  explanationBody: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text,
+    lineHeight: 19,
+  },
+
+  // Academy CTA
+  academyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  academyCtaDark: {
+    backgroundColor: colors.primarySoftDark,
+  },
+  academyCtaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    marginRight: 8,
+  },
+  academyCtaText: {
+    fontSize: 12,
     fontWeight: '700',
+    color: colors.primaryDeep,
+    flex: 1,
   },
-  doneButton: {
-    marginTop: 24,
+
+  // Bottom Action
+  continueBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: colors.primary,
-    paddingHorizontal: 40,
-    paddingVertical: 14,
-    borderRadius: radius.sm,
+    paddingVertical: 15,
+    borderRadius: radius.pill,
+    marginTop: 8,
+    marginBottom: 32,
     ...shadow.raised,
   },
-  doneButtonText: {
-    color: colors.white,
+  continueBtnText: {
+    fontSize: 15,
     fontWeight: '800',
-    fontSize: 14,
+    color: '#FFFFFF',
   },
   quizContent: {
     flex: 1,

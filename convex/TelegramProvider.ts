@@ -25,10 +25,14 @@ export const TelegramProvider = ConvexCredentials({
     );
     if (existing) return { userId: existing.user._id as Id<"users"> };
 
+    const country = credentials.country as string | undefined;
+    const profile: Record<string, string> = { name: consumed.telegramName, telegramId: consumed.telegramUserId };
+    if (country) profile.country = country;
+
     const created = await createAccount(ctx, {
       provider: "telegram",
       account,
-      profile: { name: consumed.telegramName, telegramId: consumed.telegramUserId },
+      profile,
     });
     return { userId: created.user._id as Id<"users"> };
   },
