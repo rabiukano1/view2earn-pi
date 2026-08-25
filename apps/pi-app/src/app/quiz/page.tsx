@@ -26,6 +26,10 @@ export default function DailyQuizPage() {
     api.quiz.getDailyQuiz,
     userId ? { userId, ecosystem: "PI", day: new Date().getDay() } : "skip"
   );
+  const dailyStatus = useQuery(
+    api.quiz.getDailyQuizStatus,
+    userId ? { userId } : "skip"
+  );
   const submitQuiz = useMutation(api.quiz.submitQuiz);
 
   const [gameState, setGameState] = useState<"welcome" | "playing" | "result">(
@@ -138,8 +142,37 @@ export default function DailyQuizPage() {
       </div>
 
       <div className="pi-home-body">
-        {/* State 1: Welcome Screen */}
-        {gameState === "welcome" && (
+        {/* State 1: Completed Today Screen */}
+        {gameState === "welcome" && dailyStatus?.completedToday && (
+          <section className="pi-card pi-card-glass" style={{ textAlign: "center", padding: "30px 20px" }}>
+            <div style={{ fontSize: 48, marginBottom: 10 }}>🎉</div>
+            <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>
+              Today&apos;s Quiz Completed!
+            </h2>
+            <p className="pi-muted" style={{ fontSize: 14, maxWidth: 440, margin: "0 auto 16px" }}>
+              You have already completed today&apos;s quiz challenge. Next questions and bonus points unlock tomorrow!
+            </p>
+
+            <div className="pi-result-score-box" style={{ maxWidth: 300, margin: "0 auto 20px" }}>
+              <span className="pi-result-score-val">+{dailyStatus.pointsEarned} PTS</span>
+              <span className="pi-muted" style={{ fontSize: 12 }}>
+                Score: {dailyStatus.score} / {dailyStatus.total} correct
+              </span>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, maxWidth: 320, margin: "0 auto" }}>
+              <Link href="/home" className="btn btn-secondary" style={{ flex: 1 }}>
+                Home
+              </Link>
+              <Link href="/learn" className="btn btn-primary" style={{ flex: 1 }}>
+                Lessons 🎓
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {/* State 1: Welcome Screen (if not completed today) */}
+        {gameState === "welcome" && !dailyStatus?.completedToday && (
           <section className="pi-card pi-card-glass" style={{ textAlign: "center", padding: "30px 20px" }}>
             <div style={{ fontSize: 48, marginBottom: 10 }}>🎓</div>
             <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>

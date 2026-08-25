@@ -72,7 +72,7 @@ export default function ReviewPage() {
                         className="shot-thumb"
                         onClick={() => setPreview(r.screenshotUrl!)}
                       />
-                      {r.additionalScreenshotsUrls?.map((url: string, i: number) => (
+                      {r.additionalScreenshotsUrls?.filter((url): url is string => Boolean(url)).map((url: string, i: number) => (
                         <img
                           key={i}
                           src={url}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FaqItem } from "@/components/FaqItem";
 import { Reveal } from "@/components/Reveal";
 import { Counter } from "@/components/Counter";
+import { AppStoreButtons } from "@/components/AppStoreButtons";
 
 const FEATURES = [
   {
@@ -238,15 +239,13 @@ export default function HomePage() {
                 your points for available digital rewards and perks.
               </p>
               <div className="hero-actions" id="download">
-                <a className="btn btn-lg btn-on-dark" href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk" download>
-                  Download APK (Android)
-                </a>
-                <Link className="btn btn-lg btn-outline-light" href="/contact">
+                <AppStoreButtons />
+                <Link className="btn btn-outline-light" href="/contact" style={{ padding: "11px 22px" }}>
                   Contact us
                 </Link>
               </div>
               <p className="hero-note">
-                Android & iOS · Pi Network · Sidra Chain
+                Available on Google Play & Android APK · iOS coming soon · Pi &amp; Sidra Chain
               </p>
             </div>
             <PhoneMockup />
@@ -401,11 +400,9 @@ export default function HomePage() {
                 points. Or partner with us to put your page in front of an
                 engaged, active audience.
               </p>
-              <div className="cta-actions">
-                <a className="btn btn-lg btn-on-dark" href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk" download>
-                  Download APK (Android)
-                </a>
-                <Link className="btn btn-lg btn-outline-light" href="/partner">
+              <div className="cta-actions" style={{ flexDirection: "column", alignItems: "center", gap: 16 }}>
+                <AppStoreButtons />
+                <Link className="btn btn-outline-light" href="/partner">
                   Become a partner
                 </Link>
               </div>

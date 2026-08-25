@@ -57,16 +57,21 @@ export function PageHeader({
   title,
   sub,
   action,
+  icon,
 }: {
   title: string;
   sub?: string;
   action?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
     <div className="page-header">
-      <div>
-        <h1>{title}</h1>
-        {sub && <div className="sub">{sub}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {icon}
+        <div>
+          <h1>{title}</h1>
+          {sub && <div className="sub">{sub}</div>}
+        </div>
       </div>
       {action}
     </div>

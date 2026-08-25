@@ -16,8 +16,20 @@ export function SiteHeader() {
           <Link href="/#faq">FAQ</Link>
           <Link href="/contact">Contact</Link>
           <Link href="/partner">For partners</Link>
-          <a href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk" download className="btn btn-primary btn-sm nav-cta">
-            Download APK
+          <a
+            href="https://play.google.com/store/apps/details?id=com.view2earn"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary btn-sm nav-cta"
+            title="Get View2Earn on Google Play">
+            Google Play
+          </a>
+          <a
+            href="https://github.com/rabiukano1/view2earn-pi/releases/download/v1.0.0/view2earn.apk"
+            download
+            className="btn btn-secondary btn-sm"
+            title="Download APK">
+            APK
           </a>
         </nav>
       </div>

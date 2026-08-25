@@ -79,6 +79,10 @@ export default function QuizScreen() {
     api.quiz.getDailyQuiz,
     userId ? { userId, ecosystem, day: new Date().getDay() } : 'skip',
   );
+  const dailyStatus = useQuery(
+    api.quiz.getDailyQuizStatus,
+    userId ? { userId } : 'skip',
+  );
   const submitQuiz = useMutation(api.quiz.submitQuiz);
 
   useEffect(() => {
@@ -141,7 +145,8 @@ export default function QuizScreen() {
       const res = await submitQuiz({ userId, answers: answers as any });
       setResult(res as any);
     } catch (e) {
-      Alert.alert(language === 'ha' ? 'Kuskure wajen aika amsoshi' : 'Error submitting quiz', String(e));
+      const errMsg = String((e as any)?.message ?? e).replace(/\[CONVEX\s*.*?\]\s*/g, '');
+      Alert.alert(language === 'ha' ? 'Kuskure wajen aika amsoshi' : 'Quiz Notice', errMsg);
       setSubmitted(false);
     }
   };
@@ -170,7 +175,7 @@ export default function QuizScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
+      {loading || dailyStatus === undefined ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.textMuted}>{t('loading')}</Text>
@@ -428,6 +433,63 @@ export default function QuizScreen() {
             </Text>
           </TouchableOpacity>
         </ScrollView>
+      ) : dailyStatus?.completedToday ? (
+        <ScrollView
+          contentContainerStyle={[styles.completedWrap, { paddingBottom: insets.bottom + 40 }]}
+          showsVerticalScrollIndicator={false}>
+          <View style={[styles.heroCard, dark && styles.cardDark, { width: '100%' }]}>
+            <View style={styles.heroBadgeRow}>
+              <View style={[styles.heroIconCircle, styles.heroIconGold]}>
+                <Icon name="circle-check" iconStyle="solid" size={32} color="#10B981" />
+              </View>
+            </View>
+
+            <Text style={[styles.heroTitle, dark && styles.textLight]}>
+              {language === 'ha' ? 'Ka Kammala Tambayoyin Yau!' : "Today's Quiz Completed!"}
+            </Text>
+            
+            <Text style={styles.heroSubtitle}>
+              {language === 'ha'
+                ? "Ka riga ka amsa tambayoyin yau. Sabbin tambayoyi da kyaututtuka za su kasance gobe da misalin tsakar dare!"
+                : "You have already completed today's daily quiz. Fresh questions and rewards will unlock tomorrow!"}
+            </Text>
+
+            <View style={[styles.statsGrid, { marginTop: 8, marginBottom: 12 }]}>
+              <View style={[styles.statBox, dark && styles.statBoxDark]}>
+                <Text style={styles.statLabel}>{language === 'ha' ? 'Maki' : 'Score'}</Text>
+                <Text style={[styles.statValue, { color: colors.primary }]}>
+                  {dailyStatus.score} / {dailyStatus.total}
+                </Text>
+              </View>
+
+              <View style={[styles.statBox, styles.statBoxGold, dark && styles.statBoxGoldDark]}>
+                <Text style={[styles.statLabel, { color: '#B45309' }]}>{language === 'ha' ? 'Kyauta' : 'Reward'}</Text>
+                <Text style={[styles.statValue, { color: '#D97706' }]}>
+                  +{dailyStatus.pointsEarned} PTS
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.continueBtn, { width: '100%', marginTop: 8 }]}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('Academy', { ecosystem })}>
+            <Icon name="graduation-cap" iconStyle="solid" size={16} color="#FFFFFF" />
+            <Text style={styles.continueBtnText}>
+              {language === 'ha' ? 'Duba Darussan Academy' : 'Study Academy Lessons'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.backHomeBtn, { width: '100%', marginTop: 12 }]}
+            activeOpacity={0.85}
+            onPress={() => navigation.goBack()}>
+            <Text style={[styles.backHomeBtnText, dark && styles.textLight]}>
+              {language === 'ha' ? 'Koma Shafin Farko' : 'Return to Home'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       ) : current ? (
         <View style={styles.quizContent}>
           <View style={styles.counterRow}>
@@ -567,6 +629,25 @@ const styles = StyleSheet.create({
   reviewContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
+  },
+  completedWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    alignItems: 'center',
+  },
+  backHomeBtn: {
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  backHomeBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
 
   // Hero Card

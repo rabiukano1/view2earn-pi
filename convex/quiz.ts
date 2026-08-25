@@ -427,6 +427,35 @@ export const getDailyQuiz = query({
   },
 });
 
+/** Query user's today daily quiz status (completed or not) */
+export const getDailyQuizStatus = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const since = start.getTime();
+
+    const results = await ctx.db
+      .query("quizResults")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    const todayResult = results.filter((r) => r._creationTime >= since).pop();
+    if (!todayResult) {
+      return { completedToday: false, score: 0, total: 0, pointsEarned: 0 };
+    }
+
+    const ptsPerCorrect = await getNum(ctx, "quizCorrectPoints");
+    return {
+      completedToday: true,
+      score: todayResult.score,
+      total: todayResult.total,
+      pointsEarned: todayResult.score * ptsPerCorrect,
+    };
+  },
+});
+
 /** Submit quiz answers, credit points, and sync with app wallet.
  *
  * Grading happens server-side (learn-pi.md §22: the frontend can never award
@@ -443,6 +472,21 @@ export const submitQuiz = mutation({
   handler: async (ctx, args) => {
     const { economy } = await requireUserAndEconomy(ctx, args.userId);
     await enforceRateLimit(ctx, args.userId, "quiz");
+
+    // Strictly enforce once per calendar day completion
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const since = start.getTime();
+
+    const existingToday = await ctx.db
+      .query("quizResults")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    
+    if (existingToday.some((r) => r._creationTime >= since)) {
+      throw new Error("You have already completed today's daily quiz! Come back tomorrow for a new quiz.");
+    }
+
     let score = 0;
     const questionIds: string[] = [];
     const metas: Array<{

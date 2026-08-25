@@ -65,8 +65,8 @@ export default function PiLearn() {
 
   const submit = async () => {
     if (!open) return;
-    const ordered = open.quiz.map((_, i) => answers[i] ?? -1);
-    if (ordered.some((a) => a < 0)) {
+    const ordered = open.quiz.map((_: unknown, i: number) => answers[i] ?? -1);
+    if (ordered.some((a: number) => a < 0)) {
       alert("Answer every question first");
       return;
     }
@@ -121,12 +121,12 @@ export default function PiLearn() {
           <div className="pi-lesson-body">{open.body}</div>
 
           <p className="pi-section-title">Quiz</p>
-          {open.quiz.map((q, qi) => {
+          {open.quiz.map((q: any, qi: number) => {
             const rev = result?.review[qi];
             return (
               <div key={qi} className="pi-qblock">
                 <p className="pi-question">{qi + 1}. {q.question}</p>
-                {q.options.map((opt, oi) => {
+                {q.options.map((opt: string, oi: number) => {
                   const selected = answers[qi] === oi;
                   const isCorrect = rev && rev.correctIndex === oi;
                   const isWrongPick = rev && rev.selected === oi && rev.selected !== rev.correctIndex;

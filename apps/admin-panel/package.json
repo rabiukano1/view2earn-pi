@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "deploy": "next build && wrangler pages deploy --branch production",
+    "deploy:preview": "next build && wrangler pages deploy",
+    "deploy:setup": "wrangler pages project create view2earn-admin --force --production-branch production"
   },
   "dependencies": {
     "@view2earn/core": "*",
@@ -20,6 +23,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "wrangler": "^4.118.0"
   }
 }
