@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { platformEmoji, platformLabel, openWebTaskLink } from "@view2earn/core";
+import { platformEmoji, openWebTaskLink } from "@view2earn/core";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
 
 type StepForm = {
@@ -142,10 +142,6 @@ function actionsFor(platform: string): [string, string][] {
   return list && list.length > 0 ? list : DEFAULT_ACTIONS;
 }
 
-// JOIN_CHANNEL only exists where channels/groups are a real concept — Telegram,
-// Facebook groups, YouTube. TikTok/Instagram/X have no channels.
-const CHANNEL_PLATFORMS = new Set(["telegram", "facebook", "youtube"]);
-
 function taskTypesFor(platform: string): [string, string][] {
   if (platform === "app") return [
     ["QUIZ", "Quiz"],
@@ -235,17 +231,6 @@ function nameFromUrl(url: string): string {
     .replace(/\/+$/, "")
     .replace(/^@/, "");
 }
-
-const PLACEHOLDERS: Record<string, string> = {
-  facebook: "pinetwork",
-  tiktok: "@pinetwork",
-  telegram: "pinetwork",
-  instagram: "@pinetwork",
-  x: "@pinetwork",
-  linkedin: "johndoe",
-  whatsapp: "2341234567890",
-  app: "Quiz / campaign name",
-};
 
 export default function TasksPage() {
   const tasks = useAdminQuery(api.admin.listActiveTasks);
