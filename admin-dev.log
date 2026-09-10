@@ -1,0 +1,11 @@
+
+> @view2earn/admin-panel@0.0.1 dev
+> next dev --turbo
+
+   ▲ Next.js 15.5.20 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://10.237.232.101:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 53.8s

@@ -1,0 +1,9 @@
+▌ Developing against deployment:
+▌ [Development] muhammad-musa-c99d2:view2earn:dev/muhammad-musa (dev) (dashboard: https://dashboard.convex.dev/t/muhammad-musa-c99d2/view2earn/valuable-ostrich-597)
+▌ └─ https://valuable-ostrich-597.convex.cloud
+- Preparing Convex functions...
+
+[36mA minor update is available for Convex[39m [2m(1.42.1 → 1.45.0)[22m
+[2mChangelog:[22m [4mhttps://github.com/get-convex/convex-js/blob/main/CHANGELOG.md#changelog[24m
+Typechecking took 23.57s. For faster iteration, see https://docs.convex.dev/cli/troubleshooting/typecheck-performance to troubleshoot typecheck performance.
+[32m✔[39m 19:45:37 Convex functions ready! (36.32s)

@@ -1,0 +1,9 @@
+★ eas-cli@24.0.0 is now available.
+To upgrade, run:
+npm install -g eas-cli
+Proceeding with outdated version.
+
+[33m[1mWarning: [22mRoot-level [1m"expo"[22m object found. Ignoring extra keys in Expo config: "name", "displayName", "react-native-google-mobile-ads"
+[90mLearn more: https://expo.fyi/root-expo-object[0m[0m
+Failed to resolve plugin for module "expo-updates" relative to "D:\user\v2e\View2Earn". Do you have node modules installed?
+    Error: update:list command failed.

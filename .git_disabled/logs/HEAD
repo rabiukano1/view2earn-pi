@@ -1,0 +1,53 @@
+0000000000000000000000000000000000000000 0dd66f6d0cdfa3dc209b8bc3a0c96cd83f770176 malaminislamiya <malaminislamiya53@gmail.com> 1783953969 +0100	commit (initial): Initial commit
+0dd66f6d0cdfa3dc209b8bc3a0c96cd83f770176 0000000000000000000000000000000000000000 malaminislamiya <malaminislamiya53@gmail.com> 1783956464 +0100	Branch: renamed refs/heads/main to refs/heads/main
+0dd66f6d0cdfa3dc209b8bc3a0c96cd83f770176 0dd66f6d0cdfa3dc209b8bc3a0c96cd83f770176 malaminislamiya <malaminislamiya53@gmail.com> 1783956464 +0100	Branch: renamed refs/heads/main to refs/heads/main
+0dd66f6d0cdfa3dc209b8bc3a0c96cd83f770176 24bf09274d0c9cab20f54378a21e54393b1fe192 malaminislamiya <malaminislamiya53@gmail.com> 1783960783 +0100	commit: Working baseline: CodePush on RN 0.86, Convex wired, Task Feed screen
+24bf09274d0c9cab20f54378a21e54393b1fe192 50047ed1886f76bd0d2e112bb827b90d32b41da2 malaminislamiya <malaminislamiya53@gmail.com> 1783961473 +0100	commit: Task feed: open target link on tap (quiz shows coming-soon alert)
+50047ed1886f76bd0d2e112bb827b90d32b41da2 722ff17b51b97856f4c436446d42c111ea8aa3e5 malaminislamiya <malaminislamiya53@gmail.com> 1783961914 +0100	commit: Task feed: platform-aware deep links (FB app, Telegram, TikTok) with https fallback
+722ff17b51b97856f4c436446d42c111ea8aa3e5 92e6449fda55ca7008b8277bfdbfe4c35505325a malaminislamiya <malaminislamiya53@gmail.com> 1783963582 +0100	commit: Claim + screenshot verification pipeline (plan §5 state machine)
+92e6449fda55ca7008b8277bfdbfe4c35505325a ae9bc22f8bf64479b752ccf7d58ffe41a9463d69 malaminislamiya <malaminislamiya53@gmail.com> 1783971096 +0100	commit: first commit
+ae9bc22f8bf64479b752ccf7d58ffe41a9463d69 ced3b0b760baaaa388bde093035ffee76aa343e6 malaminislamiya <malaminislamiya53@gmail.com> 1784011594 +0100	commit: Modern admin console: design system + full CRUD on every screen
+ced3b0b760baaaa388bde093035ffee76aa343e6 ddcceb2680718434222ce598c4a650207bf12b25 malaminislamiya <malaminislamiya53@gmail.com> 1784011620 +0100	commit: Ignore Next.js build output in workspaces
+ddcceb2680718434222ce598c4a650207bf12b25 4ac8481ece7bc29799e930f3dedb090b4680dc21 malaminislamiya <malaminislamiya53@gmail.com> 1784034081 +0100	commit: Add quiz task flow: seeded questions, QuizScreen modal, task integration
+4ac8481ece7bc29799e930f3dedb090b4680dc21 5c18a61911489ac33ac848ee88b06267f81d610e malaminislamiya <malaminislamiya53@gmail.com> 1784059499 +0100	commit: home pages
+5c18a61911489ac33ac848ee88b06267f81d610e 71119ce41be5b296a2c1ab03c917ec0ea2514b20 malaminislamiya <malaminislamiya53@gmail.com> 1784130274 +0100	commit: add new futures
+71119ce41be5b296a2c1ab03c917ec0ea2514b20 e9c17bd0e9f704f2d9624543365e488d0669930c malaminislamiya <malaminislamiya53@gmail.com> 1784211443 +0100	commit: login setting
+e9c17bd0e9f704f2d9624543365e488d0669930c f6d83000a35ac42642d844dbf799abe01664b778 malaminislamiya <malaminislamiya53@gmail.com> 1785437048 +0100	commit: reward test
+f6d83000a35ac42642d844dbf799abe01664b778 1670b6b6e921d41bb54b8b26ed5bd138b9f10a39 malaminislamiya <malaminislamiya53@gmail.com> 1785613856 +0100	commit: real admob test setup
+1670b6b6e921d41bb54b8b26ed5bd138b9f10a39 1670b6b6e921d41bb54b8b26ed5bd138b9f10a39 malaminislamiya <malaminislamiya53@gmail.com> 1785675026 +0100	reset: moving to HEAD
+1670b6b6e921d41bb54b8b26ed5bd138b9f10a39 6bfbc4800522d9168cadcc166a0e550848da3893 malaminislamiya <malaminislamiya53@gmail.com> 1785759380 +0100	commit: continue work
+6bfbc4800522d9168cadcc166a0e550848da3893 75f21fbf4d13276a0467fce6ec8d13d0bcc457ca malaminislamiya <malaminislamiya53@gmail.com> 1785842821 +0100	commit: deploy admin-panel as static site to Cloudflare Pages
+75f21fbf4d13276a0467fce6ec8d13d0bcc457ca e5071d8a83355b281d1d3c38e8faefd5d5954cea malaminislamiya <malaminislamiya53@gmail.com> 1785849443 +0100	commit: Add MULTI_TASK bundles, publish full terms, clean up secrets
+e5071d8a83355b281d1d3c38e8faefd5d5954cea f7b64dd41813b5de206ebc1d04329fa5f923bf99 malaminislamiya <malaminislamiya53@gmail.com> 1785873237 +0100	commit: pi browser sendbox set
+f7b64dd41813b5de206ebc1d04329fa5f923bf99 f7b64dd41813b5de206ebc1d04329fa5f923bf99 malaminislamiya <malaminislamiya53@gmail.com> 1786033746 +0100	reset: moving to HEAD
+f7b64dd41813b5de206ebc1d04329fa5f923bf99 26479a764d30df27f9de306c33cc6793cc0eb99a malaminislamiya <malaminislamiya53@gmail.com> 1786045319 +0100	commit: Add shared policy docs and parity across core, web, Pi, and mobile apps
+26479a764d30df27f9de306c33cc6793cc0eb99a 2f6b6d0fecbbb79c85a5a5cd021d7f55087bf5f7 malaminislamiya <malaminislamiya53@gmail.com> 1786045350 +0100	commit: Add Pi wallet linking, withdrawals/payouts, and video tracking backend
+2f6b6d0fecbbb79c85a5a5cd021d7f55087bf5f7 1bed13cdcfc9701c68a86f200e453ea6cb7669ca malaminislamiya <malaminislamiya53@gmail.com> 1786045367 +0100	commit: Add ad-prompt modal and update streak, daily box, and task tracking flows
+1bed13cdcfc9701c68a86f200e453ea6cb7669ca 0895f8495071f11d5a76eacf96f48268d2b66638 malaminislamiya <malaminislamiya53@gmail.com> 1786045387 +0100	commit: Rebuild Pi-app static export (includes policy, terms, wallet, redeemed pages)
+0895f8495071f11d5a76eacf96f48268d2b66638 600dae41394a513f78976565beb8c8eba31f5f9e malaminislamiya <malaminislamiya53@gmail.com> 1786045406 +0100	commit: Add @view2earn/core dependency to website and Pi app; refresh lockfile and tsbuildinfo
+600dae41394a513f78976565beb8c8eba31f5f9e f81989625a6f2626051cad86da78579fb2fb6a0a malaminislamiya <malaminislamiya53@gmail.com> 1786123537 +0100	commit: Add branding icons, smart profile hub, achievements, and Pi-app parity
+f81989625a6f2626051cad86da78579fb2fb6a0a f81989625a6f2626051cad86da78579fb2fb6a0a malaminislamiya <malaminislamiya53@gmail.com> 1786291161 +0100	reset: moving to HEAD
+f81989625a6f2626051cad86da78579fb2fb6a0a f81989625a6f2626051cad86da78579fb2fb6a0a malaminislamiya <malaminislamiya53@gmail.com> 1786291935 +0100	reset: moving to HEAD
+f81989625a6f2626051cad86da78579fb2fb6a0a dc0ab05aaade488081cad2601fe515cd798a21ba malaminislamiya <malaminislamiya53@gmail.com> 1786391402 +0100	commit: Add Pi Ads parity, Pi-app features, and cross-app polish
+dc0ab05aaade488081cad2601fe515cd798a21ba dc0ab05aaade488081cad2601fe515cd798a21ba malaminislamiya <malaminislamiya53@gmail.com> 1786452665 +0100	reset: moving to HEAD
+dc0ab05aaade488081cad2601fe515cd798a21ba dc0ab05aaade488081cad2601fe515cd798a21ba malaminislamiya <malaminislamiya53@gmail.com> 1786454441 +0100	reset: moving to HEAD
+dc0ab05aaade488081cad2601fe515cd798a21ba dc0ab05aaade488081cad2601fe515cd798a21ba malaminislamiya <malaminislamiya53@gmail.com> 1786460232 +0100	reset: moving to HEAD
+dc0ab05aaade488081cad2601fe515cd798a21ba cf82a64df95e592b7a791c4de1832c6b2a3fe86c malaminislamiya <malaminislamiya53@gmail.com> 1786473956 +0100	commit: Fix Pi rewarded ads, check-in gate, and prominent sign-out
+cf82a64df95e592b7a791c4de1832c6b2a3fe86c 79ed1103bd775dc6afb60a881407a5bd4dc54aba malaminislamiya <malaminislamiya53@gmail.com> 1786474726 +0100	commit: pi networ adk set
+79ed1103bd775dc6afb60a881407a5bd4dc54aba 880d01449b8cf74e098743a1e609c68878e7be7e malaminislamiya <malaminislamiya53@gmail.com> 1786630901 +0100	commit: reset anti-fraud to live
+880d01449b8cf74e098743a1e609c68878e7be7e e3aa23ac1e0dc66177831dd31277ecbd1cecfe2b malaminislamiya <malaminislamiya53@gmail.com> 1786631078 +0100	commit: test security
+e3aa23ac1e0dc66177831dd31277ecbd1cecfe2b c748c5976720d5811b5e263b9613e68e84f3f431 malaminislamiya <malaminislamiya53@gmail.com> 1786888220 +0100	commit: add more features
+c748c5976720d5811b5e263b9613e68e84f3f431 8e0159ba4d14f1b3b513323f8642bf389a1fc3ab malaminislamiya <malaminislamiya53@gmail.com> 1786908743 +0100	commit: first release
+8e0159ba4d14f1b3b513323f8642bf389a1fc3ab b701817ec30ac7c0833582fe1d8df6f575e11f73 malaminislamiya <malaminislamiya53@gmail.com> 1786986392 +0100	commit: add child-safety and delete-account
+b701817ec30ac7c0833582fe1d8df6f575e11f73 2da1a469877a93f060ffc26b640b8c42684f14d0 malaminislamiya <malaminislamiya53@gmail.com> 1787332088 +0100	commit: host APK download via GitHub release on website
+2da1a469877a93f060ffc26b640b8c42684f14d0 500e53b1e9861d4a8df01f3378574b70482b3738 malaminislamiya <malaminislamiya53@gmail.com> 1787407235 +0100	commit: feat: gate all wallet and rewards screens/tiles behind remote feature flags
+500e53b1e9861d4a8df01f3378574b70482b3738 6aad336d562eaa0f760380cc0ad32098403a68b7 malaminislamiya <malaminislamiya53@gmail.com> 1787408771 +0100	commit: fix(pi): update Pi app domain validation key
+6aad336d562eaa0f760380cc0ad32098403a68b7 f421997d130071602eca91d2c8a4a76f58d36741 malaminislamiya <malaminislamiya53@gmail.com> 1787412339 +0100	commit: update UI
+f421997d130071602eca91d2c8a4a76f58d36741 3bc0f462a8abd4ffab30db3b9d719adc40cac1d4 malaminislamiya <malaminislamiya53@gmail.com> 1787413345 +0100	commit: chore: bump versionCode to 2 (1.0.1)
+3bc0f462a8abd4ffab30db3b9d719adc40cac1d4 a4f260e97eea8ceea0d521585974c52de773b43f malaminislamiya <malaminislamiya53@gmail.com> 1787421455 +0100	commit: new app
+a4f260e97eea8ceea0d521585974c52de773b43f 322bd64aa0fd3ae34299092d1ef8299d39c85ec1 malaminislamiya <malaminislamiya53@gmail.com> 1787504861 +0100	commit: deep link
+322bd64aa0fd3ae34299092d1ef8299d39c85ec1 5c708d6142572721a2679076b4ee0883b69236b1 malaminislamiya <malaminislamiya53@gmail.com> 1787602328 +0100	commit: rebiuld first MVP
+5c708d6142572721a2679076b4ee0883b69236b1 607188279d181eb7a4ae7548c0994cbac71b09dc malaminislamiya <malaminislamiya53@gmail.com> 1787681730 +0100	commit: add CI auto-deploy
+607188279d181eb7a4ae7548c0994cbac71b09dc afbd03227000deb88161e270647ffd80834b17b4 malaminislamiya <malaminislamiya53@gmail.com> 1787682992 +0100	commit: sync package-lock for admin-panel wrangler
+afbd03227000deb88161e270647ffd80834b17b4 b845cf1054abf16830e91b1c2831413a96f862bd malaminislamiya <malaminislamiya53@gmail.com> 1787685376 +0100	commit: fix admin-panel unused vars blocking build
+b845cf1054abf16830e91b1c2831413a96f862bd 671d343d7ae2c77aed5212b374e5ee24f2e22a43 malaminislamiya <malaminislamiya53@gmail.com> 1787686030 +0100	commit: ignore pi-app build output; untrack apps/pi-app/out
