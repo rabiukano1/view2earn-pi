@@ -97,3 +97,6 @@ apps/*/node_modules/
 apps/website/out/
 apps/admin-panel/out/
 apps/pi-app/out/
+
+# EAS Update export output
+dist/
