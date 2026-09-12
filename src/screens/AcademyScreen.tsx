@@ -18,6 +18,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../auth/AuthContext';
+import { showInterstitial } from '../services/interstitialService';
 import { colors, radius, shadow } from '../theme';
 
 type Ecosystem = 'PI' | 'SIDRA';
@@ -118,6 +119,8 @@ export default function AcademyScreen() {
     try {
       const res = await submitLevel({ userId, ecosystem, level: open.level, answers: ordered });
       setResult(res as SubmitResult);
+      // Interstitial on learn quiz submit — natural break after grading
+      setTimeout(() => showInterstitial().catch(() => {}), 350);
     } catch (e) {
       Alert.alert('Could not submit', String(e));
     } finally {

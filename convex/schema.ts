@@ -44,6 +44,9 @@ export default defineSchema({
     prizeIndex: v.number(),
     claimed: v.boolean(),
     createdAt: v.number(),
+    // Legacy optional flag: set by an earlier revision of the 2x flow. Kept so
+    // rows written while it existed still validate. No longer written by code.
+    doubled: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 
   // Pi Ad Network rewarded-ad completions (plan §7.9 / Pi Ads). One row per

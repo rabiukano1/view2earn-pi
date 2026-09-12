@@ -28,7 +28,10 @@ export function extractYoutubeId(url: string): string | null {
 }
 
 // HLS.js player for .m3u8 streams — posts real health metrics back to RN.
-function buildHlsHtml(streamUrl: string): string {
+// referrer/userAgent are forwarded via xhrSetup so CORS-checked CDNs (uzayterligi, Sakatv) don't 403.
+function buildHlsHtml(streamUrl: string, httpReferrer?: string, userAgent?: string): string {
+  const ref = httpReferrer ? httpReferrer.replace(/"/g, '&quot;') : '';
+  const ua = userAgent ? userAgent.replace(/"/g, '&quot;') : '';
   return `
     <!DOCTYPE html>
     <html>
@@ -60,7 +63,17 @@ function buildHlsHtml(streamUrl: string): string {
           video.addEventListener('playing', function () { post('signal', { state: 'playing' }); });
           video.addEventListener('error', function () { post('fatal', { error: 'video' }); });
           if (window.Hls && Hls.isSupported()) {
-            const hls = new Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 90 });
+            const hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+              backBufferLength: 90,
+              xhrSetup: function(xhr, url) {
+                if ("${ref}") xhr.setRequestHeader('Referer', "${ref}");
+                if ("${ua}") xhr.setRequestHeader('User-Agent', "${ua}");
+                // allow http -> https mixed content via proxy
+                xhr.withCredentials = false;
+              }
+            });
             let recoveredOnce = false;
             hls.loadSource(streamUrl);
             hls.attachMedia(video);
@@ -86,6 +99,45 @@ function buildHlsHtml(streamUrl: string): string {
           } else {
             post('fatal', { error: 'unsupported' });
           }
+        </script>
+      </body>
+    </html>
+  `;
+}
+
+// Generic web / Yacine TV iframe player — for non-HLS pages (yacine-tv.com, koora, etc).
+// These sites render their own HLS player inside the page; we just embed them full-screen.
+function buildWebHtml(pageUrl: string, referrer?: string): string {
+  const safeUrl = pageUrl.replace(/"/g, '&quot;');
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; background: #000; }
+          body, html { width: 100%; height: 100%; overflow: hidden; background: #000; }
+          iframe { width: 100%; height: 100%; border: none; background: #000; }
+        </style>
+      </head>
+      <body>
+        <iframe
+          src="${safeUrl}"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
+        <script>
+          function post(type, payload) {
+            try {
+              if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                window.ReactNativeWebView.postMessage(JSON.stringify(Object.assign({ type: type }, payload || {})));
+              }
+            } catch(e) {}
+          }
+          // Yacine pages take a moment to start — report playing after load
+          window.addEventListener('load', function(){ setTimeout(function(){ post('signal', { state: 'playing' }); }, 2000); });
+          window.addEventListener('error', function(){ post('fatal', { error: 'webview' }); });
         </script>
       </body>
     </html>
@@ -140,20 +192,37 @@ function buildYoutubeHtml(videoId: string): string {
 
 interface Props {
   streamUrl: string;
+  httpReferrer?: string;
+  userAgent?: string;
   /** Called with stream health updates (buffering / bitrate). */
   onSignal?: (signal: StreamSignal) => void;
   /** Called when the stream fatally errors (trigger auto-failover). */
   onFatal?: () => void;
 }
 
-export default function LiveStreamPlayer({ streamUrl, onSignal, onFatal }: Props) {
+function isHlsUrl(url: string): boolean {
+  return /\.m3u8?(\?|#|$)/i.test(url);
+}
+
+function isYacineOrWebUrl(url: string): boolean {
+  return /yacine|yacin|koora|alkass|bein/i.test(url) && !isHlsUrl(url);
+}
+
+export default function LiveStreamPlayer({ streamUrl, httpReferrer, userAgent, onSignal, onFatal }: Props) {
   const webViewRef = useRef<WebView>(null);
   const youtubeId = useMemo(() => extractYoutubeId(streamUrl), [streamUrl]);
 
-  const html = useMemo(
-    () => (youtubeId ? buildYoutubeHtml(youtubeId) : buildHlsHtml(streamUrl)),
-    [youtubeId, streamUrl],
-  );
+  const html = useMemo(() => {
+    if (youtubeId) return buildYoutubeHtml(youtubeId);
+    if (isHlsUrl(streamUrl)) return buildHlsHtml(streamUrl, httpReferrer, userAgent);
+    // Yacine TV and other web players: embed as iframe (they handle their own HLS internally)
+    if (isYacineOrWebUrl(streamUrl) || !isHlsUrl(streamUrl)) {
+      // If it's a plain https URL without .m3u8, treat as web embed
+      if (/^https?:\/\//i.test(streamUrl) && !isHlsUrl(streamUrl)) return buildWebHtml(streamUrl, httpReferrer);
+      return buildHlsHtml(streamUrl, httpReferrer, userAgent);
+    }
+    return buildHlsHtml(streamUrl, httpReferrer, userAgent);
+  }, [youtubeId, streamUrl, httpReferrer, userAgent]);
 
   const onMessage = (event: any) => {
     let msg: any;
@@ -179,7 +248,7 @@ export default function LiveStreamPlayer({ streamUrl, onSignal, onFatal }: Props
       <WebViewPlayer
         ref={webViewRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={{ html, baseUrl: 'https://localhost' }}
         style={styles.webview}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
@@ -187,6 +256,10 @@ export default function LiveStreamPlayer({ streamUrl, onSignal, onFatal }: Props
         javaScriptEnabled={true}
         domStorageEnabled={true}
         scalesPageToFit={true}
+        mixedContentMode="always"
+        allowFileAccess={true}
+        allowUniversalAccessFromFileURLs={true}
+        userAgent={userAgent}
         onMessage={onMessage}
       />
     </View>

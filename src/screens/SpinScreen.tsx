@@ -65,9 +65,10 @@ export default function SpinScreen() {
 
   const [adVisible, setAdVisible] = useState(false);
   const [refillMs, setRefillMs] = useState(0);
-  const pendingAdAction = useRef<'spin' | 'bonusSpin' | 'doubleReward' | null>(null);
+  const [pendingAdAction, setPendingAdAction] = useState<'spin' | 'bonusSpin' | 'doubleReward' | null>(null);
   const pendingResultAction = useRef<'spinAgain' | 'claimReward' | null>(null);
   const [doubleClaimed, setDoubleClaimed] = useState(false);
+  const [doubleUnlocked, setDoubleUnlocked] = useState(false);
 
   const popScale = useRef(new Animated.Value(0)).current;
   const shine = useRef(new Animated.Value(-1)).current;
@@ -186,6 +187,7 @@ export default function SpinScreen() {
     setSpinning(true);
     setResult(null);
     setDoubleClaimed(false);
+    setDoubleUnlocked(false);
     pendingSpinRef.current = null;
     setHasPending(false);
     try {
@@ -227,14 +229,14 @@ export default function SpinScreen() {
     if (spinsRemaining > 0) {
       executeSpin();
     } else if (adBonusRemaining > 0) {
-      pendingAdAction.current = 'bonusSpin';
+      setPendingAdAction('bonusSpin');
       setAdVisible(true);
     }
   };
 
   const handleGetBonusSpinPress = () => {
     if (adBonusRemaining <= 0) return;
-    pendingAdAction.current = 'bonusSpin';
+    setPendingAdAction('bonusSpin');
     setAdVisible(true);
   };
 
@@ -243,7 +245,9 @@ export default function SpinScreen() {
     if (!pending || !userId || claiming) return;
     setClaiming(true);
     try {
+      console.log('[Spin] doClaim doubled=', doubled, 'pts=', pending.pts, 'spinId=', pending.spinId);
       const res = await claimSpin({ userId: userId as any, spinId: pending.spinId as any, doubled });
+      console.log('[Spin] claimSpin result:', JSON.stringify(res));
       pendingSpinRef.current = null;
       setHasPending(false);
       if (res.pts < 0) {
@@ -251,6 +255,9 @@ export default function SpinScreen() {
         setResult(null);
       } else if (doubled) {
         setDoubleClaimed(true);
+        setDoubleUnlocked(false);
+        // Exact 2x of the wheel prize — never anything extra (e.g. 10 → 20).
+        // Use the server-returned value as the single source of truth.
         setResult(res.credited);
       } else {
         setResult(res.credited);
@@ -264,6 +271,7 @@ export default function SpinScreen() {
   };
 
   const handleDirectClaim = async () => {
+    showInterstitial().catch(() => { });
     const pending = pendingSpinRef.current;
     if (pending) {
       await doClaim(false);
@@ -274,13 +282,13 @@ export default function SpinScreen() {
 
   const handleTryAgain = () => {
     if (spinsRemaining > 0) {
-      showInterstitial().catch(() => {});
+      showInterstitial().catch(() => { });
       setResult(null);
       pendingSpinRef.current = null;
       setHasPending(false);
       executeSpin();
     } else {
-      showInterstitial().catch(() => {});
+      showInterstitial().catch(() => { });
       setResult(null);
       pendingSpinRef.current = null;
       setHasPending(false);
@@ -290,7 +298,7 @@ export default function SpinScreen() {
   const handleResultPress = () => {
     if (result === null) return;
     if (result > 0 && !doubleClaimed && hasPending) {
-      pendingAdAction.current = 'doubleReward';
+      setPendingAdAction('doubleReward');
       pendingResultAction.current = spinsRemaining > 0 ? 'spinAgain' : 'claimReward';
       setAdVisible(true);
       return;
@@ -301,27 +309,19 @@ export default function SpinScreen() {
   const handleAdSuccess = async () => {
     if (!userId) return;
     try {
-      const action = pendingAdAction.current;
+      const action = pendingAdAction;
       if (action === 'bonusSpin') {
         await earnBonusSpin({ userId, amount: 1 });
       } else if (action === 'doubleReward') {
-        // ad watched — claim the pending spin with doubled=true (credits 2x)
-        await doClaim(true);
-        const next = pendingResultAction.current;
+        // Ad watched — unlock 2x reward so the user can review and click Claim button
+        setDoubleUnlocked(true);
         pendingResultAction.current = null;
-        if (next === 'spinAgain') {
-          // after double claimed, allow immediate next spin
-          setTimeout(() => {
-            setResult(null);
-            executeSpin(true);
-          }, 600);
-        }
       } else {
         await executeSpin();
       }
     } catch {
     } finally {
-      pendingAdAction.current = null;
+      setPendingAdAction(null);
     }
   };
 
@@ -380,7 +380,7 @@ export default function SpinScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom + 32, 40) }]}>
-        
+
         {/* Title Section */}
         <View style={styles.titleSection}>
           <Text style={styles.mainTitle}>SPIN THE WHEEL</Text>
@@ -437,37 +437,60 @@ export default function SpinScreen() {
             <View style={styles.trophyWrap}>
               <Icon name="trophy" iconStyle="solid" size={30} color="#8B5CF6" />
             </View>
-            <Text style={styles.resultTitle}>
-              {result > 0 || result < 0 ? 'YOU WON!' : 'NO BONUS'}
-            </Text>
+            {!doubleClaimed && (
+              <Text style={styles.resultTitle}>
+                {result > 0 || result < 0 ? 'YOU WON!' : 'NO BONUS'}
+              </Text>
+            )}
             <Animated.Text style={[styles.resultPts, { transform: [{ scale: popScale }] }]}>
-              {result > 0 ? `+${result} PTS` : result < 0 ? `+${Math.abs(result)} SPINS` : 'TRY AGAIN'}
+              {result > 0
+                ? doubleUnlocked
+                  ? `+${result * 2} PTS`
+                  : `+${result} PTS`
+                : result < 0
+                ? `+${Math.abs(result)} SPINS`
+                : 'TRY AGAIN'}
             </Animated.Text>
 
             {Boolean(result && result > 0 && !doubleClaimed && hasPending) ? (
-              <View style={styles.resultButtonGroup}>
-                <TouchableOpacity style={styles.doubleBtn} onPress={handleResultPress} activeOpacity={0.88} disabled={claiming}>
-                  <Icon name="circle-play" iconStyle="solid" size={15} color="#FFF" />
-                  <Text style={styles.doubleBtnText}>WATCH VIDEO TO DOUBLE (2X)</Text>
-                </TouchableOpacity>
+              doubleUnlocked ? (
+                <View style={styles.resultButtonGroup}>
+                  <TouchableOpacity style={styles.doubleBtn} onPress={() => doClaim(true)} activeOpacity={0.88} disabled={claiming}>
+                    {claiming ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Icon name="check-double" iconStyle="solid" size={15} color="#FFF" />
+                        <Text style={styles.doubleBtnText}>{`CLAIM +${result * 2} PTS (2X REWARD)`}</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.resultButtonGroup}>
+                  <TouchableOpacity style={styles.doubleBtn} onPress={handleResultPress} activeOpacity={0.88} disabled={claiming}>
+                    <Icon name="circle-play" iconStyle="solid" size={15} color="#FFF" />
+                    <Text style={styles.doubleBtnText}>{`WATCH VIDEO TO DOUBLE (+${result} → +${result * 2})`}</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity style={styles.directClaimBtn} onPress={handleDirectClaim} activeOpacity={0.85} disabled={claiming}>
-                  {claiming ? <ActivityIndicator size="small" color="#C4B5FD" /> : <Icon name="check" iconStyle="solid" size={13} color="#C4B5FD" />}
-                  <Text style={styles.directClaimText}>{claiming ? 'Claiming…' : `Claim +${result} PTS (Skip Ad)`}</Text>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity style={styles.directClaimBtn} onPress={handleDirectClaim} activeOpacity={0.85} disabled={claiming}>
+                    {claiming ? <ActivityIndicator size="small" color="#C4B5FD" /> : <Icon name="check" iconStyle="solid" size={13} color="#C4B5FD" />}
+                    <Text style={styles.directClaimText}>{claiming ? 'Claiming…' : `Claim +${result} PTS (Skip Ad)`}</Text>
+                  </TouchableOpacity>
+                </View>
+              )
             ) : (
               <View style={styles.resultButtonGroup}>
                 <TouchableOpacity style={styles.doubleBtn} onPress={handleTryAgain} activeOpacity={0.88} disabled={claiming}>
-                  {Boolean(doubleClaimed) ? (
+                  {doubleClaimed ? (
                     <Icon name="check-double" iconStyle="solid" size={15} color="#FFF" />
                   ) : null}
                   <Text style={styles.doubleBtnText}>
-                    {result && result > 0 && doubleClaimed
-                      ? 'CLAIMED (2X REWARD)'
+                    {doubleClaimed
+                      ? (spinsRemaining > 0 ? 'TRY AGAIN' : 'CONTINUE')
                       : spinsRemaining > 0
-                      ? 'TRY AGAIN'
-                      : 'CONTINUE'}
+                        ? 'TRY AGAIN'
+                        : 'CONTINUE'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -517,10 +540,15 @@ export default function SpinScreen() {
 
       <RewardedAdModal
         visible={adVisible}
-        onClose={() => setAdVisible(false)}
+        onClose={() => { setAdVisible(false); setPendingAdAction(null); }}
         onSuccess={handleAdSuccess}
-        rewardAmount={pendingAdAction.current === 'doubleReward' ? result ?? undefined : undefined}
-        adType={pendingAdAction.current === 'doubleReward' ? 'spin_double_bonus' : undefined}
+        rewardAmount={
+          pendingAdAction === 'doubleReward' && result != null
+            ? result * 2
+            : undefined
+        }
+        adType={pendingAdAction === 'doubleReward' ? 'spin_double_bonus' : pendingAdAction === 'bonusSpin' ? 'spin_bonus_spin' : undefined}
+        skipReward={pendingAdAction === 'doubleReward' || pendingAdAction === 'bonusSpin'}
       />
     </View>
   );

@@ -49,7 +49,7 @@ export const getAdRewardConfig = query({
 
     // 3. Fallback default
     if (rewardPoints === null) {
-      rewardPoints = 50;
+      rewardPoints = 0;
     }
 
     return {
@@ -95,9 +95,31 @@ export const rewardForAd = mutation({
   },
   handler: async (ctx, args) => {
     const { economy } = await requireUserAndEconomy(ctx, args.userId);
+    const normalizedAdType = args.adType?.trim().toLowerCase() ?? "";
+
+    // Spin double/bonus rewards are credited by spin.ts (claimSpin /
+    // doubleSpinReward / earnBonusSpin) — never via this generic flat-reward
+    // path, which would credit the wrong amount (a flat adRewardPoints) or
+    // double-credit. Guard kept as a defensive backstop.
+    const isSpinRelatedAd =
+      normalizedAdType.includes("spin") || normalizedAdType.includes("double");
+
+    if (isSpinRelatedAd) {
+      console.warn(
+        `[ads.rewardForAd] blocked generic credit for ${args.adType} — use claimSpin/earnBonusSpin`,
+      );
+      const last0 = await ctx.db
+        .query("pointsLedger")
+        .withIndex("by_user_economy", (q) =>
+          q.eq("userId", args.userId).eq("economy", economy),
+        )
+        .order("desc")
+        .first();
+      return last0?.balanceAfter ?? 0;
+    }
 
     // Per-adType rate limit — global AD_REWARD_* cooldown blocked spin bonus→double in <30s
-    const currentReason = `AD_REWARD_${(args.adType ?? "REWARDED_VIDEO").toUpperCase()}`;
+    const currentReason = `AD_REWARD_${(normalizedAdType || "REWARDED_VIDEO").toUpperCase()}`;
     const recentReward = await ctx.db
       .query("pointsLedger")
       .withIndex("by_user_economy", (q) =>
@@ -153,8 +175,11 @@ export const rewardForAd = mutation({
       }
     }
 
-    // 3. Fall back to passed amount or 50
-    const finalReward = rewardPoints ?? (args.rewardAmount ?? 50);
+    // 3. Generic ad rewards must come from server config only.
+    // Do not accept a client-supplied rewardAmount here, because that can stack
+    // a flat ad reward on top of a separate spin/double payout and create a
+    // duplicate credit like the +50 issue.
+    const finalReward = rewardPoints ?? 0;
 
     const last = await ctx.db
       .query("pointsLedger")

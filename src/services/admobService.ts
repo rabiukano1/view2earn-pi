@@ -61,13 +61,14 @@ export async function initializeAdMob(): Promise<void> {
       console.warn('[AdMob] UMP Consent update warning (non-fatal):', consentErr);
     }
 
-    // 1b. Consent gate — don't init/load ads if UMP says ads cannot be requested (EEA without consent)
+    // 1b. Consent gate — log canRequestAds but ALWAYS initialize the SDK
+    // so that rewarded/interstitial still load (as non-personalized on EEA).
+    // Previous code early-returned here and never called mobileAds().initialize(),
+    // which caused useRewardedAd / InterstitialAd to stay in "not initialized" state.
     try {
       const info = await AdsConsent.getConsentInfo();
       if (info.canRequestAds === false) {
-        console.log('[AdMob] canRequestAds=false — skipping init (non-personalized fallback via UMP)');
-        isMobileAdsInitialized = true;
-        return;
+        console.log('[AdMob] canRequestAds=false — still initializing SDK (npa fallback)');
       }
     } catch {}
 

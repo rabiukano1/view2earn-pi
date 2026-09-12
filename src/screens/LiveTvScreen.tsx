@@ -22,6 +22,7 @@ import Icon from '../components/Icon';
 import LiveStreamPlayer from '../components/LiveStreamPlayer';
 import { colors, radius, spacing, shadow } from '../theme';
 import { getCuratedChannels, fetchIPTVChannels, IPTVChannel } from '../services/iptvService';
+import { fetchLiveEvents, LiveEvent } from '../services/liveEventsService';
 
 type LiveTvNavProp = NativeStackNavigationProp<RootStackParamList, 'LiveTV'>;
 type LiveTvRouteProp = RouteProp<RootStackParamList, 'LiveTV'>;
@@ -81,6 +82,8 @@ export default function LiveTvScreen() {
   const [measuredBitrate, setMeasuredBitrate] = useState<number>(0);
   const [failoverAt, setFailoverAt] = useState<number>(0);
   const [fullscreen, setFullscreen] = useState<boolean>(false);
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState<boolean>(true);
 
   const iptvDocs = useQuery(api.iptv.list);
 
@@ -105,6 +108,15 @@ export default function LiveTvScreen() {
         setLoading(false);
       });
     }
+    // Free live events (no API key) — poll every 60s for good signal
+    const loadEvents = () =>
+      fetchLiveEvents()
+        .then(setLiveEvents)
+        .catch(() => {})
+        .finally(() => setEventsLoading(false));
+    loadEvents();
+    const iv = setInterval(loadEvents, 60000);
+    return () => clearInterval(iv);
   }, []);
 
   // Football-only channels from Convex (admin-managed), falling back to curated.
@@ -199,6 +211,8 @@ export default function LiveTvScreen() {
     }
   };
 
+  const isYacineChannel = (ch: IPTVChannel) => ch.id.startsWith('yacin-') || ch.name.toLowerCase().includes('yacine');
+
   const filteredChannels = channels.filter((ch) => {
     const matchesSearch =
       ch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -206,6 +220,9 @@ export default function LiveTvScreen() {
       (ch.currentMatch && ch.currentMatch.toLowerCase().includes(searchQuery.toLowerCase()));
     if (selectedCategory === 'Favorites') {
       return favorites.includes(ch.id) && matchesSearch;
+    }
+    if (selectedCategory === 'Yacine TV') {
+      return isYacineChannel(ch) && matchesSearch;
     }
     if (selectedCategory !== 'All' && ch.category !== selectedCategory) {
       return false;
@@ -246,6 +263,8 @@ export default function LiveTvScreen() {
         <LiveStreamPlayer
           key={`${selectedChannel.id}-${streamIndex}`}
           streamUrl={activeStreamUrl}
+          httpReferrer={selectedChannel.httpReferrer}
+          userAgent={selectedChannel.userAgent}
           onSignal={onPlayerSignal}
           onFatal={handleFatal}
         />
@@ -298,12 +317,55 @@ export default function LiveTvScreen() {
             <LiveStreamPlayer
               key={`${selectedChannel.id}-${streamIndex}-fs`}
               streamUrl={activeStreamUrl}
+              httpReferrer={selectedChannel.httpReferrer}
+              userAgent={selectedChannel.userAgent}
               onSignal={onPlayerSignal}
               onFatal={handleFatal}
             />
           </View>
         </View>
       ) : null}
+
+      {/* Free Live Events strip — beIN live scores, tap to filter channel search */}
+      {liveEvents.length > 0 && (
+        <View style={[styles.eventsStrip, dark && styles.eventsStripDark]}>
+          <View style={styles.eventsHeader}>
+            <View style={styles.liveDotSm} />
+            <Text style={[styles.eventsTitle, dark && styles.textLight]}>LIVE NOW</Text>
+            {eventsLoading && <ActivityIndicator size="small" color={colors.primary} />}
+            <Text style={styles.eventsHint}>Free • auto from ESPN/TheSportsDB</Text>
+          </View>
+          <FlatList
+            data={liveEvents}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(e) => e.id}
+            contentContainerStyle={{ paddingHorizontal: spacing.md, gap: 8 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.eventChip, dark && styles.eventChipDark]}
+                activeOpacity={0.85}
+                onPress={() => setSearchQuery(item.homeTeam)}>
+                <Text style={[styles.eventLeague, dark && { color: '#A7F3D0' }]} numberOfLines={1}>
+                  {item.league}
+                </Text>
+                <Text style={[styles.eventTeams, dark && styles.textLight]} numberOfLines={1}>
+                  {item.homeTeam} vs {item.awayTeam}
+                </Text>
+                <Text style={styles.eventScore}>
+                  {item.homeScore != null && item.awayScore != null
+                    ? `${item.homeScore} - ${item.awayScore}`
+                    : item.minute || item.status}
+                  {item.status === 'LIVE' ? ' • LIVE' : ` • ${item.status}`}
+                </Text>
+                <View style={styles.watchOnBeIN}>
+                  <Text style={styles.watchOnText}>Watch on beIN ▶</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
 
       <View style={styles.body}>
         <View style={[styles.searchBox, dark && styles.searchBoxDark]}>
@@ -323,7 +385,7 @@ export default function LiveTvScreen() {
         </View>
 
         <View style={styles.categoriesRow}>
-          {['All', 'Football', 'Sports', 'Favorites'].map((cat) => {
+          {['All', 'Football', 'Yacine TV', 'Sports', 'Favorites'].map((cat) => {
             const active = selectedCategory === cat;
             return (
               <TouchableOpacity
@@ -332,6 +394,7 @@ export default function LiveTvScreen() {
                   styles.catChip,
                   active && styles.catChipActive,
                   dark && !active && styles.catChipDark,
+                  cat === 'Yacine TV' && active && { backgroundColor: '#10B981', borderColor: '#10B981' },
                 ]}
                 onPress={() => setSelectedCategory(cat)}
                 activeOpacity={0.85}>
@@ -341,12 +404,19 @@ export default function LiveTvScreen() {
                     active && styles.catChipTextActive,
                     dark && !active && styles.textLight,
                   ]}>
-                  {cat === 'Football' ? '⚽ Football' : cat === 'Favorites' ? '⭐ Saved' : cat}
+                  {cat === 'Football' ? '⚽ Football' : cat === 'Yacine TV' ? '📺 Yacine TV' : cat === 'Favorites' ? '⭐ Saved' : cat}
                 </Text>
               </TouchableOpacity>
             );
           })}
         </View>
+
+        {isYacineChannel(selectedChannel) ? (
+          <View style={[styles.yacineNotice, dark && { backgroundColor: '#064E3B', borderColor: '#10B981' }]}>
+            <Icon name="tv" iconStyle="solid" size={12} color="#10B981" />
+            <Text style={[styles.yacineNoticeText, dark && { color: '#A7F3D0' }]}>Yacine TV • Embedded player — uses site's own HLS. Replace URL in Admin → Channels if stream rotates.</Text>
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.centerContainer}>
@@ -636,4 +706,51 @@ const styles = StyleSheet.create({
   },
   fullscreenTitle: { color: colors.white, fontSize: 14, fontWeight: '800', flexShrink: 1 },
   fullscreenPlayer: { width: '100%', height: '100%' },
+  yacineNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginBottom: spacing.sm,
+  },
+  yacineNoticeText: { flex: 1, fontSize: 11, color: '#065F46', fontWeight: '600', lineHeight: 14 },
+  eventsStrip: {
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingVertical: 10,
+  },
+  eventsStripDark: { backgroundColor: colors.surfaceDark, borderBottomColor: colors.borderDark },
+  eventsHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: spacing.md, marginBottom: 8 },
+  liveDotSm: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' },
+  eventsTitle: { fontSize: 12, fontWeight: '900', color: colors.text, letterSpacing: 0.5 },
+  eventsHint: { marginLeft: 'auto', fontSize: 10, color: colors.textFaint, fontWeight: '600' },
+  eventChip: {
+    minWidth: 160,
+    maxWidth: 200,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.lg,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 2,
+  },
+  eventChipDark: { backgroundColor: colors.surfaceAltDark, borderColor: colors.borderDark },
+  eventLeague: { fontSize: 10, fontWeight: '800', color: colors.primaryDeep },
+  eventTeams: { fontSize: 12, fontWeight: '800', color: colors.text },
+  eventScore: { fontSize: 11, fontWeight: '700', color: '#EF4444' },
+  watchOnBeIN: {
+    marginTop: 4,
+    backgroundColor: '#8B5CF6',
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  watchOnText: { fontSize: 10, fontWeight: '800', color: colors.white },
 });

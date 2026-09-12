@@ -44,9 +44,13 @@ export default function PiSpin() {
   const status = useQuery(api.spin.getSpinStatus, userId ? { userId } : "skip");
   const balance = useQuery(api.points.balance, userId ? { userId } : "skip");
   const doSpin = useMutation(api.spin.spin);
+  const claimSpin = useMutation(api.spin.claimSpin);
   const earnBonusSpin = useMutation(api.spin.earnBonusSpin);
   const claimRewardedAd = useMutation(api.piAds.claimRewardedAd);
-  const rewardForAd = useMutation(api.ads.rewardForAd);
+  // The spin stays UNCLAIMED until the user finishes the result step. A single
+  // claimSpin call then credits the exact amount: pts normally, or 2×pts when
+  // the double-reward ad was watched. Nothing is credited twice.
+  const pendingSpinRef = useRef<{ spinId: Id<"pendingSpins">; pts: number } | null>(null);
 
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<number | null>(null);
@@ -56,6 +60,8 @@ export default function PiSpin() {
   const [adBusy, setAdBusy] = useState(false);
   const [doubleAdBusy, setDoubleAdBusy] = useState(false);
   const [doubleClaimed, setDoubleClaimed] = useState(false);
+  const [doubleUnlocked, setDoubleUnlocked] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
@@ -108,10 +114,13 @@ export default function PiSpin() {
     setSpinning(true);
     setResult(null);
     setDoubleClaimed(false);
+    setDoubleUnlocked(false);
     setMsg(null);
+    pendingSpinRef.current = null;
 
     try {
-      const { pts } = await doSpin({ userId });
+      const { spinId, pts } = await doSpin({ userId });
+      pendingSpinRef.current = { spinId: spinId as Id<"pendingSpins">, pts };
       const targetIndex = indexForPts(pts);
 
       // Mathematically calculate exact rotation to align target 36° sector with top 12 o'clock pointer
@@ -127,12 +136,49 @@ export default function PiSpin() {
       setRotationDeg(finalRotation);
 
       window.setTimeout(() => {
-        setResult(pts);
         setSpinning(false);
+        // Show the prize the wheel landed on. Nothing is credited yet — the
+        // single credit happens when the user claims (watch-2x or skip).
+        setResult(pts);
       }, 4050);
     } catch (e) {
       setMsg({ ok: false, text: String((e as Error)?.message ?? e).replace("[CONVEX] ", "") });
       setSpinning(false);
+    }
+  };
+
+  // Credits the pending spin exactly once. `doubled` → credits 2×pts in a single
+  // ledger entry (e.g. 10 → 20); otherwise credits pts (10 → 10). Never adds
+  // anything on top of the wheel prize.
+  const claimPending = async (doubled: boolean) => {
+    const pending = pendingSpinRef.current;
+    if (!pending || claiming) return null;
+    setClaiming(true);
+    try {
+      const res = await claimSpin({
+        userId,
+        spinId: pending.spinId,
+        doubled,
+      });
+      pendingSpinRef.current = null;
+      if (res.pts < 0) {
+        // bonus-spin prize — credited as extra spins, not points
+        setResult(null);
+        setDoubleClaimed(true);
+        setMsg({ ok: true, text: `🎉 +${res.bonusSpins} bonus spin${res.bonusSpins === 1 ? "" : "s"} added!` });
+      } else {
+        setDoubleClaimed(doubled);
+        setDoubleUnlocked(false);
+        setResult(res.credited);
+        if (doubled) setMsg({ ok: true, text: `🎉 Doubled! +${res.credited} PTS credited.` });
+      }
+      return res;
+    } catch (e) {
+      pendingSpinRef.current = null;
+      setMsg({ ok: false, text: String((e as Error)?.message ?? e).replace("[CONVEX] ", "") });
+      return null;
+    } finally {
+      setClaiming(false);
     }
   };
 
@@ -167,7 +213,7 @@ export default function PiSpin() {
   };
 
   const handleDoubleRewardAd = async () => {
-    if (doubleAdBusy || doubleClaimed || result === null || result <= 0) return;
+    if (doubleAdBusy || claiming || result === null || result <= 0 || !pendingSpinRef.current) return;
     setDoubleAdBusy(true);
     setMsg(null);
     try {
@@ -175,14 +221,11 @@ export default function PiSpin() {
       const isRewarded = ad.rewarded || ad.reason === "AD_REWARDED" || ad.reason === "REWARDED";
 
       if (isRewarded) {
-        await rewardForAd({
-          userId,
-          provider: ad.adId,
-          adType: "spin_double_bonus",
-          rewardAmount: result,
-        });
-        setDoubleClaimed(true);
-        setMsg({ ok: true, text: `🎉 Double Bonus! +${result} extra PTS added to your balance!` });
+        // Unlock 2x reward so the user can review and click Claim button.
+        // Do not show an extra message here; the final claim message is shown
+        // once the user confirms the doubled reward.
+        setDoubleUnlocked(true);
+        setMsg(null);
       } else if (ad.supported) {
         const isClosed = ad.reason.includes("CLOSED") || ad.reason.includes("cancel");
         setMsg({
@@ -192,20 +235,21 @@ export default function PiSpin() {
             : `Ad not completed: ${ad.reason}`,
         });
       } else {
-        await rewardForAd({
-          userId,
-          provider: "pi_spin_double_simulated",
-          adType: "spin_double_bonus",
-          rewardAmount: result,
-        });
-        setDoubleClaimed(true);
-        setMsg({ ok: true, text: `🎉 Double Bonus! +${result} extra PTS added to your balance!` });
+        // Ad network unavailable — unlock the double
+        setDoubleUnlocked(true);
+        setMsg({ ok: true, text: "🎉 Double reward unlocked! Tap Claim button to collect." });
       }
     } catch (e) {
       setMsg({ ok: false, text: String((e as Error)?.message ?? e).replace("[CONVEX] ", "") });
     } finally {
       setDoubleAdBusy(false);
     }
+  };
+
+  // Credit the prize without doubling (the "no thanks / skip" path).
+  const handleSkipDouble = async () => {
+    if (claiming) return;
+    await claimPending(false);
   };
 
   return (
@@ -288,37 +332,83 @@ export default function PiSpin() {
       {result !== null ? (
         <div className="pi-card pi-spin-result-card" style={{ marginTop: 16 }}>
           <div className="pi-spin-trophy-icon">🏆</div>
-          <p className="pi-spin-result-title">{result > 0 || result < 0 ? "YOU WON!" : "NO BONUS"}</p>
-          <p className="pi-spin-result-pts">{result > 0 ? `+${result} PTS` : result < 0 ? `+${Math.abs(result)} SPINS` : "TRY AGAIN"}</p>
+          <p className="pi-spin-result-title">
+            {result !== 0 ? "YOU WON!" : "NO BONUS"}
+          </p>
+          <p className="pi-spin-result-pts">
+            {result > 0
+              ? doubleUnlocked
+                ? `+${result * 2} PTS`
+                : `+${result} PTS`
+              : result < 0
+              ? `+${Math.abs(result)} SPINS`
+              : "TRY AGAIN"}
+          </p>
 
-          {/* Double Reward Pi Ad Button */}
-          {result > 0 && !doubleClaimed && (
+          {result > 0 && !doubleClaimed ? (
+            doubleUnlocked ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => claimPending(true)}
+                disabled={claiming}
+                style={{ width: "100%", marginTop: 12, fontWeight: 900 }}
+              >
+                {claiming ? "Claiming…" : `🎉 Claim +${result * 2} PTS (2X REWARD)`}
+              </button>
+            ) : (
+              <>
+                {/* Watch the Pi ad to double — credits exactly 2× the prize. */}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleDoubleRewardAd}
+                  disabled={doubleAdBusy || claiming}
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    backgroundColor: "rgba(245, 158, 11, 0.2)",
+                    borderColor: "#F59E0B",
+                    color: "#F59E0B",
+                    fontWeight: 800,
+                  }}
+                >
+                  {doubleAdBusy
+                    ? "Loading video…"
+                    : `🎬 Double Reward (+${result} → +${result * 2} PTS)`}
+                </button>
+
+                {/* Skip the ad — credits exactly the prize shown (no double). */}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSkipDouble}
+                  disabled={claiming}
+                  style={{ width: "100%", marginTop: 12 }}
+                >
+                  {claiming ? "Claiming…" : `Claim +${result} PTS (Skip Ad)`}
+                </button>
+              </>
+            )
+          ) : (
             <button
               type="button"
-              className="btn btn-secondary"
-              onClick={handleDoubleRewardAd}
-              disabled={doubleAdBusy}
-              style={{
-                width: "100%",
-                marginTop: 10,
-                backgroundColor: "rgba(245, 158, 11, 0.2)",
-                borderColor: "#F59E0B",
-                color: "#F59E0B",
-                fontWeight: 800,
+              className="btn btn-primary"
+              onClick={() => {
+                // For bonus-spin / zero prizes the claim is a no-op credit; just
+                // credit it (idempotent) then dismiss the card.
+                if (result <= 0 && pendingSpinRef.current) {
+                  void claimPending(false);
+                }
+                setResult(null);
+                setDoubleClaimed(false);
               }}
+              disabled={claiming}
+              style={{ width: "100%", marginTop: 12 }}
             >
-              {doubleAdBusy ? "Loading video…" : `🎬 Double Reward (+${result} PTS)`}
+              {spinsRemaining > 0 ? "SPIN AGAIN" : "DONE"}
             </button>
           )}
-
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setResult(null)}
-            style={{ width: "100%", marginTop: 12 }}
-          >
-            {spinsRemaining > 0 ? "SPIN AGAIN" : "CLAIM REWARD 🎉"}
-          </button>
         </div>
       ) : (
         <div className="pi-spin-actions-matching" style={{ marginTop: 16 }}>

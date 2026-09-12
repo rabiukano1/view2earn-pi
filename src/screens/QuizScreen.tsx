@@ -154,6 +154,9 @@ export default function QuizScreen() {
   };
 
   const handleSubmit = () => {
+    // Interstitial on Learn/Quiz submit — show at natural transition, non-blocking
+    // executeSubmit also triggers one after grading; this pre-warms and covers quick re-opens
+    showInterstitial().catch(() => {});
     executeSubmit();
   };
 

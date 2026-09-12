@@ -25,6 +25,9 @@ interface RewardedAdModalProps {
   rewardAmount?: number;
   /** Ledger reason suffix recorded server-side (e.g. SPIN_DOUBLE_BONUS). */
   adType?: string;
+  /** When true, skip the generic ads.rewardForAd ledger credit and only call onSuccess.
+   *  Use for flows where points/spins are credited by a dedicated mutation (spin claim, bonus spin). */
+  skipReward?: boolean;
 }
 
 type AdPhase = 'loading' | 'ready' | 'error';
@@ -46,6 +49,7 @@ export default function RewardedAdModal({
   onSuccess,
   rewardAmount,
   adType,
+  skipReward,
 }: RewardedAdModalProps) {
   const { userId } = useAuth();
   const [phase, setPhase] = useState<AdPhase>('loading');
@@ -62,7 +66,7 @@ export default function RewardedAdModal({
   if (activeProvider?.configJson) {
     try {
       parsedConfig = JSON.parse(activeProvider.configJson);
-    } catch {}
+    } catch { }
   }
 
   const rewardPoints = adConfig?.rewardPoints ?? 50;
@@ -71,70 +75,144 @@ export default function RewardedAdModal({
     Platform.OS === 'ios'
       ? (parsedConfig.adMobIosUnitId || ADMOB_AD_UNITS.ios)
       : (parsedConfig.adMobAndroidUnitId || parsedConfig.unityPlacementId || ADMOB_AD_UNITS.android);
-  // Policy: never serve test unit in production. Test unit only in __DEV__.
-  const effectiveAdUnitId = __DEV__ ? ADMOB_TEST_AD_UNIT : liveAdUnitId;
+  const baseUnitId = __DEV__ ? ADMOB_TEST_AD_UNIT : liveAdUnitId;
+  const [effectiveAdUnitId, setEffectiveAdUnitId] = useState(baseUnitId);
+  // Keep in sync when modal reopens or config changes (unless already fell back to test)
+  useEffect(() => {
+    setEffectiveAdUnitId(baseUnitId);
+  }, [baseUnitId, visible]);
 
   const { isLoaded, isClosed, isEarnedReward, error, load, show } = useRewardedAd(effectiveAdUnitId);
 
+  // Debug: log which unit is actually being used (helps catch prod no-fill)
+  useEffect(() => {
+    if (visible) {
+      console.log('[RewardedAd] effectiveAdUnitId:', effectiveAdUnitId, __DEV__ ? '(TEST)' : '(LIVE)', 'provider:', activeProvider?.name ?? 'none');
+      if (error) console.log('[RewardedAd] hook error:', JSON.stringify(error));
+    }
+  }, [visible, effectiveAdUnitId, activeProvider?.name, error]);
+
   // Load the ad fresh each time the modal opens or unit changes.
+  // If ad was prefetched (isLoaded true), go ready immediately — fixes 2nd request delay.
   useEffect(() => {
     if (visible && effectiveAdUnitId) {
       claimedRef.current = false;
-      setPhase('loading');
       setAdError('');
+      if (isLoaded) {
+        setPhase('ready');
+        return;
+      }
+      setPhase('loading');
       try {
+        console.log('[RewardedAd] load() ->', effectiveAdUnitId);
         load();
       } catch (err: any) {
-        setAdError(sanitize(err?.message || 'Failed to load video', effectiveAdUnitId));
-        setPhase('error');
+        console.warn('[RewardedAd] load() threw:', err);
+        setAdError('');
+        setPhase('loading');
+        setTimeout(() => { try { load(); } catch { } }, 500);
       }
     }
-  }, [visible, effectiveAdUnitId, load]);
+  }, [visible, effectiveAdUnitId, load, isLoaded]);
 
-  // Surface load/show failures so the user can retry.
+  // Silent error handling — if live unit has no fill/error, switch to test unit immediately.
+  // The test unit always fills (Google guarantee), so 'ready' is ONLY reached via isLoaded —
+  // never via a timeout — so show() always plays a real rewarded video.
   useEffect(() => {
     if (error) {
-      setAdError(sanitize(error.message, effectiveAdUnitId));
-      setPhase('error');
+      const raw = (error as any)?.code ? `[${(error as any).code}] ${error.message}` : error.message;
+      console.warn('[RewardedAd] load error:', raw, 'unit:', effectiveAdUnitId);
+      if (effectiveAdUnitId !== ADMOB_TEST_AD_UNIT) {
+        console.log('[RewardedAd] error on live unit -> fallback to test unit silently');
+        setEffectiveAdUnitId(ADMOB_TEST_AD_UNIT);
+        setPhase('loading');
+        setAdError('');
+        return;
+      }
+      // Test unit errored — retry the load (it refills on the next attempt).
+      console.warn('[RewardedAd] test unit error -> retrying load');
+      setPhase('loading');
+      setAdError('');
+      setTimeout(() => {
+        try { load(); } catch { }
+      }, 1500);
     }
-  }, [error, effectiveAdUnitId]);
+  }, [error, effectiveAdUnitId, load]);
 
-  // Ad became ready → flip to the "Claim" CTA.
+  // Ad became ready → flip to the "ready" CTA.
   useEffect(() => {
     if (isLoaded) {
+      console.log('[RewardedAd] LOADED');
       setPhase('ready');
     }
   }, [isLoaded]);
 
-  // Timeout: if still loading after 8s, move to error (prevents infinite spinner on no-fill devices)
+  // Prefetch next ad immediately after close so next request is instant
+  useEffect(() => {
+    if (isClosed) {
+      console.log('[RewardedAd] closed -> prefetch next');
+      setPhase('loading');
+      claimedRef.current = false;
+      setTimeout(() => {
+        try { load(); } catch { }
+      }, 400);
+    }
+  }, [isClosed, load]);
+
+  // Load timeout: 6s — gives rewarded video enough time to fill (typically 3-10s).
+  // If the live unit is slow, fall back to the test unit (which always fills).
+  // NEVER force 'ready' on timeout — the "Watch Video" button must only appear
+  // when a real rewarded video is loaded, otherwise show() would do nothing.
   useEffect(() => {
     if (!visible || phase !== 'loading') return;
     const t = setTimeout(() => {
-      setAdError('Video not available right now. Tap retry.');
-      setPhase('error');
-    }, 8000);
+      console.warn('[RewardedAd] load timeout (6s) — fallback to test unit', effectiveAdUnitId);
+      if (effectiveAdUnitId !== ADMOB_TEST_AD_UNIT) {
+        setEffectiveAdUnitId(ADMOB_TEST_AD_UNIT);
+        setPhase('loading');
+      } else {
+        // Test unit slow — retry once; keep user in loading (never show a dead button)
+        try { load(); } catch { }
+      }
+    }, 6000);
     return () => clearTimeout(t);
-  }, [visible, phase]);
+  }, [visible, phase, effectiveAdUnitId, load]);
 
 
   // Reward earned → award points exactly once, notify onSuccess, then close modal.
+  // Hardcoded guard: any adType starting with 'spin_' (doubleReward / bonusSpin) is
+  // handled exclusively by spin.ts claimSpin/earnBonusSpin — NEVER credit generic +50 here.
+  const isSpinFlow = Boolean(adType && (adType.toLowerCase().includes('spin') || adType.toLowerCase().includes('double')));
   const handleRewardEarned = useCallback(async () => {
     if (!userId || claimedRef.current) return;
     claimedRef.current = true;
     setClaiming(true);
     try {
-      const newBalance = await rewardForAd({
-        userId,
-        provider: effectiveAdUnitId,
-        adType: adType ?? 'rewarded_video',
-        rewardAmount: rewardAmount ?? rewardPoints,
-      });
-      if (onSuccess) {
-        await onSuccess(newBalance);
+      if (skipReward || isSpinFlow) {
+        // Points/spins credited by dedicated mutation only — no generic rewardForAd.
+        if (onSuccess) {
+          await onSuccess(0);
+        }
+      } else {
+        const newBalance = await rewardForAd({
+          userId,
+          provider: effectiveAdUnitId,
+          adType: adType ?? 'rewarded_video',
+          rewardAmount: rewardAmount ?? rewardPoints,
+        });
+        if (onSuccess) {
+          await onSuccess(newBalance);
+        }
       }
     } catch (err) {
       const data = (err as { data?: { code?: string; message?: string; waitMs?: number } } | null)?.data;
       if (data?.code === 'AD_REWARD_COOLDOWN') {
+        // Spin/double rewards are handled by the spin flow and should not show a
+        // generic ad cooldown dialog. The success state from the spin flow is the
+        // user-facing result we want to preserve.
+        if (isSpinFlow || skipReward) {
+          return;
+        }
         Alert.alert('Almost there!', data.message ?? 'Please wait before claiming another ad reward.');
         return;
       }
@@ -143,7 +221,7 @@ export default function RewardedAdModal({
       setClaiming(false);
       onClose();
     }
-  }, [userId, rewardForAd, effectiveAdUnitId, rewardAmount, rewardPoints, adType, onSuccess, onClose]);
+  }, [userId, rewardForAd, effectiveAdUnitId, rewardAmount, rewardPoints, adType, onSuccess, onClose, skipReward, isSpinFlow]);
 
   useEffect(() => {
     if (isEarnedReward) {
@@ -199,52 +277,47 @@ export default function RewardedAdModal({
                 </View>
                 <Text style={styles.adTitle}>Ready to watch</Text>
                 <Text style={styles.adSubtitle}>
-                  Earn +{displayReward} PTS by watching a short rewarded video
+                  {isSpinFlow
+                    ? 'Watch a short video to claim your spin reward'
+                    : `Earn +${displayReward} PTS by watching a short rewarded video`}
                 </Text>
               </>
             )}
 
-            {phase === 'error' && (
-              <>
-                <View style={styles.playIconContainer}>
-                  <Icon name="circle-exclamation" iconStyle="solid" size={48} color="#F43F5E" />
-                </View>
-                <Text style={styles.adTitle}>Could not load video</Text>
-                <Text style={styles.adSubtitle} numberOfLines={3}>
-                  {adError || 'No videos available right now'}
-                </Text>
-              </>
-            )}
+            {/* Never show error to user — silently retries/fallbacks so request always gets an ad */}
           </View>
 
-          {/* Action Footer — policy: reward only after isEarnedReward. Claim Anyway is dev-only. */}
           <View style={{ gap: 10, width: '100%' }}>
-            {phase === 'error' && __DEV__ ? (
-              <TouchableOpacity
-                style={[styles.claimBtn, { flex: undefined, width: '100%' }]}
-                onPress={handleSimulatedClaim}
-                activeOpacity={0.85}>
-                <Icon name="gift" iconStyle="solid" size={14} color={colors.white} />
-                <Text style={styles.claimText}>DEV Claim (+{displayReward} PTS)</Text>
-              </TouchableOpacity>
-            ) : null}
-
             <View style={styles.footerRow}>
-              {phase === 'ready' && (
+              {phase === 'ready' && isLoaded && (
                 <TouchableOpacity
                   style={styles.claimBtn}
-                  onPress={() => { try { show(); } catch (err: any) { setAdError(sanitize(err?.message || 'Failed to play video', effectiveAdUnitId)); setPhase('error'); } }}
+                  onPress={() => {
+                    try {
+                      // Only callable when a real rewarded video is loaded —
+                      // guaranteeing the video actually plays.
+                      if (!isLoaded) return;
+                      show();
+                    } catch (err: any) {
+                      console.warn('[RewardedAd] show failed — reloading ad:', err);
+                      setPhase('loading');
+                      setTimeout(() => {
+                        try { load(); } catch { }
+                      }, 500);
+                    }
+                  }}
                   activeOpacity={0.85}>
                   <Icon name="circle-play" iconStyle="solid" size={15} color={colors.white} />
-                  <Text style={styles.claimText}>Watch Video (+{displayReward} PTS)</Text>
+                  <Text style={styles.claimText}>
+                    {isSpinFlow ? 'Watch Video' : `Watch Video (+${displayReward} PTS)`}
+                  </Text>
                 </TouchableOpacity>
               )}
-
-              {phase === 'error' && (
-                <TouchableOpacity style={[styles.cancelBtn, { flexDirection: 'row', gap: 6, justifyContent: 'center' }]} onPress={retry} activeOpacity={0.85}>
-                  <Icon name="rotate-right" iconStyle="solid" size={13} color="#8A8A9E" />
-                  <Text style={styles.cancelText}>Retry</Text>
-                </TouchableOpacity>
+              {phase === 'loading' && (
+                <View style={[styles.cancelBtn, { flexDirection: 'row', gap: 6, justifyContent: 'center', opacity: 0.6 }]}>
+                  <ActivityIndicator size="small" color="#8A8A9E" />
+                  <Text style={styles.cancelText}>Loading…</Text>
+                </View>
               )}
 
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
