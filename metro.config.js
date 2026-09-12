@@ -1,13 +1,9 @@
 const path = require('path');
-const { getDefaultConfig } = require('@expo/metro-config');
-
-const base = getDefaultConfig(__dirname);
+const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
 const config = {
-  ...base,
-  watchFolders: [path.resolve(__dirname, 'packages'), ...(base.watchFolders || [])],
+  watchFolders: [path.resolve(__dirname, 'packages')],
   resolver: {
-    ...base.resolver,
     nodeModulesPaths: [path.resolve(__dirname, 'node_modules')],
     blockList: [
       /.*[/\\]android[/\\]build[/\\]\.*/,
@@ -19,7 +15,6 @@ const config = {
     ],
   },
   transformer: {
-    ...base.transformer,
     getTransformOptions: async () => ({
       transform: {
         experimentalImportSupport: false,
@@ -29,4 +24,4 @@ const config = {
   },
 };
 
-module.exports = config;
+module.exports = mergeConfig(getDefaultConfig(__dirname), config);
