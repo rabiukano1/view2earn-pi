@@ -75,3 +75,13 @@
 {"_e":"metro:instantiate","_t":1789246525755,"atlas":false,"workers":3,"host":null,"port":null}
 {"_e":"metro:bundling:started","_t":1789246527653,"id":"1","platform":"ios","environment":null,"entry":"index.js"}
 {"_e":"metro:bundling:done","_t":1789246608655,"id":"1","total":1185,"ms":81001.9039}
+{"_e":"root:init","_t":1789247253210,"format":"v0-jsonl","version":"57.0.22"}
+{"_e":"env:mode","_t":1789247256218,"nodeEnv":"production","babelEnv":"production","mode":"production"}
+{"_e":"env:load","_t":1789247256287,"mode":"production","files":["../..\\..\\.env.local"],"env":{"CONVEX_DEPLOYMENT":"dev:valuable-ostrich-597","CONVEX_SITE_URL":"https://valuable-ostrich-597.convex.site","CONVEX_URL":"https://valuable-ostrich-597.convex.cloud","PI_API_KEY":"10hkqag3s9jg3brbqrjacsonj2nrqh6wnii4erluel2frchefdqnheknmqwuwauk"}}
+{"_e":"devserver:start","_t":1789247256777,"mode":"production","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":true}
+{"_e":"metro:config","_t":1789247262065,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":true,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1789247264821,"atlas":false,"workers":3,"host":null,"port":null}
+{"_e":"metro:bundling:started","_t":1789247266718,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:started","_t":1789247266720,"id":"2","platform":"ios","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:done","_t":1789247318259,"id":"2","total":1185,"ms":51530.2774}
+{"_e":"metro:bundling:done","_t":1789247353538,"id":"1","total":1185,"ms":86810.4992}
