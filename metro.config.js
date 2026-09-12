@@ -1,23 +1,32 @@
 const path = require('path');
-const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const { getDefaultConfig: rnGetDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const { getDefaultConfig: expoGetDefaultConfig } = require('@expo/metro-config');
 
-// Monorepo: @view2earn/core is a workspace package symlinked into node_modules.
-// Watch packages/ so Metro bundles its source through the symlink, and pin the
-// root node_modules so its deps resolve.
+const expoBase = expoGetDefaultConfig(__dirname);
+const rnBase = rnGetDefaultConfig(__dirname);
+
+const defaultBlockList = [
+  /.*[/\\]android[/\\]build[/\\]\.*/,
+  /.*[/\\]\.react-native-.*[/\\]\.*/,
+  /.*[/\\]build[/\\]generated[/\\]\.*/,
+  /.*[/\\]\.next[/\\]\.*/,
+  /.*[/\\]apps[/\\][^/\\]+[/\\]\.next[/\\]\.*/,
+  /.*[/\\]apps[/\\][^/\\]+[/\\]out[/\\]\.*/,
+];
+
 const config = {
-  watchFolders: [path.resolve(__dirname, 'packages')],
+  ...expoBase,
+  ...rnBase,
+  watchFolders: [path.resolve(__dirname, 'packages'), ...(expoBase.watchFolders || [])],
   resolver: {
-    nodeModulesPaths: [path.resolve(__dirname, 'node_modules')],
-    blockList: [
-      /.*[/\\]android[/\\]build[/\\]\.*/,
-      /.*[/\\]\.react-native-.*[/\\]\.*/,
-      /.*[/\\]build[/\\]generated[/\\]\.*/,
-      /.*[/\\]\.next[/\\]\.*/,
-      /.*[/\\]apps[/\\][^/\\]+[/\\]\.next[/\\]\.*/,
-      /.*[/\\]apps[/\\][^/\\]+[/\\]out[/\\]\.*/,
-    ],
+    ...expoBase.resolver,
+    ...rnBase.resolver,
+    nodeModulesPaths: [path.resolve(__dirname, 'node_modules'), ...(expoBase.resolver?.nodeModulesPaths || [])],
+    blockList: [...defaultBlockList],
   },
   transformer: {
+    ...expoBase.transformer,
+    ...rnBase.transformer,
     getTransformOptions: async () => ({
       transform: {
         experimentalImportSupport: false,
@@ -25,6 +34,7 @@ const config = {
       },
     }),
   },
+  serializer: expoBase.serializer || rnBase.serializer,
 };
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), config);
+module.exports = config;

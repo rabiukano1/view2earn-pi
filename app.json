@@ -5,23 +5,23 @@
     "name": "View2Earn",
     "slug": "view2earn",
     "version": "1.0.1",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.1",
     "updates": {
-      "url": "https://u.expo.dev/b3efec20-c2b1-4bd1-8a4e-f868fc010a8d"
+      "url": "https://u.expo.dev/bf3aab4e-1913-4e19-bc26-e6f6c78d80fe"
     },
     "android": {
       "package": "com.view2earn"
     },
     "extra": {
       "eas": {
-        "projectId": "b3efec20-c2b1-4bd1-8a4e-f868fc010a8d"
+        "projectId": "bf3aab4e-1913-4e19-bc26-e6f6c78d80fe"
       }
     },
     "plugins": [
       "expo-updates"
-    ]
+    ],
+    "owner": "rabiukano",
+    "ios": {}
   },
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-5278018921408798~9302302185",
