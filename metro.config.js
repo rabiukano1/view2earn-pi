@@ -1,32 +1,20 @@
 const path = require('path');
-const { getDefaultConfig: rnGetDefaultConfig, mergeConfig } = require('@react-native/metro-config');
-const { getDefaultConfig: expoGetDefaultConfig } = require('@expo/metro-config');
-
-const expoBase = expoGetDefaultConfig(__dirname);
-const rnBase = rnGetDefaultConfig(__dirname);
-
-const defaultBlockList = [
-  /.*[/\\]android[/\\]build[/\\]\.*/,
-  /.*[/\\]\.react-native-.*[/\\]\.*/,
-  /.*[/\\]build[/\\]generated[/\\]\.*/,
-  /.*[/\\]\.next[/\\]\.*/,
-  /.*[/\\]apps[/\\][^/\\]+[/\\]\.next[/\\]\.*/,
-  /.*[/\\]apps[/\\][^/\\]+[/\\]out[/\\]\.*/,
-];
+const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
 
 const config = {
-  ...expoBase,
-  ...rnBase,
-  watchFolders: [path.resolve(__dirname, 'packages'), ...(expoBase.watchFolders || [])],
+  watchFolders: [path.resolve(__dirname, 'packages')],
   resolver: {
-    ...expoBase.resolver,
-    ...rnBase.resolver,
-    nodeModulesPaths: [path.resolve(__dirname, 'node_modules'), ...(expoBase.resolver?.nodeModulesPaths || [])],
-    blockList: [...defaultBlockList],
+    nodeModulesPaths: [path.resolve(__dirname, 'node_modules')],
+    blockList: [
+      /.*[/\\]android[/\\]build[/\\]\.*/,
+      /.*[/\\]\.react-native-.*[/\\]\.*/,
+      /.*[/\\]build[/\\]generated[/\\]\.*/,
+      /.*[/\\]\.next[/\\]\.*/,
+      /.*[/\\]apps[/\\][^/\\]+[/\\]\.next[/\\]\.*/,
+      /.*[/\\]apps[/\\][^/\\]+[/\\]out[/\\]\.*/,
+    ],
   },
   transformer: {
-    ...expoBase.transformer,
-    ...rnBase.transformer,
     getTransformOptions: async () => ({
       transform: {
         experimentalImportSupport: false,
@@ -34,7 +22,6 @@ const config = {
       },
     }),
   },
-  serializer: expoBase.serializer || rnBase.serializer,
 };
 
-module.exports = config;
+module.exports = mergeConfig(getDefaultConfig(__dirname), config);
