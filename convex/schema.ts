@@ -268,10 +268,22 @@ export default defineSchema({
 
   // Admin-configurable platform settings (key-value store, changeable from dashboard)
   platformSettings: defineTable({
-    key: v.string(),        // e.g. "platformSolanaAddress", "piproMintAddress"
+    key: v.string(),
     value: v.string(),
     updatedAt: v.number(),
   }).index("by_key", ["key"]),
+
+  // Per-user/per-level feature toggles. Overrides global platformSettings
+  // feature flags for specific users or user levels.
+  featureToggles: defineTable({
+    userId: v.optional(v.id("users")),
+    level: v.optional(v.number()),
+    featureKey: v.string(),
+    enabled: v.boolean(),
+    updatedAt: v.number(),
+  }).index("by_featureKey", ["featureKey"])
+    .index("by_userId_featureKey", ["userId", "featureKey"])
+    .index("by_level_featureKey", ["level", "featureKey"]),
 
   providers: defineTable({
     kind: v.union(v.literal("ADS"), v.literal("SURVEY"), v.literal("VAS")),
