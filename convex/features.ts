@@ -55,14 +55,18 @@ export const setFeatureToggle = mutation({
     }
 
     // Find existing override
-    const existing = await ctx.db
-      .query("featureToggles")
-      .withIndex("by_userId_featureKey", (q) =>
-        userId
-          ? q.eq("userId", userId).eq("featureKey", featureKey)
-          : q.eq("level", level!).eq("featureKey", featureKey)
-      )
-      .unique();
+    let existing;
+    if (userId !== undefined) {
+      existing = await ctx.db
+        .query("featureToggles")
+        .withIndex("by_userId_featureKey", (q) => q.eq("userId", userId).eq("featureKey", featureKey))
+        .unique();
+    } else {
+      existing = await ctx.db
+        .query("featureToggles")
+        .withIndex("by_level_featureKey", (q) => q.eq("level", level!).eq("featureKey", featureKey))
+        .unique();
+    }
 
     if (enabled === null || enabled === undefined) {
       // Remove the override
