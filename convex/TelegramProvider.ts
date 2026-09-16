@@ -12,12 +12,14 @@ export const TelegramProvider = ConvexCredentials({
   id: "telegram",
   authorize: async (credentials, ctx): Promise<{ userId: Id<"users"> }> => {
     const nonce = credentials.nonce as string | undefined;
-    if (!nonce) throw new Error("Missing nonce");
+    const initData = credentials.initData as string | undefined;
+    if (!nonce && !initData) throw new Error("Missing nonce");
 
-    const consumed: { telegramUserId: string; telegramName: string } = await ctx.runMutation(
-      internal.telegramAuth.consumeNonce,
-      { nonce },
-    );
+    // Two entry points, same account key: the bot deep-link nonce flow, or a
+    // Telegram Mini App session (initData verified against the bot token).
+    const consumed: { telegramUserId: string; telegramName: string } = initData
+      ? await ctx.runAction(internal.telegramAuth.verifyInitData, { initData })
+      : await ctx.runMutation(internal.telegramAuth.consumeNonce, { nonce: nonce! });
 
     const account = { id: `telegram:${consumed.telegramUserId}` };
     const existing = await retrieveAccount(ctx, { provider: "telegram", account }).catch(

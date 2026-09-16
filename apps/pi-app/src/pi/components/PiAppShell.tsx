@@ -6,10 +6,12 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { ReactNode } from "react";
 import { PiBottomNav } from "./PiBottomNav";
+import { useIsTelegram } from "@/pi/telegram";
 
 export function PiAppShell({ children }: { children: ReactNode }) {
   const me = useQuery(api.users.me);
   const { signOut } = useAuthActions();
+  const tg = useIsTelegram();
 
   return (
     <div className="pi-shell">
@@ -25,7 +27,7 @@ export function PiAppShell({ children }: { children: ReactNode }) {
               style={{ borderRadius: "12px", objectFit: "contain" }}
             />
             View2Earn
-            <span className="pi-brand-tag">PI</span>
+            <span className="pi-brand-tag">{tg ? "TG" : "PI"}</span>
           </Link>
           {me ? <span className="pi-username pi-nav-user">@{me.username}</span> : null}
           {me ? (

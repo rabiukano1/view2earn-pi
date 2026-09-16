@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalAction, internalMutation } from "./_generated/server";
 import { requireUser } from "./lib/guards";
 
 // "Sign in with Telegram" (deep-link bot flow). The client creates a nonce and
@@ -125,5 +125,48 @@ export const linkComplete = mutation({
     }
     await ctx.db.patch(userId, { telegramUserId });
     return { telegramUserId };
+  },
+});
+
+// Telegram Mini App sign-in: verifies `window.Telegram.WebApp.initData` per
+// https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+// (HMAC-SHA256 keyed by HMAC("WebAppData", BOT_TOKEN)). Web Crypto, no Node.
+const INIT_DATA_MAX_AGE_S = 24 * 60 * 60;
+
+export const verifyInitData = internalAction({
+  args: { initData: v.string() },
+  handler: async (_ctx, { initData }): Promise<{ telegramUserId: string; telegramName: string }> => {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) throw new Error("TELEGRAM_BOT_TOKEN not configured");
+    const params = new URLSearchParams(initData);
+    const hash = params.get("hash");
+    if (!hash) throw new Error("Missing Telegram hash");
+    params.delete("hash");
+    const checkString = [...params.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([k, val]) => `${k}=${val}`)
+      .join("\n");
+
+    const enc = new TextEncoder();
+    const hmac = async (key: BufferSource, data: string) => {
+      const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      return crypto.subtle.sign("HMAC", k, enc.encode(data));
+    };
+    const secret = await hmac(enc.encode("WebAppData") as BufferSource, token);
+    const sig = new Uint8Array(await hmac(secret, checkString));
+    const hex = [...sig].map((b) => b.toString(16).padStart(2, "0")).join("");
+    if (hex !== hash) throw new Error("Invalid Telegram signature");
+
+    const authDate = Number(params.get("auth_date") ?? 0);
+    if (!authDate || Date.now() / 1000 - authDate > INIT_DATA_MAX_AGE_S) {
+      throw new Error("Telegram session expired — reopen the app");
+    }
+    const user = JSON.parse(params.get("user") ?? "{}") as {
+      id?: number; first_name?: string; last_name?: string; username?: string;
+    };
+    if (!user.id) throw new Error("Missing Telegram user");
+    const telegramName =
+      user.username ?? [user.first_name, user.last_name].filter(Boolean).join(" ") ?? `tg_${user.id}`;
+    return { telegramUserId: String(user.id), telegramName };
   },
 });

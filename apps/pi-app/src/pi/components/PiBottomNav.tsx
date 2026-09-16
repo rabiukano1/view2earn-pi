@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsTelegram } from "@/pi/telegram";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useConvexAuth } from "@convex-dev/auth/react";
@@ -75,6 +77,7 @@ const TABS: { href: string; label: string; icon: React.ReactNode }[] = [
 ];
 
 export function PiBottomNav() {
+  const tg = useIsTelegram();
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useConvexAuth();
   if (isLoading || !isAuthenticated) return null;
@@ -82,7 +85,7 @@ export function PiBottomNav() {
   return (
     <nav className="pi-tabbar" aria-label="Primary">
       <div className="pi-tabbar-glow" aria-hidden />
-      {TABS.map((tab) => {
+      {TABS.filter((tab) => !(tg && tab.href === "/donate")).map((tab) => {
         const active =
           pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
         return (

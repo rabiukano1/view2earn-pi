@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsTelegram } from "@/pi/telegram";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -51,6 +53,7 @@ export default function PiWallet() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.users.me);
+  const tg = useIsTelegram();
   const userId = (me?._id ?? null) as Id<"users"> | null;
 
   const myWallet = useQuery(api.piWallet.getMyWallet, userId ? { userId } : "skip");
@@ -284,7 +287,8 @@ export default function PiWallet() {
           {balError ? <p className="pi-error">{balError}</p> : null}
         </section>
 
-        {/* Direct Payout to Pi Wallet */}
+        {/* Direct Payout to Pi Wallet (Pi Browser only) */}
+        {!tg && (<>
         <section className="pi-card pi-card-glass">
           <div className="pi-card-head">
             <h2>Direct Payout to Pi Wallet</h2>
@@ -415,6 +419,7 @@ export default function PiWallet() {
         </section>
 
         {/* Linked Wallet Details + QR */}
+        {/* (still inside the !isTelegram block) */}
         <section className="pi-card pi-card-glass">
           <div className="pi-card-head">
             <h2>Linked Pi Wallet</h2>
@@ -472,6 +477,7 @@ export default function PiWallet() {
             </p>
           )}
         </section>
+        </>)}
 
         {/* History: points activity + payouts */}
         <section className="pi-card pi-card-glass">

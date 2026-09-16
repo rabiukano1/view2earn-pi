@@ -1,5 +1,7 @@
 "use client";
 
+import { useIsTelegram } from "@/pi/telegram";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -23,6 +25,7 @@ export default function PiHome() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const me = useQuery(api.users.me);
+  const tg = useIsTelegram();
   const userId = (me?._id ?? null) as Id<"users"> | null;
 
   const balance = useQuery(api.points.balance, userId ? { userId } : "skip");
@@ -146,7 +149,7 @@ export default function PiHome() {
       items: [
         { href: "/learn", label: "Learn", emoji: "🎓", desc: "How to earn guide", tint: "#F59E0B" },
         { href: "/knowledge", label: "Pi Knowledge Center", emoji: "📚", desc: "Official-source Pi courses", tint: "#8B5CF6" },
-        { href: "/donate", label: "Donate π", emoji: "💜", desc: "Support the pool", tint: "#EC4899" },
+        ...(tg ? [] : [{ href: "/donate", label: "Donate π", emoji: "💜", desc: "Support the pool", tint: "#EC4899" }]),
       ],
     },
   ];

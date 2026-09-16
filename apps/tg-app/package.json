@@ -1,0 +1,14 @@
+{
+  "name": "@view2earn/tg-app",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Telegram Mini App. Same source as apps/pi-app, built with NEXT_PUBLIC_APP_MODE=telegram, deployed to its own Pages project (tg.view2earn.org).",
+  "scripts": {
+    "build": "node build.js",
+    "deploy": "node build.js && wrangler pages deploy --branch production",
+    "deploy:setup": "wrangler pages project create view2earn-tg --production-branch production"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
+  }
+}

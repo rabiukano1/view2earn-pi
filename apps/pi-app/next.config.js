@@ -3,6 +3,8 @@ const path = require("path");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: process.env.NODE_ENV === "production" ? "export" : undefined,
+  // apps/tg-app builds this same source with its own dist dir (see tg-app/build.js)
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   images: { unoptimized: true },
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },

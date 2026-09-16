@@ -11,6 +11,9 @@
 //       API before a reward is granted (never trust the client alone)
 "use client";
 
+import { isTelegram } from "@/pi/telegram";
+import { adsgramConfigured, showAdsgramInterstitial, showAdsgramRewarded } from "@/pi/adsgram";
+
 type PiUser = { uid: string; username?: string; wallet_address?: string };
 export type PiAuthResult = {
   accessToken: string;
@@ -280,7 +283,9 @@ export async function isPiAdsSupported(
 }
 
 export type PiRewardedAdResult =
-  | { supported: true; rewarded: true; adId: string; reason?: string }
+  // adId is present for Pi Ad Network ads (verified server-side); Telegram
+  // (Adsgram) rewards carry no adId and rely on the server-side caps.
+  | { supported: true; rewarded: true; adId?: string; reason?: string }
   | { supported: true; rewarded: false; reason: string; adId?: undefined }
   | { supported: false; rewarded: false; reason: string; adId?: undefined };
 
@@ -290,6 +295,16 @@ export type PiRewardedAdResult =
 export async function showPiRewardedAd(
   sandbox = getPiSandbox(),
 ): Promise<PiRewardedAdResult> {
+  if (isTelegram()) {
+    if (!adsgramConfigured()) return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
+    try {
+      return (await showAdsgramRewarded())
+        ? { supported: true, rewarded: true }
+        : { supported: true, rewarded: false, reason: "AD_CLOSED" };
+    } catch {
+      return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
+    }
+  }
   try {
     const Pi = await initPi(sandbox);
     if (!Pi.Ads) {
@@ -341,6 +356,11 @@ let lastInterstitialAt = 0;
 
 export async function showPiInterstitial(sandbox = getPiSandbox()): Promise<void> {
   if (Date.now() - lastInterstitialAt < INTERSTITIAL_MIN_INTERVAL_MS) return;
+  if (isTelegram()) {
+    lastInterstitialAt = Date.now();
+    await showAdsgramInterstitial().catch(() => {});
+    return;
+  }
   try {
     const Pi = await initPi(sandbox);
     if (!Pi.Ads) return;

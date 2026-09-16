@@ -87,6 +87,7 @@ const PLATFORM_CONFIG: Record<string, { label: string; color: string }> = {
   telegram: { label: "Telegram", color: "#0088CC" },
   whatsapp: { label: "WhatsApp", color: "#25D366" },
   linkedin: { label: "LinkedIn", color: "#0A66C2" },
+  fireside: { label: "Fireside Forum (Pi)", color: "#F97316" },
 };
 
 const DEFAULT_ACTIONS: [string, string][] = [
@@ -100,6 +101,12 @@ const DEFAULT_ACTIONS: [string, string][] = [
 // Platform-specific multi-task actions. TikTok has no channels/groups, so its
 // bundle steps are Follow / Like / Comment / Watch only — no "Join Channel".
 const PLATFORM_ACTIONS: Record<string, [string, string][]> = {
+  fireside: [
+    ["FOLLOW", "Follow Channel"],
+    ["FLAME", "Flame (upvote) Post"],
+    ["COMMENT", "Comment"],
+    ["SHARE", "Share Post"],
+  ],
   facebook: [
     ["FOLLOW", "Follow"],
     ["LIKE", "Like"],

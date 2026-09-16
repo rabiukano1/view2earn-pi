@@ -5,6 +5,7 @@ import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import { PiIncompleteResumer } from "@/pi/components/PiIncompleteResumer";
 import type { ReactNode } from "react";
+import { useIsTelegram } from "@/pi/telegram";
 
 // The Pi web app is Pi-only (plan §2: "sidra-mobile contains ZERO Pi code" —
 // and the Pi web app contains ZERO Sidra/VINTA code). Non-Pi accounts are
@@ -13,6 +14,7 @@ export function PiEcosystemGate({ children }: { children: ReactNode }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const me = useQuery(api.users.me, isAuthenticated ? {} : "skip");
   const { signOut } = useAuthActions();
+  const tg = useIsTelegram();
 
   if (isLoading) {
     return <div className="pi-centered"><div className="pi-spinner" /></div>;
@@ -20,6 +22,9 @@ export function PiEcosystemGate({ children }: { children: ReactNode }) {
 
   // Not signed in yet — the /pi gate shows the Pi sign-in card.
   if (!isAuthenticated || !me) return <>{children}</>;
+
+  // Telegram Mini App sessions run the same UI on the Android/Sidra economy.
+  if (tg) return <>{children}</>;
 
   if (me.ecosystem !== "PI") {
     return (

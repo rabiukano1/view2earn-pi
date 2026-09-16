@@ -51,7 +51,7 @@ export default function FeaturesPage() {
     if (!selectedUser) return;
     setSaving(`${selectedUser}-${featureKey}`);
     try {
-      const nextValue = currentEnabled !== true ? true : null;
+      const nextValue = currentEnabled !== true ? true : undefined; // undefined = remove override
       await setFeatureToggle({ userId: selectedUser, featureKey, enabled: nextValue });
     } finally {
       setSaving(null);
@@ -62,7 +62,7 @@ export default function FeaturesPage() {
     if (selectedLevel === null) return;
     setSaving(`${selectedLevel}-${featureKey}`);
     try {
-      const nextValue = currentEnabled !== true ? true : null;
+      const nextValue = currentEnabled !== true ? true : undefined; // undefined = remove override
       await setFeatureToggle({ level: selectedLevel, featureKey, enabled: nextValue });
     } finally {
       setSaving(null);
