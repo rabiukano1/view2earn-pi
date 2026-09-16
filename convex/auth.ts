@@ -3,12 +3,14 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import { ResendOTP } from "./ResendOTP";
 import { TelegramProvider } from "./TelegramProvider";
 import { PiProvider } from "./PiProvider";
+import { WalletHandoffProvider } from "./WalletHandoffProvider";
 
 // Sign-in methods: email+password, email OTP (Resend), Telegram,
-// and Pi Network (Pi Browser, plan §7.1). Sidra KYC is added later.
+// Pi Network (Pi Browser, plan §7.1), and the wallet-app handoff
+// ("Sign in with View2Earn"). Sidra KYC is added later.
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [
-    Password({ 
+    Password({
       verify: ResendOTP,
       reset: ResendOTP,
       profile: (params) => {
@@ -18,10 +20,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         if (params.country) profile.country = params.country as string;
         return profile;
       }
-    }), 
-    ResendOTP, 
-    TelegramProvider, 
-    PiProvider
+    }),
+    ResendOTP,
+    TelegramProvider,
+    PiProvider,
+    WalletHandoffProvider
   ],
   // Long-lived mobile sessions: 90 days total duration, 30 days inactive duration.
   session: {

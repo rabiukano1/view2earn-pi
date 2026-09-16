@@ -3,6 +3,7 @@ import { query, mutation, internalMutation, internalQuery } from "./_generated/s
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { isEvmAddress, isSolanaAddress } from "@view2earn/core";
 import { lastBalance, appendLedger } from "./lib/ledger";
+import { readPointsPerSidra } from "./sidra";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -13,12 +14,13 @@ async function getOrCreateWalletDoc(ctx: any, userId: any) {
     .withIndex("by_user", (q: any) => q.eq("userId", userId))
     .unique();
   if (existing) return existing;
+  // SIDRA is never a stored balance (see sidra.ts) — deposits become points
+  // and withdrawals are funded from points. VINTA is a platform token.
   const id = await ctx.db.insert("wallets", {
     userId,
     pointsBalance: 0,
     piproBalance: 0,
     vintaBalance: 100,
-    sidraBalance: 10,
   });
   return await ctx.db.get(id);
 }
@@ -81,7 +83,6 @@ export const getOrCreateWallet = query({
       pointsBalance,
       piproBalance: existing?.piproBalance ?? 0,
       vintaBalance: existing?.vintaBalance ?? 100,
-      sidraBalance: existing?.sidraBalance ?? 10,
       economy,
     };
   },
@@ -268,7 +269,9 @@ export const setPayoutWallet = mutation({
     if (evm !== undefined) {
       const e = evm.trim();
       if (e && !isEvmAddress(e)) throw new Error("That doesn't look like a valid EVM address");
-      patch.payoutEvm = e;
+      // Stored lowercase: the Sidra deposit scanner matches senders against
+      // this via an index, and on-chain addresses are case-insensitive.
+      patch.payoutEvm = e.toLowerCase();
     }
     if (solana !== undefined) {
       const s = solana.trim();
@@ -372,7 +375,12 @@ export const getPlatformAddressInternal = internalQuery({
 
 // ─── Withdrawal Engine ──────────────────────────────────────────────────────
 
-/** User withdrawal request for VINTA token, PIPRO token, or Sidra coin */
+/**
+ * Withdrawal request. VINTA and PIPRO are stored balances and withdraw 1:1.
+ * SIDRA is never stored: `amount` is the SIDRA to pay out, and the points to
+ * cover it (amount × pointsPerSidra, at this instant's rate) are debited right
+ * here in the same step — there is no way to hold SIDRA in the wallet.
+ */
 export const requestWithdrawal = mutation({
   args: {
     userId: v.id("users"),
@@ -381,7 +389,7 @@ export const requestWithdrawal = mutation({
     destinationAddress: v.string(),
   },
   handler: async (ctx, { userId, asset, amount, destinationAddress }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
     const addr = destinationAddress.trim();
@@ -400,6 +408,10 @@ export const requestWithdrawal = mutation({
 
     const wallet = await getOrCreateWalletDoc(ctx, userId);
 
+    let pointsDebited = 0;
+    let pointsPerSidra: number | undefined;
+    let pointsAfter = wallet.pointsBalance;
+
     if (asset === "VINTA") {
       const bal = wallet.vintaBalance ?? 100;
       if (bal < amount) throw new Error(`Insufficient VINTA token balance. Available: ${bal.toFixed(2)} VINTA`);
@@ -409,9 +421,25 @@ export const requestWithdrawal = mutation({
       if (bal < amount) throw new Error(`Insufficient PIPRO token balance. Available: ${bal.toFixed(4)} PIPRO`);
       await ctx.db.patch(wallet._id, { piproBalance: bal - amount });
     } else if (asset === "SIDRA") {
-      const bal = wallet.sidraBalance ?? 10;
-      if (bal < amount) throw new Error(`Insufficient Sidra coin balance. Available: ${bal.toFixed(2)} SIDRA`);
-      await ctx.db.patch(wallet._id, { sidraBalance: bal - amount });
+      pointsPerSidra = await readPointsPerSidra(ctx);
+      if (pointsPerSidra <= 0) throw new Error("SIDRA withdrawals aren't available right now. Please try again later.");
+      pointsDebited = Math.ceil(amount * pointsPerSidra);
+      const available = await lastBalance(ctx, userId, economy);
+      if (available < pointsDebited) {
+        throw new Error(
+          `Insufficient points. ${amount} SIDRA costs ${pointsDebited} PTS at the current rate; you have ${available} PTS.`,
+        );
+      }
+      // Ledger is the source of truth for points; this throws if it would go negative.
+      await appendLedger(ctx, userId, economy, -pointsDebited, "SIDRA_WITHDRAWAL", addr);
+      pointsAfter =
+        economy === "pi-browser"
+          ? (wallet.piBrowserPointsBalance ?? 0) - pointsDebited
+          : wallet.pointsBalance - pointsDebited;
+      await ctx.db.patch(
+        wallet._id,
+        economy === "pi-browser" ? { piBrowserPointsBalance: pointsAfter } : { pointsBalance: pointsAfter },
+      );
     }
 
     const withdrawalId = await ctx.db.insert("withdrawals", {
@@ -420,20 +448,24 @@ export const requestWithdrawal = mutation({
       amount,
       destinationAddress: addr,
       status: "pending",
+      ...(asset === "SIDRA" ? { pointsDebited, pointsPerSidra } : {}),
       createdAt: Date.now(),
     });
 
     await ctx.db.insert("walletTransactions", {
       userId,
       type: `withdraw_${asset.toLowerCase()}`,
-      pointsDelta: 0,
+      pointsDelta: asset === "SIDRA" ? -pointsDebited : 0,
       piproDelta: asset === "PIPRO" ? -amount : 0,
-      pointsBalanceAfter: wallet.pointsBalance,
+      pointsBalanceAfter: pointsAfter,
       piproBalanceAfter: asset === "PIPRO" ? (wallet.piproBalance - amount) : wallet.piproBalance,
-      note: `Requested withdrawal of ${amount} ${asset} to ${addr.slice(0, 6)}…${addr.slice(-4)}`,
+      note:
+        asset === "SIDRA"
+          ? `Withdraw ${amount} SIDRA to ${addr.slice(0, 6)}…${addr.slice(-4)} (−${pointsDebited} PTS at 1 SIDRA = ${pointsPerSidra} PTS)`
+          : `Requested withdrawal of ${amount} ${asset} to ${addr.slice(0, 6)}…${addr.slice(-4)}`,
     });
 
-    return { withdrawalId, status: "pending" };
+    return { withdrawalId, status: "pending", pointsDebited };
   },
 });
 

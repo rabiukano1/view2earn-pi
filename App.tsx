@@ -128,6 +128,7 @@ const linking: LinkingOptions<RootStackParamList> = {
       Stats: 'stats',
       Donate: 'donate',
       LiveTV: 'live-tv',
+      WalletAuth: 'wallet-auth/:nonce',
     },
   },
 };

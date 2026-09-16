@@ -15,7 +15,6 @@ export type ActivityId =
   | "spin"
   | "tasks"
   | "learn"
-  | "surveys"
   | "quiz"
   | "box"
   | "combo";
@@ -24,7 +23,6 @@ export type ActivityCategory =
   | "DAILY"
   | "EARN"
   | "LEARN"
-  | "SURVEYS"
   | "GAMES"
   | "BONUSES";
 
@@ -131,7 +129,6 @@ const CANONICAL_ORDER: ActivityId[] = [
   "spin",
   "tasks",
   "learn",
-  "surveys",
   "quiz",
 ];
 
@@ -306,32 +303,6 @@ function learnActivity(data: ActivitiesHubData): Activity {
   };
 }
 
-function surveysActivity(data: ActivitiesHubData): Activity {
-  const s = data.surveys;
-  const none = s.available === 0;
-  return {
-    id: "surveys",
-    category: "SURVEYS",
-    title: "Surveys",
-    subtitle: "Complete available surveys",
-    icon: "clipboard-list",
-    tint: "#F97316",
-    status: none ? (s.doneToday ? "completed" : "locked") : "available",
-    statusLabel: none
-      ? s.doneToday
-        ? "Done for today"
-        : "No surveys right now"
-      : `${s.available} survey${s.available === 1 ? "" : "s"} available`,
-    progress: s.doneToday ? 1 : 0,
-    progressLabel: s.doneToday ? "Completed today" : "Varies by offer",
-    rewardLabel: "Earn per survey",
-    rewardPoints: s.available > 0 ? null : 0,
-    buttonLabel: "Take survey",
-    route: "Surveys",
-    doneToday: s.doneToday,
-  };
-}
-
 function quizActivity(data: ActivitiesHubData): Activity {
   const done = data.quiz.doneToday;
   const maxPts = 5 * data.rewardConfig.quizCorrectPoints;
@@ -438,7 +409,6 @@ export function buildActivities(data: ActivitiesHubData): Activity[] {
     spinActivity(data),
     tasksActivity(data),
     learnActivity(data),
-    surveysActivity(data),
     quizActivity(data),
   ];
   const canonical = new Map(CANONICAL_ORDER.map((id, i) => [id, i]));

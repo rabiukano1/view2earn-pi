@@ -280,7 +280,7 @@ export async function isPiAdsSupported(
 }
 
 export type PiRewardedAdResult =
-  | { supported: true; rewarded: true; adId?: string; reason?: string }
+  | { supported: true; rewarded: true; adId: string; reason?: string }
   | { supported: true; rewarded: false; reason: string; adId?: undefined }
   | { supported: false; rewarded: false; reason: string; adId?: undefined };
 
@@ -314,7 +314,11 @@ export async function showPiRewardedAd(
     const resultStr = String(shown?.result || "").toUpperCase();
 
     if (resultStr === "AD_REWARDED" || resultStr === "REWARDED") {
-      return { supported: true, rewarded: true, adId: (shown as any)?.adId };
+      const adId = (shown as any)?.adId as string | undefined;
+      // Pi docs: adId is omitted until the app is approved for the Dev Ad
+      // Network, and rewards must never be granted without verifying it.
+      if (!adId) return { supported: true, rewarded: false, reason: "AD_UNVERIFIED" };
+      return { supported: true, rewarded: true, adId };
     }
     if (resultStr === "AD_CLOSED") {
       return { supported: true, rewarded: false, reason: "AD_CLOSED" };
@@ -326,6 +330,29 @@ export async function showPiRewardedAd(
       rewarded: false,
       reason: e instanceof Error ? e.message : "AD_ERROR",
     };
+  }
+}
+
+// Interstitial at natural transition points (quiz graded, spin claimed…).
+// Fire-and-forget: never blocks the flow, never throws. Same 30s spacing
+// as the Android interstitialService so users aren't hammered.
+const INTERSTITIAL_MIN_INTERVAL_MS = 30_000;
+let lastInterstitialAt = 0;
+
+export async function showPiInterstitial(sandbox = getPiSandbox()): Promise<void> {
+  if (Date.now() - lastInterstitialAt < INTERSTITIAL_MIN_INTERVAL_MS) return;
+  try {
+    const Pi = await initPi(sandbox);
+    if (!Pi.Ads) return;
+    const ready = await Pi.Ads.isAdReady("interstitial");
+    if (!ready.ready) {
+      const req = await Pi.Ads.requestAd("interstitial");
+      if (req.result !== "AD_LOADED") return;
+    }
+    lastInterstitialAt = Date.now();
+    await Pi.Ads.showAd("interstitial");
+  } catch {
+    // ads are optional — never surface errors to the user
   }
 }
 

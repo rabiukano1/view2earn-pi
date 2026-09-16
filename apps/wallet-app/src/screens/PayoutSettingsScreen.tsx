@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
+import { useAuthActions } from '@convex-dev/auth/react';
 import { api } from '../../../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
@@ -12,8 +13,16 @@ export default function PayoutSettingsScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
+  const { signOut } = useAuthActions();
   const me = useQuery(api.users.me);
   const setPayoutWallet = useMutation(api.wallets.setPayoutWallet);
+
+  const confirmSignOut = () => {
+    Alert.alert('Sign out', 'You can sign back in any time with the same account.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => { signOut().catch(() => {}); } },
+    ]);
+  };
   const [evmAddr, setEvmAddr] = useState('');
   const [solAddr, setSolAddr] = useState('');
   const [walletSeeded, setWalletSeeded] = useState(false);
@@ -50,11 +59,11 @@ export default function PayoutSettingsScreen() {
       <View style={[styles.scroll, { paddingBottom: insets.bottom + 40 }]}>
         <View style={[styles.card, dark && styles.cardDark]}>
           <Text style={styles.cardHint}>
-            Tokens earned are sent to your specified public wallet addresses. No private keys are stored.
+            Withdrawals are sent to these public addresses, and SIDRA you send to the platform is credited to the account whose Sidra address it came from. No private keys are stored.
           </Text>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>EVM Network (Ethereum / Polygon / SDA)</Text>
+            <Text style={styles.inputLabel}>Sidra Chain / EVM address (0x…)</Text>
             <View style={[styles.inputBox, dark && styles.inputBoxDark]}>
               <Icon name="ethereum" iconStyle="brand" size={16} color="#627EEA" />
               <TextInput
@@ -106,6 +115,17 @@ export default function PayoutSettingsScreen() {
             <Text style={styles.primaryActionText}>{saving ? 'Saving…' : 'Save Wallet Addresses'}</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.signOutBtn, dark && styles.signOutBtnDark]}
+          onPress={confirmSignOut}
+          activeOpacity={0.8}>
+          <Icon name="arrow-right-from-bracket" iconStyle="solid" size={14} color={colors.danger} />
+          <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
+        {me?.email ? (
+          <Text style={[styles.signedInAs, dark && styles.signedInAsDark]}>Signed in as {me.email}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -161,4 +181,20 @@ const styles = StyleSheet.create({
   msgText: { fontSize: 12, fontWeight: '700' },
   msgTextOk: { color: colors.success },
   msgTextErr: { color: colors.danger },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 13,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.dangerSoft,
+  },
+  signOutBtnDark: { backgroundColor: colors.surfaceDark, borderColor: '#3F1D1D' },
+  signOutText: { color: colors.danger, fontWeight: '800', fontSize: 14 },
+  signedInAs: { textAlign: 'center', fontSize: 11.5, color: colors.textFaint, marginTop: 10, fontWeight: '600' },
+  signedInAsDark: { color: '#71717A' },
 });

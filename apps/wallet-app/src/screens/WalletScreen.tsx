@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Clipboard,
   Image,
   Modal,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -13,16 +14,17 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { openTaskLink } from '../services/TaskLinkService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
-import { colors, radius, shadow } from '../theme';
+import { colors, getPalette, radius, shadow } from '../theme';
+import type { Palette } from '../theme';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
-import PageHeader from '../components/PageHeader';
 import Icon from '../components/Icon';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
@@ -30,20 +32,133 @@ type StackNav = NativeStackNavigationProp<RootStackParamList>;
 const PIPRO_MINT = '7hU4hrLtr2dxGDBy56HQo6NF2u19FA1k4rM8nJQ5ceFk';
 const PIPRO_LOGO = require('../assets/pipro_logo.png');
 const VINTA_LOGO = require('../assets/vinta_logo.png');
+const SIDRA_LOGO = require('../assets/sidra_logo.png');
 
-type AssetKey = 'POINTS' | 'VINTA' | 'PIPRO' | 'SIDRA';
+// Storable balances only. SIDRA is deliberately NOT one: deposits convert to
+// points and withdrawals are funded from points, both at the live rate, so the
+// wallet never holds an asset whose price users could time.
+type AssetKey = 'POINTS' | 'VINTA' | 'PIPRO';
 
-const ASSETS: Record<AssetKey, { label: string; code: string; color: string; icon?: string }> = {
-  POINTS: { label: 'Points Balance', code: 'PTS', color: '#FBBF24', icon: 'coins' },
-  VINTA: { label: 'VINTA Token', code: 'VINTA', color: '#FBBF24' },
-  PIPRO: { label: 'PIPRO Token', code: 'PIPRO', color: '#8B5CF6' },
-  SIDRA: { label: 'Sidra Coin', code: 'SIDRA', color: '#34D399', icon: 'shield-halved' },
+const ASSETS: Record<AssetKey, { label: string; code: string; color: string; icon?: string; sub: string }> = {
+  POINTS: { label: 'Points Balance', code: 'PTS', color: '#FBBF24', icon: 'coins', sub: 'Earned from tasks, quizzes & rewards' },
+  VINTA: { label: 'VINTA Token', code: 'VINTA', color: '#FBBF24', sub: 'Original platform currency' },
+  PIPRO: { label: 'PIPRO Token', code: 'PIPRO', color: '#8B5CF6', sub: 'Solana blockchain powered' },
 };
 
-const ASSET_ORDER: AssetKey[] = ['VINTA', 'PIPRO', 'SIDRA', 'POINTS'];
+const ASSET_ORDER: AssetKey[] = ['VINTA', 'PIPRO', 'POINTS'];
+
+function sidraLogo(size: number) {
+  return <Image source={SIDRA_LOGO} style={{ width: size, height: size }} resizeMode="contain" />;
+}
+
+// Shared chrome for the four bottom sheets. Kept at module level so its
+// identity is stable across renders — defining it inside the screen would
+// remount every TextInput (and drop the keyboard) on each keystroke.
+function Sheet({
+  visible,
+  onClose,
+  title,
+  icon,
+  children,
+  p,
+  bottomInset,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  p: Palette;
+  bottomInset: number;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.sheetOverlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: p.surface, paddingBottom: Math.max(bottomInset, 16) + 16 }]}>
+          <View style={[styles.grabber, { backgroundColor: p.border }]} />
+          <View style={styles.sheetHeader}>
+            <View style={styles.sheetTitleRow}>
+              {icon}
+              <Text style={[styles.sheetTitle, { color: p.text }]}>{title}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={[styles.sheetClose, { backgroundColor: p.surfaceAlt }]} hitSlop={8}>
+              <Icon name="xmark" iconStyle="solid" size={15} color={p.textMuted} />
+            </TouchableOpacity>
+          </View>
+          {children}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function Segment({
+  options,
+  value,
+  onChange,
+  p,
+}: {
+  options: { key: string; label: string; icon?: React.ReactNode }[];
+  value: string;
+  onChange: (key: string) => void;
+  p: Palette;
+}) {
+  return (
+    <View style={[styles.segment, { backgroundColor: p.surfaceAlt }]}>
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <TouchableOpacity
+            key={o.key}
+            style={[styles.segmentItem, on && { backgroundColor: p.surface, ...shadow.card }]}
+            onPress={() => onChange(o.key)}
+            activeOpacity={0.85}>
+            {o.icon}
+            <Text style={[styles.segmentText, { color: on ? p.text : p.textMuted }]}>{o.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function PrimaryButton({
+  label,
+  icon,
+  onPress,
+  loading,
+  disabled,
+  color = colors.primary,
+}: {
+  label: string;
+  icon: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  color?: string;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.primaryBtn, { backgroundColor: color }, (disabled || loading) && styles.btnDisabled]}
+      onPress={onPress}
+      disabled={disabled || loading}
+      activeOpacity={0.88}>
+      {loading ? (
+        <ActivityIndicator size="small" color="#FFF" />
+      ) : (
+        <>
+          <Icon name={icon} iconStyle="solid" size={15} color="#FFF" />
+          <Text style={styles.primaryBtnText}>{label}</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+}
 
 export default function WalletScreen() {
   const dark = useColorScheme() === 'dark';
+  const p = getPalette(dark);
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const stackNav = useNavigation<StackNav>();
@@ -52,12 +167,16 @@ export default function WalletScreen() {
   const wallet = useQuery(api.wallets.getOrCreateWallet, userId ? { userId } : 'skip');
   const rate = useQuery(api.wallets.getExchangeRate);
   const platformAddr = useQuery(api.wallets.getPlatformDepositAddress);
+  const platformSidraAddr = useQuery(api.sidra.getPlatformSidraAddress);
+  const sidraRate = useQuery(api.sidra.getSidraRate);
+  const me = useQuery(api.users.me, userId ? {} : 'skip');
   const recentTxs = useQuery(api.wallets.getWalletHistory, userId ? { userId, limit: 7 } : 'skip');
 
   // Mutations
   const swapPtsToPipro = useMutation(api.wallets.swapPointsToPipro);
   const swapPiproToPts = useMutation(api.wallets.swapPiproToPoints);
   const submitDeposit = useMutation(api.wallets.submitPiproDeposit);
+  const submitSidra = useMutation(api.sidra.submitSidraDeposit);
   const requestWithdrawalMutation = useMutation(api.wallets.requestWithdrawal);
 
   // Modal states
@@ -69,11 +188,14 @@ export default function WalletScreen() {
   const [swapAmount, setSwapAmount] = useState('');
   const [swapLoading, setSwapLoading] = useState(false);
 
+  const [depositAsset, setDepositAsset] = useState<'PIPRO' | 'SIDRA'>('PIPRO');
   const [depositMethod, setDepositMethod] = useState<'payNow' | 'manual'>('payNow');
   const [depositTxSig, setDepositTxSig] = useState('');
   const [depositFromAddr, setDepositFromAddr] = useState('');
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
+  const [sidraTxHash, setSidraTxHash] = useState('');
+  const [sidraLoading, setSidraLoading] = useState(false);
 
   // Withdrawal States
   const [withdrawAsset, setWithdrawAsset] = useState<'VINTA' | 'PIPRO' | 'SIDRA'>('VINTA');
@@ -84,11 +206,15 @@ export default function WalletScreen() {
   // Hero balance switcher
   const [activeAsset, setActiveAsset] = useState<AssetKey>('POINTS');
 
+  const pointsPerSidra = sidraRate?.pointsPerSidra ?? 0;
+
+  // For VINTA/PIPRO this is the stored balance. For SIDRA there is no balance:
+  // it's how much SIDRA the user's points can buy at the current rate.
   const getAvailableBalance = (asset: 'VINTA' | 'PIPRO' | 'SIDRA') => {
     if (!wallet) return 0;
     if (asset === 'VINTA') return wallet.vintaBalance ?? 100;
     if (asset === 'PIPRO') return wallet.piproBalance ?? 0;
-    if (asset === 'SIDRA') return wallet.sidraBalance ?? 10;
+    if (asset === 'SIDRA') return pointsPerSidra > 0 ? Math.floor((wallet.pointsBalance / pointsPerSidra) * 10000) / 10000 : 0;
     return 0;
   };
 
@@ -98,14 +224,37 @@ export default function WalletScreen() {
       case 'POINTS': return { display: wallet.pointsBalance.toLocaleString(), raw: wallet.pointsBalance };
       case 'VINTA': return { display: (wallet.vintaBalance ?? 100).toFixed(2), raw: wallet.vintaBalance ?? 100 };
       case 'PIPRO': return { display: (wallet.piproBalance ?? 0).toFixed(4), raw: wallet.piproBalance ?? 0 };
-      case 'SIDRA': return { display: (wallet.sidraBalance ?? 10).toFixed(2), raw: wallet.sidraBalance ?? 10 };
+    }
+  };
+
+  const withdrawSidraAmount = parseFloat(withdrawAmount) || 0;
+  const withdrawSidraPointsCost = Math.ceil(withdrawSidraAmount * pointsPerSidra);
+
+  const handleSidraDeposit = async () => {
+    if (!userId || !sidraTxHash.trim()) {
+      Alert.alert('Error', 'Paste the transaction hash of your SIDRA transfer');
+      return;
+    }
+    setSidraLoading(true);
+    try {
+      await submitSidra({ userId, txHash: sidraTxHash.trim() });
+      Alert.alert(
+        'Deposit Submitted',
+        "We're verifying it on Sidra Chain now. Your SIDRA balance updates automatically once the transaction is confirmed — usually within a minute or two.",
+      );
+      setSidraTxHash('');
+      setDepositModal(false);
+    } catch (e: any) {
+      Alert.alert('Error', e.message?.replace('[CONVEX] ', '') ?? String(e));
+    } finally {
+      setSidraLoading(false);
     }
   };
 
   const renderAssetLogo = (key: AssetKey, size: number, radiusStyle?: object) => {
     if (key === 'VINTA') {
       return (
-        <Image source={VINTA_LOGO} style={[{ width: size, height: size }, radiusStyle]} resizeMode="cover" />
+        <Image source={VINTA_LOGO} style={[{ width: size, height: size, borderRadius: size / 2 }, radiusStyle]} resizeMode="cover" />
       );
     }
     if (key === 'PIPRO') {
@@ -121,7 +270,7 @@ export default function WalletScreen() {
           borderRadius: size / 2,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: ASSETS[key].color + '22',
+          backgroundColor: ASSETS[key].color + '26',
         }, radiusStyle]}>
         <Icon name={ASSETS[key].icon!} iconStyle="solid" size={size * 0.42} color={ASSETS[key].color} />
       </View>
@@ -134,9 +283,18 @@ export default function WalletScreen() {
       Alert.alert('Error', 'Enter a valid amount and destination address');
       return;
     }
+    if (withdrawAsset === 'SIDRA' && pointsPerSidra <= 0) {
+      Alert.alert('Not available', "SIDRA withdrawals aren't available right now. Please try again later.");
+      return;
+    }
     const avail = getAvailableBalance(withdrawAsset);
     if (numAmount > avail) {
-      Alert.alert('Insufficient Balance', `You only have ${avail} ${withdrawAsset} available.`);
+      Alert.alert(
+        'Insufficient Balance',
+        withdrawAsset === 'SIDRA'
+          ? `${numAmount} SIDRA costs ${Math.ceil(numAmount * pointsPerSidra)} PTS at the current rate. Your points cover up to ${avail} SIDRA.`
+          : `You only have ${avail} ${withdrawAsset} available.`,
+      );
       return;
     }
     setWithdrawLoading(true);
@@ -149,7 +307,9 @@ export default function WalletScreen() {
       });
       Alert.alert(
         'Withdrawal Request Submitted!',
-        `Your request to withdraw ${numAmount} ${withdrawAsset} to ${withdrawDestAddr.trim().slice(0, 8)}… has been submitted and is processing.`,
+        withdrawAsset === 'SIDRA'
+          ? `${Math.ceil(numAmount * pointsPerSidra)} PTS were converted at today's rate. ${numAmount} SIDRA will be sent to ${withdrawDestAddr.trim().slice(0, 8)}… once processed.`
+          : `Your request to withdraw ${numAmount} ${withdrawAsset} to ${withdrawDestAddr.trim().slice(0, 8)}… has been submitted and is processing.`,
       );
       setWithdrawAmount('');
       setWithdrawDestAddr('');
@@ -278,6 +438,10 @@ export default function WalletScreen() {
       case 'swap_points_to_pipro': return { icon: 'arrow-right-arrow-left', color: '#8B5CF6', isPipro: true };
       case 'swap_pipro_to_points': return { icon: 'arrow-right-arrow-left', color: '#3B82F6', isPipro: true };
       case 'deposit_pipro': return { icon: 'arrow-down', color: colors.success, isPipro: true };
+      case 'deposit_sidra': return { icon: 'arrow-down', color: '#34D399', isPipro: false };
+      case 'withdraw_sidra': return { icon: 'arrow-up-from-bracket', color: '#34D399', isPipro: false };
+      case 'withdraw_pipro': return { icon: 'arrow-up-from-bracket', color: '#8B5CF6', isPipro: true };
+      case 'withdraw_vinta': return { icon: 'arrow-up-from-bracket', color: '#FBBF24', isPipro: false };
       case 'earn_points': return { icon: 'plus', color: colors.success, isPipro: false };
       case 'deduct_points': return { icon: 'minus', color: colors.danger, isPipro: false };
       case 'admin_adjust': return { icon: 'shield-halved', color: colors.warn, isPipro: false };
@@ -294,218 +458,211 @@ export default function WalletScreen() {
   const active = ASSETS[activeAsset];
   const activeBalance = getAssetBalance(activeAsset);
 
+  const topInset =
+    Platform.OS === 'android'
+      ? Math.max(insets.top, StatusBar.currentHeight ?? 0)
+      : insets.top;
+
+  const inputStyle = [styles.input, { backgroundColor: p.surfaceAlt, color: p.text }];
+  const labelStyle = [styles.fieldLabel, { color: p.textMuted }];
+
+  const quickActions = [
+    { key: 'withdraw', label: 'Withdraw', icon: 'arrow-up-from-bracket', onPress: () => setWithdrawModal(true) },
+    { key: 'swap', label: 'Swap', icon: 'arrow-right-arrow-left', onPress: () => { setSwapDir('pts_to_pipro'); setSwapModal(true); } },
+    { key: 'deposit', label: 'Deposit', icon: 'arrow-down', onPress: () => setDepositModal(true) },
+    { key: 'data', label: 'Buy Data', icon: 'mobile-screen-button', onPress: () => setVasModal(true) },
+  ];
+
+  const sheetProps = { p, bottomInset: insets.bottom };
+
   return (
-    <View style={[styles.container, dark && styles.containerDark]}>
-      <PageHeader title="App Wallet" subtitle="Manage your Points & Tokens" />
+    <View style={[styles.container, { backgroundColor: p.bg }]}>
+      <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: topInset + 12, paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}>
 
-        {/* ── Hero Gradient Card ── */}
-        <View style={styles.heroCard}>
+        {/* ── Title row ── */}
+        <View style={styles.titleRow}>
+          <View>
+            <Text style={[styles.title, { color: p.text }]}>Wallet</Text>
+            <Text style={[styles.titleSub, { color: p.textMuted }]}>Points & tokens in one place</Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.iconBtn, { backgroundColor: p.iconBtn }, !dark && shadow.card]}
+            onPress={() => stackNav.navigate('WalletHistory')}
+            activeOpacity={0.8}
+            accessibilityLabel="Transaction history">
+            <Icon name="clock-rotate-left" iconStyle="solid" size={16} color={p.text} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Hero balance card ── */}
+        <View style={styles.hero}>
           <View style={styles.heroGlow1} />
           <View style={styles.heroGlow2} />
 
-          <View style={styles.heroHeaderRow}>
-            {renderAssetLogo(activeAsset, 46, styles.heroLogo)}
-            <View style={styles.heroTitleCol}>
-              <Text style={styles.heroTitle}>{active.label}</Text>
-              <Text style={styles.heroSub}>View2Earn Wallet</Text>
+          <View style={styles.heroTop}>
+            <View style={styles.heroAssetRow}>
+              {renderAssetLogo(activeAsset, 32)}
+              <Text style={styles.heroAssetLabel}>{active.label}</Text>
             </View>
             {Boolean(rate) ? (
-              <View style={styles.heroRateBadge}>
-                <Text style={styles.heroRateText}>1 PIPRO = {pointsPerPipro.toLocaleString()} PTS</Text>
+              <View style={styles.rateChip}>
+                <Icon name="arrow-right-arrow-left" iconStyle="solid" size={9} color="#FBBF24" />
+                <Text style={styles.rateChipText}>1 PIPRO = {pointsPerPipro.toLocaleString()} PTS</Text>
               </View>
             ) : null}
           </View>
 
-          {/* Balance Switcher */}
-          <View style={styles.switcherRow}>
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceValue} numberOfLines={1} adjustsFontSizeToFit>
+              {activeBalance.display}
+            </Text>
+            <Text style={styles.balanceUnit}>{active.code}</Text>
+          </View>
+          {Boolean(activeAsset === 'POINTS' && pointsPerPipro > 0 && wallet) ? (
+            <Text style={styles.balanceHint}>
+              ≈ {(wallet!.pointsBalance / pointsPerPipro).toFixed(4)} PIPRO at current rate
+            </Text>
+          ) : (
+            <Text style={styles.balanceHint}>Available balance</Text>
+          )}
+
+          {/* Asset switcher */}
+          <View style={styles.switcher}>
             {(Object.keys(ASSETS) as AssetKey[]).map((key) => {
-              const isActive = key === activeAsset;
+              const on = key === activeAsset;
               return (
                 <TouchableOpacity
                   key={key}
-                  style={[styles.switcherItem, isActive && styles.switcherItemActive]}
+                  style={[styles.switcherItem, on && styles.switcherItemOn]}
                   onPress={() => setActiveAsset(key)}
                   activeOpacity={0.85}>
-                  <Text style={[styles.switcherText, isActive && styles.switcherTextActive]}>
-                    {ASSETS[key].code}
-                  </Text>
+                  <Text style={[styles.switcherText, on && styles.switcherTextOn]}>{ASSETS[key].code}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {/* Total Balance */}
-          <View style={styles.balanceRow}>
-            <Text style={styles.balanceLabel}>TOTAL {active.code} BALANCE</Text>
-            <View style={styles.balanceValRow}>
-              <Text style={styles.balanceValue}>{activeBalance.display}</Text>
-              <Text style={styles.balanceUnit}>{active.code}</Text>
-            </View>
-            {Boolean(activeAsset === 'POINTS' && pointsPerPipro > 0 && wallet) ? (
-              <Text style={styles.balanceHint}>
-                ≈ {(wallet!.pointsBalance / pointsPerPipro).toFixed(4)} PIPRO at current rate
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Activity Bar Chart */}
-          <View style={styles.chartCard}>
-            <View style={styles.chartTitleRow}>
-              <Icon name="chart-column" iconStyle="solid" size={13} color="#C4B5FD" />
-              <Text style={styles.chartTitle}>Recent Activity</Text>
+          {/* Sparkline */}
+          <View style={styles.chart}>
+            <View style={styles.chartHead}>
+              <Text style={styles.chartTitle}>Recent activity</Text>
+              <Text style={styles.chartMeta}>{chartBars.length ? `last ${chartBars.length}` : ''}</Text>
             </View>
             {chartBars.length === 0 ? (
-              <Text style={styles.chartEmpty}>No activity yet — start earning!</Text>
+              <Text style={styles.chartEmpty}>No activity yet — start earning</Text>
             ) : (
               <View style={styles.chartRow}>
                 {chartBars.map((bar, i) => {
-                  const h = Math.max(6, Math.round((bar.val / chartMax) * 44));
+                  const h = Math.max(6, Math.round((bar.val / chartMax) * 40));
                   return (
                     <View key={i} style={styles.chartCol}>
-                      <View
-                        style={[
-                          styles.chartBar,
-                          { height: h },
-                          bar.positive ? styles.chartBarPos : styles.chartBarNeg,
-                        ]}
-                      />
+                      <View style={[styles.chartBar, { height: h }, bar.positive ? styles.chartBarPos : styles.chartBarNeg]} />
                     </View>
                   );
                 })}
               </View>
             )}
           </View>
-
-          {/* Quick Action Buttons */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#EF4444' }]}
-              onPress={() => setWithdrawModal(true)}
-              activeOpacity={0.85}>
-              <Icon name="arrow-up-from-bracket" iconStyle="solid" size={14} color="#FFF" />
-              <Text style={styles.actionBtnText}>Withdraw</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#7C3AED' }]}
-              onPress={() => { setSwapDir('pts_to_pipro'); setSwapModal(true); }}
-              activeOpacity={0.85}>
-              <Icon name="arrow-right-arrow-left" iconStyle="solid" size={14} color="#FFF" />
-              <Text style={styles.actionBtnText}>Swap</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#059669' }]}
-              onPress={() => setDepositModal(true)}
-              activeOpacity={0.85}>
-              <Icon name="bolt" iconStyle="solid" size={14} color="#FFF" />
-              <Text style={styles.actionBtnText}>Deposit</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#D97706' }]}
-              onPress={() => setVasModal(true)}
-              activeOpacity={0.85}>
-              <Icon name="mobile" iconStyle="solid" size={14} color="#FFF" />
-              <Text style={styles.actionBtnText}>Buy Data</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {/* ── Your Assets (List Style) ── */}
-        <View style={[styles.glassCard, dark && styles.glassCardDark]}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionHeader}>
-              <Icon name="coins" iconStyle="solid" size={15} color={colors.primary} />
-              <Text style={[styles.sectionTitle, dark && styles.textLight]}>Your Assets</Text>
-            </View>
-          </View>
+        {/* ── Quick actions ── */}
+        <View style={styles.actions}>
+          {quickActions.map((a) => (
+            <TouchableOpacity key={a.key} style={styles.action} onPress={a.onPress} activeOpacity={0.8}>
+              <View style={[styles.actionCircle, { backgroundColor: p.primarySoft }]}>
+                <Icon name={a.icon} iconStyle="solid" size={20} color={dark ? '#C4B5FD' : colors.primaryDeep} />
+              </View>
+              <Text style={[styles.actionLabel, { color: p.text }]}>{a.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
+        {/* ── Assets ── */}
+        <View style={styles.sectionHead}>
+          <Text style={[styles.sectionTitle, { color: p.text }]}>Your assets</Text>
+        </View>
+        <View style={[styles.card, { backgroundColor: p.surface }, !dark && shadow.card]}>
           {!wallet ? (
-            <View style={styles.emptyCard}>
+            <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
             </View>
           ) : (
-            ASSET_ORDER.map((key) => {
+            ASSET_ORDER.map((key, i) => {
               const bal = getAssetBalance(key);
+              const on = key === activeAsset;
               return (
                 <TouchableOpacity
                   key={key}
-                  style={styles.assetRow}
+                  style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.border }]}
                   onPress={() => setActiveAsset(key)}
                   activeOpacity={0.7}>
-                  {renderAssetLogo(key, 40, styles.assetLogo)}
-                  <View style={styles.assetCol}>
-                    <Text style={[styles.assetName, dark && styles.textLight]}>{ASSETS[key].label}</Text>
-                    <Text style={styles.assetSub}>{key === 'VINTA' ? 'Original Platform Currency' : key === 'PIPRO' ? 'Solana Blockchain Powered' : key === 'SIDRA' ? 'Sidra Chain Coin' : 'Earn by watching ads & quizzes'}</Text>
+                  {renderAssetLogo(key, 42)}
+                  <View style={styles.rowBody}>
+                    <Text style={[styles.rowTitle, { color: p.text }]}>{ASSETS[key].label}</Text>
+                    <Text style={[styles.rowSub, { color: p.textMuted }]} numberOfLines={1}>{ASSETS[key].sub}</Text>
                   </View>
-                  <View style={styles.assetRight}>
-                    <Text style={[styles.assetValue, dark && styles.textLight]}>{bal.display}</Text>
-                    <Text style={styles.assetCode}>{ASSETS[key].code}</Text>
+                  <View style={styles.rowRight}>
+                    <Text style={[styles.rowValue, { color: p.text }]}>{bal.display}</Text>
+                    <Text style={[styles.rowCode, { color: on ? colors.primary : p.textFaint }]}>{ASSETS[key].code}</Text>
                   </View>
-                  <Icon name="chevron-right" iconStyle="solid" size={13} color={colors.textFaint} />
                 </TouchableOpacity>
               );
             })
           )}
         </View>
 
-        {/* ── Recent Transactions ── */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.sectionHeaderRow}>
-            <View style={styles.sectionHeader}>
-              <Icon name="clock-rotate-left" iconStyle="solid" size={15} color={colors.primary} />
-              <Text style={[styles.sectionTitle, dark && styles.textLight]}>Recent Transactions</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.viewAllBtn}
-              onPress={() => stackNav.navigate('WalletHistory')}
-              activeOpacity={0.7}>
-              <Text style={styles.viewAllText}>View All</Text>
-              <Icon name="chevron-right" iconStyle="solid" size={11} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-
+        {/* ── Transactions ── */}
+        <View style={styles.sectionHead}>
+          <Text style={[styles.sectionTitle, { color: p.text }]}>Recent transactions</Text>
+          <TouchableOpacity onPress={() => stackNav.navigate('WalletHistory')} activeOpacity={0.7} hitSlop={8}>
+            <Text style={styles.link}>View all</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.card, { backgroundColor: p.surface }, !dark && shadow.card]}>
           {!recentTxs ? (
-            <View style={[styles.emptyCard, dark && styles.cardDark]}>
+            <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color={colors.primary} />
             </View>
           ) : recentTxs.length === 0 ? (
-            <View style={[styles.emptyCard, dark && styles.cardDark]}>
-              <Icon name="inbox" iconStyle="solid" size={24} color={colors.textFaint} />
-              <Text style={styles.emptyText}>No wallet activity yet</Text>
+            <View style={styles.empty}>
+              <View style={[styles.emptyIcon, { backgroundColor: p.surfaceAlt }]}>
+                <Icon name="inbox" iconStyle="solid" size={20} color={p.textFaint} />
+              </View>
+              <Text style={[styles.emptyText, { color: p.textMuted }]}>No wallet activity yet</Text>
             </View>
           ) : (
-            recentTxs.map((tx) => {
+            recentTxs.map((tx, i) => {
               const meta = txTypeMeta(tx.type);
               return (
-                <View key={tx._id} style={[styles.txRow, dark && styles.cardDark]}>
+                <View
+                  key={tx._id}
+                  style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.border }]}>
                   {meta.isPipro ? (
-                    <Image source={PIPRO_LOGO} style={styles.txCoinLogo} resizeMode="contain" />
+                    <Image source={PIPRO_LOGO} style={styles.txLogo} resizeMode="contain" />
                   ) : (
-                    <View style={[styles.txIconBg, { backgroundColor: meta.color + '1E' }]}>
-                      <Icon name={meta.icon} iconStyle="solid" size={14} color={meta.color} />
+                    <View style={[styles.txIcon, { backgroundColor: meta.color + '1F' }]}>
+                      <Icon name={meta.icon} iconStyle="solid" size={15} color={meta.color} />
                     </View>
                   )}
-                  <View style={styles.txContent}>
-                    <Text style={[styles.txType, dark && styles.textLight]}>
+                  <View style={styles.rowBody}>
+                    <Text style={[styles.rowTitle, { color: p.text }]} numberOfLines={1}>
                       {tx.type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                     </Text>
-                    <Text style={styles.txNote} numberOfLines={1}>
-                      {tx.note ?? ''}
-                    </Text>
+                    {tx.note ? (
+                      <Text style={[styles.rowSub, { color: p.textMuted }]} numberOfLines={1}>{tx.note}</Text>
+                    ) : null}
                   </View>
-                  <View style={styles.txAmounts}>
+                  <View style={styles.rowRight}>
                     {tx.piproDelta !== 0 && (
-                      <Text style={[styles.txDelta, tx.piproDelta > 0 ? styles.deltaPos : styles.deltaNeg]}>
+                      <Text style={[styles.rowValue, tx.piproDelta > 0 ? styles.pos : styles.neg]}>
                         {tx.piproDelta > 0 ? '+' : ''}{tx.piproDelta.toFixed(4)} PIPRO
                       </Text>
                     )}
                     {tx.pointsDelta !== 0 && (
-                      <Text style={[styles.txDelta, tx.pointsDelta > 0 ? styles.deltaPos : styles.deltaNeg]}>
+                      <Text style={[styles.rowValue, tx.pointsDelta > 0 ? styles.pos : styles.neg]}>
                         {tx.pointsDelta > 0 ? '+' : ''}{tx.pointsDelta} PTS
                       </Text>
                     )}
@@ -516,1062 +673,700 @@ export default function WalletScreen() {
           )}
         </View>
 
-        {/* PIPRO Ecosystem Note */}
-        <View style={[styles.glassCard, dark && styles.glassCardDark]}>
-          <View style={styles.infoHeader}>
-            {renderAssetLogo('PIPRO', 30, styles.infoCoinIcon)}
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.infoTitle, dark && styles.textLight]}>PIPRO Token Ecosystem</Text>
-              <Text style={styles.infoSub}>Solana Blockchain Powered</Text>
-            </View>
+        {/* ── PIPRO note ── */}
+        <View style={[styles.infoCard, { backgroundColor: p.primarySoft }]}>
+          {renderAssetLogo('PIPRO', 34)}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.infoTitle, { color: dark ? '#E9D5FF' : colors.primaryDeep }]}>PIPRO token ecosystem</Text>
+            <Text style={[styles.infoText, { color: dark ? '#C4B5FD' : colors.primaryDeep }]}>
+              Swap earned points to PIPRO instantly, or deposit PIPRO from any Solana wallet.
+            </Text>
           </View>
-          <Text style={[styles.infoText, dark && styles.infoTextDark]}>
-            PIPRO is the native utility token of the View2Earn community on Solana. You can swap earned points to PIPRO instantly, or deposit PIPRO directly into your app wallet.
-          </Text>
         </View>
       </ScrollView>
 
-      {/* ─── Swap Modal ─── */}
-      <Modal visible={swapModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, dark && styles.modalCardDark]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Image source={PIPRO_LOGO} style={{ width: 28, height: 28 }} resizeMode="contain" />
-                <Text style={[styles.modalTitle, dark && styles.textLight]}>Instant Swap</Text>
-              </View>
-              <TouchableOpacity onPress={() => setSwapModal(false)}>
-                <Icon name="xmark" iconStyle="solid" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
+      {/* ─── Swap ─── */}
+      <Sheet
+        {...sheetProps}
+        visible={swapModal}
+        onClose={() => setSwapModal(false)}
+        title="Instant swap"
+        icon={<Image source={PIPRO_LOGO} style={styles.sheetIconImg} resizeMode="contain" />}>
+        <Segment
+          p={p}
+          value={swapDir}
+          onChange={(k) => { setSwapDir(k as typeof swapDir); setSwapAmount(''); }}
+          options={[
+            { key: 'pts_to_pipro', label: 'Points → PIPRO' },
+            { key: 'pipro_to_pts', label: 'PIPRO → Points' },
+          ]}
+        />
 
-            {/* Direction Tabs */}
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                style={[styles.tab, swapDir === 'pts_to_pipro' && styles.tabActive]}
-                onPress={() => { setSwapDir('pts_to_pipro'); setSwapAmount(''); }}>
-                <Text style={[styles.tabText, swapDir === 'pts_to_pipro' && styles.tabTextActive]}>
-                  Points → PIPRO
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, swapDir === 'pipro_to_pts' && styles.tabActive]}
-                onPress={() => { setSwapDir('pipro_to_pts'); setSwapAmount(''); }}>
-                <Text style={[styles.tabText, swapDir === 'pipro_to_pts' && styles.tabTextActive]}>
-                  PIPRO → Points
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.swapInputGroup}>
-              <Text style={styles.swapLabel}>
-                {swapDir === 'pts_to_pipro' ? 'Points to swap' : 'PIPRO to swap'}
-              </Text>
-              <TextInput
-                style={[styles.swapInput, dark && styles.swapInputDark]}
-                value={swapAmount}
-                onChangeText={setSwapAmount}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={colors.textFaint}
-              />
-            </View>
-
-            <View style={styles.swapReceiveRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                {swapDir === 'pts_to_pipro' ? (
-                  <Image source={PIPRO_LOGO} style={{ width: 20, height: 20 }} resizeMode="contain" />
-                ) : (
-                  <Icon name="coins" iconStyle="solid" size={16} color="#FBBF24" />
-                )}
-                <Text style={styles.swapReceiveLabel}>You receive:</Text>
-              </View>
-              <Text style={styles.swapReceiveValue}>
-                {swapReceive} {swapDir === 'pts_to_pipro' ? 'PIPRO' : 'PTS'}
-              </Text>
-            </View>
-
-            {Boolean(rate) ? (
-              <Text style={styles.swapRateHint}>
-                Current Rate: 1 PIPRO = {pointsPerPipro.toLocaleString()} PTS
-              </Text>
-            ) : null}
-
-            <TouchableOpacity
-              style={[styles.swapConfirmBtn, swapLoading && styles.btnDisabled]}
-              onPress={handleSwap}
-              disabled={swapLoading || swapNumericAmount <= 0}
-              activeOpacity={0.85}>
-              {swapLoading ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="arrow-right-arrow-left" iconStyle="solid" size={15} color="#FFF" />
-                  <Text style={styles.swapConfirmText}>Swap Now</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+        <Text style={labelStyle}>{swapDir === 'pts_to_pipro' ? 'Points to swap' : 'PIPRO to swap'}</Text>
+        <View style={[styles.amountBox, { backgroundColor: p.surfaceAlt }]}>
+          <TextInput
+            style={[styles.amountInput, { color: p.text }]}
+            value={swapAmount}
+            onChangeText={setSwapAmount}
+            keyboardType="numeric"
+            placeholder="0"
+            placeholderTextColor={p.textFaint}
+          />
+          <Text style={[styles.amountUnit, { color: p.textMuted }]}>{swapDir === 'pts_to_pipro' ? 'PTS' : 'PIPRO'}</Text>
         </View>
-      </Modal>
 
-      {/* ─── Deposit Modal ─── */}
-      <Modal visible={depositModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, dark && styles.modalCardDark]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Image source={PIPRO_LOGO} style={{ width: 32, height: 32 }} resizeMode="contain" />
-                <Text style={[styles.modalTitle, dark && styles.textLight]}>Deposit PIPRO</Text>
-              </View>
-              <TouchableOpacity onPress={() => setDepositModal(false)}>
-                <Icon name="xmark" iconStyle="solid" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Method Tabs */}
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                style={[styles.tab, depositMethod === 'payNow' && styles.tabActive]}
-                onPress={() => setDepositMethod('payNow')}>
-                <Text style={[styles.tabText, depositMethod === 'payNow' && styles.tabTextActive]}>
-                  ⚡ Pay Now
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, depositMethod === 'manual' && styles.tabActive]}
-                onPress={() => setDepositMethod('manual')}>
-                <Text style={[styles.tabText, depositMethod === 'manual' && styles.tabTextActive]}>
-                  📋 Manual
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {depositMethod === 'payNow' ? (
-              <View style={styles.depositSection}>
-                <Text style={styles.depositHint}>
-                  Enter the amount of PIPRO to deposit, then tap "Pay Now" to open your Solana wallet app (Phantom, Solflare, etc.).
-                </Text>
-                <TextInput
-                  style={[styles.swapInput, dark && styles.swapInputDark]}
-                  value={depositAmount}
-                  onChangeText={setDepositAmount}
-                  keyboardType="numeric"
-                  placeholder="Amount of PIPRO"
-                  placeholderTextColor={colors.textFaint}
-                />
-                <TouchableOpacity
-                  style={styles.payNowBtn}
-                  onPress={handlePayNow}
-                  activeOpacity={0.85}>
-                  <Image source={PIPRO_LOGO} style={{ width: 22, height: 22 }} resizeMode="contain" />
-                  <Text style={styles.payNowText}>Pay Now with Wallet</Text>
-                </TouchableOpacity>
-
-                <View style={styles.divider} />
-
-                <Text style={styles.depositLabel}>Paste transaction signature after payment:</Text>
-                <TextInput
-                  style={[styles.swapInput, dark && styles.swapInputDark]}
-                  value={depositTxSig}
-                  onChangeText={setDepositTxSig}
-                  placeholder="Transaction signature..."
-                  placeholderTextColor={colors.textFaint}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  style={[styles.submitDepositBtn, depositLoading && styles.btnDisabled]}
-                  onPress={handleManualDeposit}
-                  disabled={depositLoading}
-                  activeOpacity={0.85}>
-                  {depositLoading ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Icon name="paper-plane" iconStyle="solid" size={14} color="#FFF" />
-                      <Text style={styles.submitDepositText}>Submit for Verification</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+        <View style={styles.receiveRow}>
+          <View style={styles.receiveLeft}>
+            {swapDir === 'pts_to_pipro' ? (
+              <Image source={PIPRO_LOGO} style={{ width: 20, height: 20 }} resizeMode="contain" />
             ) : (
-              <View style={styles.depositSection}>
-                <Text style={styles.depositHint}>
-                  Send PIPRO tokens to the platform deposit address below. Then paste your transaction signature.
-                </Text>
-
-                {platformAddr ? (
-                  <TouchableOpacity
-                    style={[styles.addrCard, dark && styles.addrCardDark]}
-                    onPress={() => copyToClipboard(platformAddr)}
-                    activeOpacity={0.7}>
-                    <Text style={styles.addrLabel}>Platform Deposit Address (Solana):</Text>
-                    <Text style={[styles.addrValue, dark && styles.textLight]} numberOfLines={2}>
-                      {platformAddr}
-                    </Text>
-                    <View style={styles.copyRow}>
-                      <Icon name="copy" iconStyle="solid" size={12} color={colors.primary} />
-                      <Text style={styles.copyText}>Tap to copy address</Text>
-                    </View>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.warningBox}>
-                    <Icon name="triangle-exclamation" iconStyle="solid" size={14} color={colors.warn} />
-                    <Text style={styles.warningText}>
-                      Platform deposit address not configured. Contact admin.
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.divider} />
-
-                <Text style={styles.depositLabel}>Your Solana sender address (optional):</Text>
-                <TextInput
-                  style={[styles.swapInput, dark && styles.swapInputDark]}
-                  value={depositFromAddr}
-                  onChangeText={setDepositFromAddr}
-                  placeholder="Sender wallet address"
-                  placeholderTextColor={colors.textFaint}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-
-                <Text style={styles.depositLabel}>Transaction signature:</Text>
-                <TextInput
-                  style={[styles.swapInput, dark && styles.swapInputDark]}
-                  value={depositTxSig}
-                  onChangeText={setDepositTxSig}
-                  placeholder="Paste tx signature..."
-                  placeholderTextColor={colors.textFaint}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-
-                <TouchableOpacity
-                  style={[styles.submitDepositBtn, depositLoading && styles.btnDisabled]}
-                  onPress={handleManualDeposit}
-                  disabled={depositLoading}
-                  activeOpacity={0.85}>
-                  {depositLoading ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Icon name="paper-plane" iconStyle="solid" size={14} color="#FFF" />
-                      <Text style={styles.submitDepositText}>Submit for Verification</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+              <Icon name="coins" iconStyle="solid" size={16} color="#FBBF24" />
             )}
+            <Text style={styles.receiveLabel}>You receive</Text>
           </View>
+          <Text style={styles.receiveValue}>
+            {swapReceive} {swapDir === 'pts_to_pipro' ? 'PIPRO' : 'PTS'}
+          </Text>
         </View>
-      </Modal>
+        {Boolean(rate) ? (
+          <Text style={[styles.rateHint, { color: p.textFaint }]}>1 PIPRO = {pointsPerPipro.toLocaleString()} PTS</Text>
+        ) : null}
 
-      {/* ─── Buy Data & Airtime Modal ─── */}
-      <Modal visible={vasModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, dark && styles.modalCardDark, { maxHeight: '85%' }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Icon name="mobile-screen-button" iconStyle="solid" size={22} color={colors.primary} />
-                <Text style={[styles.modalTitle, dark && styles.textLight]}>Buy Data &amp; Airtime</Text>
-              </View>
-              <TouchableOpacity onPress={() => setVasModal(false)}>
-                <Icon name="xmark" iconStyle="solid" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
+        <PrimaryButton
+          label="Swap now"
+          icon="arrow-right-arrow-left"
+          onPress={handleSwap}
+          loading={swapLoading}
+          disabled={swapNumericAmount <= 0}
+        />
+      </Sheet>
 
-            {/* Payment Method Switcher */}
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                style={[styles.tab, vasPaymentMethod === 'PIPRO' && styles.tabActive]}
-                onPress={() => setVasPaymentMethod('PIPRO')}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Image source={PIPRO_LOGO} style={{ width: 16, height: 16 }} resizeMode="contain" />
-                  <Text style={[styles.tabText, vasPaymentMethod === 'PIPRO' && styles.tabTextActive]}>
-                    Pay with PIPRO
-                  </Text>
-                </View>
-              </TouchableOpacity>
+      {/* ─── Deposit ─── */}
+      <Sheet
+        {...sheetProps}
+        visible={depositModal}
+        onClose={() => setDepositModal(false)}
+        title={depositAsset === 'SIDRA' ? 'Deposit SIDRA' : 'Deposit PIPRO'}
+        icon={
+          depositAsset === 'SIDRA'
+            ? sidraLogo(26)
+            : <Image source={PIPRO_LOGO} style={styles.sheetIconImg} resizeMode="contain" />
+        }>
+        <Segment
+          p={p}
+          value={depositAsset}
+          onChange={(k) => setDepositAsset(k as typeof depositAsset)}
+          options={[
+            { key: 'PIPRO', label: 'PIPRO', icon: <Image source={PIPRO_LOGO} style={{ width: 16, height: 16 }} resizeMode="contain" /> },
+            { key: 'SIDRA', label: 'SIDRA', icon: sidraLogo(16) },
+          ]}
+        />
 
-              <TouchableOpacity
-                style={[styles.tab, vasPaymentMethod === 'POINTS' && styles.tabActive]}
-                onPress={() => setVasPaymentMethod('POINTS')}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Icon name="coins" iconStyle="solid" size={14} color="#FBBF24" />
-                  <Text style={[styles.tabText, vasPaymentMethod === 'POINTS' && styles.tabTextActive]}>
-                    Pay with Points
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 240, marginVertical: 10 }}>
-              <Text style={styles.depositLabel}>Select Bundle:</Text>
-              {!catalogItems ? (
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-              ) : catalogItems.length === 0 ? (
-                <Text style={[styles.depositHint, { textAlign: 'center', marginVertical: 10 }]}>
-                  No catalog bundles available.
+        {depositAsset === 'SIDRA' ? (
+          !me?.payoutEvm ? (
+            <>
+              <View style={[styles.availBox, { backgroundColor: p.primarySoft, alignItems: 'flex-start' }]}>
+                <Text style={[styles.rowTitle, { color: dark ? '#E9D5FF' : colors.primaryDeep }]}>Add your Sidra address first</Text>
+                <Text style={[styles.hint, { color: dark ? '#C4B5FD' : colors.primaryDeep, marginTop: 4, marginBottom: 0 }]}>
+                  Deposits are credited to the account whose registered address sent them. Save the Sidra Chain address you'll be sending from, then come back.
                 </Text>
-              ) : (
-                catalogItems.map((item) => {
-                  const selected = selectedCatalogId === item._id;
-                  const priceInPipro = item.coinPrice ?? ((item.pointsPrice ?? 500) / (pointsPerPipro || 1000));
-                  const displayCost =
-                    vasPaymentMethod === 'PIPRO'
-                      ? `${priceInPipro.toFixed(4)} PIPRO`
-                      : `${item.pointsPrice ?? 0} PTS`;
-
-                  return (
-                    <TouchableOpacity
-                      key={item._id}
-                      style={[
-                        styles.bundleItem,
-                        dark && styles.bundleItemDark,
-                        selected && styles.bundleItemSelected,
-                      ]}
-                      onPress={() => setSelectedCatalogId(item._id)}
-                      activeOpacity={0.8}>
-                      <View style={styles.bundleIconWrap}>
-                        <Icon
-                          name={item.itemType === 'DATA' ? 'wifi' : 'phone'}
-                          iconStyle="solid"
-                          size={16}
-                          color={colors.primary}
-                        />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.bundleName, dark && styles.textLight]}>{item.name}</Text>
-                        <Text style={styles.bundleType}>{item.itemType} Bundle</Text>
-                      </View>
-                      <View style={styles.bundleCostBadge}>
-                        <Text style={styles.bundleCostText}>{displayCost}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-
-            <View style={{ marginTop: 6 }}>
-              <Text style={styles.depositLabel}>Enter Target Phone Number:</Text>
-              <TextInput
-                style={[styles.swapInput, dark && styles.swapInputDark]}
-                value={vasPhone}
-                onChangeText={setVasPhone}
-                placeholder="e.g. +234 801 234 5678"
-                placeholderTextColor={colors.textFaint}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.swapConfirmBtn,
-                { backgroundColor: vasPaymentMethod === 'PIPRO' ? colors.primary : '#D97706', marginTop: 14 },
-                (vasLoading || !selectedCatalogId || !vasPhone.trim()) && styles.btnDisabled,
-              ]}
-              onPress={handleBuyVas}
-              disabled={vasLoading || !selectedCatalogId || !vasPhone.trim()}
-              activeOpacity={0.85}>
-              {vasLoading ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="bolt" iconStyle="solid" size={15} color="#FFF" />
-                  <Text style={styles.swapConfirmText}>Confirm Purchase</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ─── Modern Withdrawal Modal ─── */}
-      <Modal visible={withdrawModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, dark && styles.modalCardDark]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Icon name="arrow-up-from-bracket" iconStyle="solid" size={22} color={colors.primary} />
-                <Text style={[styles.modalTitle, dark && styles.textLight]}>Withdraw Funds</Text>
               </View>
-              <TouchableOpacity onPress={() => setWithdrawModal(false)}>
-                <Icon name="xmark" iconStyle="solid" size={20} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Asset Selection Tabs: VINTA, PIPRO, SIDRA */}
-            <View style={styles.tabRow}>
-              <TouchableOpacity
-                style={[styles.tab, withdrawAsset === 'VINTA' && styles.tabActive]}
-                onPress={() => setWithdrawAsset('VINTA')}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  {renderAssetLogo('VINTA', 18)}
-                  <Text style={[styles.tabText, withdrawAsset === 'VINTA' && styles.tabTextActive]}>
-                    VINTA
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tab, withdrawAsset === 'PIPRO' && styles.tabActive]}
-                onPress={() => setWithdrawAsset('PIPRO')}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Image source={PIPRO_LOGO} style={{ width: 18, height: 18 }} resizeMode="contain" />
-                  <Text style={[styles.tabText, withdrawAsset === 'PIPRO' && styles.tabTextActive]}>
-                    PIPRO
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tab, withdrawAsset === 'SIDRA' && styles.tabActive]}
-                onPress={() => setWithdrawAsset('SIDRA')}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Icon name="shield-halved" iconStyle="solid" size={14} color="#34D399" />
-                  <Text style={[styles.tabText, withdrawAsset === 'SIDRA' && styles.tabTextActive]}>
-                    SIDRA
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Available Balance Box */}
-            <View style={styles.withdrawAvailBox}>
-              <Text style={styles.withdrawAvailLabel}>AVAILABLE BALANCE:</Text>
-              <Text style={styles.withdrawAvailVal}>
-                {getAvailableBalance(withdrawAsset)} {withdrawAsset}
+              <PrimaryButton
+                label="Add Sidra address"
+                icon="gear"
+                onPress={() => { setDepositModal(false); stackNav.navigate('PayoutSettings'); }}
+              />
+            </>
+          ) : (
+            <>
+              <Text style={[styles.hint, { color: p.textMuted }]}>
+                Send SIDRA from your registered address to the platform address below. Once confirmed on Sidra Chain it's converted to points at that moment's rate
+                {pointsPerSidra > 0 ? ` (1 SIDRA = ${pointsPerSidra.toLocaleString()} PTS)` : ''} and added to your balance automatically — paste the transaction hash to speed it up.
               </Text>
-            </View>
 
-            {/* Amount Input with MAX Button */}
-            <View style={styles.swapInputGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <Text style={styles.swapLabel}>Amount to Withdraw</Text>
+              {platformSidraAddr ? (
                 <TouchableOpacity
-                  onPress={() => setWithdrawAmount(String(getAvailableBalance(withdrawAsset)))}>
-                  <Text style={styles.maxBtnText}>MAX</Text>
+                  style={[styles.addrCard, { backgroundColor: p.surfaceAlt }]}
+                  onPress={() => copyToClipboard(platformSidraAddr)}
+                  activeOpacity={0.7}>
+                  <Text style={[styles.addrLabel, { color: p.textMuted }]}>Platform deposit address · Sidra Chain</Text>
+                  <Text style={[styles.addrValue, { color: p.text }]} numberOfLines={2}>{platformSidraAddr}</Text>
+                  <View style={styles.copyRow}>
+                    <Icon name="copy" iconStyle="solid" size={12} color={colors.primary} />
+                    <Text style={styles.copyText}>Tap to copy</Text>
+                  </View>
                 </TouchableOpacity>
-              </View>
-              <TextInput
-                style={[styles.swapInput, dark && styles.swapInputDark]}
-                value={withdrawAmount}
-                onChangeText={setWithdrawAmount}
-                keyboardType="numeric"
-                placeholder="0.00"
-                placeholderTextColor={colors.textFaint}
-              />
-            </View>
+              ) : (
+                <View style={styles.warn}>
+                  <Icon name="triangle-exclamation" iconStyle="solid" size={14} color={colors.warn} />
+                  <Text style={styles.warnText}>Sidra deposits aren't available yet. Please check back soon.</Text>
+                </View>
+              )}
 
-            {/* Destination Address Input */}
-            <View style={styles.swapInputGroup}>
-              <Text style={styles.swapLabel}>
-                Destination Address ({withdrawAsset === 'PIPRO' ? 'Solana SPL' : withdrawAsset === 'SIDRA' ? 'Sidra Chain EVM' : 'EVM or Solana'}):
-              </Text>
+              <View style={[styles.addrCard, { backgroundColor: p.surfaceAlt }]}>
+                <Text style={[styles.addrLabel, { color: p.textMuted }]}>Send only from your registered address</Text>
+                <Text style={[styles.addrValue, { color: p.text }]} numberOfLines={1}>{me.payoutEvm}</Text>
+              </View>
+
+              <Text style={labelStyle}>Transaction hash (optional, speeds it up)</Text>
               <TextInput
-                style={[styles.swapInput, dark && styles.swapInputDark]}
-                value={withdrawDestAddr}
-                onChangeText={setWithdrawDestAddr}
-                placeholder={withdrawAsset === 'PIPRO' ? 'Solana address...' : '0x... or Solana address'}
-                placeholderTextColor={colors.textFaint}
+                style={inputStyle}
+                value={sidraTxHash}
+                onChangeText={setSidraTxHash}
+                placeholder="0x…"
+                placeholderTextColor={p.textFaint}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-            </View>
+              <PrimaryButton
+                label="Submit for verification"
+                icon="paper-plane"
+                onPress={handleSidraDeposit}
+                loading={sidraLoading}
+                disabled={!sidraTxHash.trim() || !platformSidraAddr}
+                color="#059669"
+              />
+            </>
+          )
+        ) : null}
 
-            <View style={styles.feeInfoRow}>
-              <Icon name="circle-info" iconStyle="solid" size={13} color={colors.textMuted} />
-              <Text style={styles.feeInfoText}>Network Fee: <Text style={{ color: colors.success, fontWeight: '800' }}>0.00 FREE</Text> (Platform Sponsored)</Text>
-            </View>
+        {depositAsset === 'PIPRO' ? (
+        <Segment
+          p={p}
+          value={depositMethod}
+          onChange={(k) => setDepositMethod(k as typeof depositMethod)}
+          options={[
+            { key: 'payNow', label: 'Pay now' },
+            { key: 'manual', label: 'Manual' },
+          ]}
+        />
+        ) : null}
 
-            <TouchableOpacity
-              style={[
-                styles.swapConfirmBtn,
-                (withdrawLoading || !withdrawAmount || !withdrawDestAddr.trim()) && styles.btnDisabled,
-              ]}
-              onPress={handleWithdrawal}
-              disabled={withdrawLoading || !withdrawAmount || !withdrawDestAddr.trim()}
-              activeOpacity={0.85}>
-              {withdrawLoading ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="paper-plane" iconStyle="solid" size={15} color="#FFF" />
-                  <Text style={styles.swapConfirmText}>Submit Withdrawal Request</Text>
-                </>
-              )}
-            </TouchableOpacity>
+        {depositAsset === 'PIPRO' && depositMethod === 'payNow' ? (
+          <>
+            <Text style={[styles.hint, { color: p.textMuted }]}>
+              Enter the amount, then open your Solana wallet (Phantom, Solflare…) to pay.
+            </Text>
+            <View style={[styles.amountBox, { backgroundColor: p.surfaceAlt }]}>
+              <TextInput
+                style={[styles.amountInput, { color: p.text }]}
+                value={depositAmount}
+                onChangeText={setDepositAmount}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={p.textFaint}
+              />
+              <Text style={[styles.amountUnit, { color: p.textMuted }]}>PIPRO</Text>
+            </View>
+            <PrimaryButton label="Pay with wallet" icon="wallet" onPress={handlePayNow} color="#D97706" />
+
+            <View style={[styles.divider, { backgroundColor: p.border }]} />
+
+            <Text style={labelStyle}>Transaction signature after payment</Text>
+            <TextInput
+              style={inputStyle}
+              value={depositTxSig}
+              onChangeText={setDepositTxSig}
+              placeholder="Paste signature…"
+              placeholderTextColor={p.textFaint}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <PrimaryButton
+              label="Submit for verification"
+              icon="paper-plane"
+              onPress={handleManualDeposit}
+              loading={depositLoading}
+              color={colors.success}
+            />
+          </>
+        ) : depositAsset === 'PIPRO' ? (
+          <>
+            <Text style={[styles.hint, { color: p.textMuted }]}>
+              Send PIPRO to the platform address below, then paste your transaction signature.
+            </Text>
+
+            {platformAddr ? (
+              <TouchableOpacity
+                style={[styles.addrCard, { backgroundColor: p.surfaceAlt }]}
+                onPress={() => copyToClipboard(platformAddr)}
+                activeOpacity={0.7}>
+                <Text style={[styles.addrLabel, { color: p.textMuted }]}>Platform deposit address · Solana</Text>
+                <Text style={[styles.addrValue, { color: p.text }]} numberOfLines={2}>{platformAddr}</Text>
+                <View style={styles.copyRow}>
+                  <Icon name="copy" iconStyle="solid" size={12} color={colors.primary} />
+                  <Text style={styles.copyText}>Tap to copy</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.warn}>
+                <Icon name="triangle-exclamation" iconStyle="solid" size={14} color={colors.warn} />
+                <Text style={styles.warnText}>Platform deposit address not configured. Contact admin.</Text>
+              </View>
+            )}
+
+            <Text style={labelStyle}>Your sender address (optional)</Text>
+            <TextInput
+              style={inputStyle}
+              value={depositFromAddr}
+              onChangeText={setDepositFromAddr}
+              placeholder="Sender wallet address"
+              placeholderTextColor={p.textFaint}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={labelStyle}>Transaction signature</Text>
+            <TextInput
+              style={inputStyle}
+              value={depositTxSig}
+              onChangeText={setDepositTxSig}
+              placeholder="Paste signature…"
+              placeholderTextColor={p.textFaint}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <PrimaryButton
+              label="Submit for verification"
+              icon="paper-plane"
+              onPress={handleManualDeposit}
+              loading={depositLoading}
+              color={colors.success}
+            />
+          </>
+        ) : null}
+      </Sheet>
+
+      {/* ─── Buy data & airtime ─── */}
+      <Sheet
+        {...sheetProps}
+        visible={vasModal}
+        onClose={() => setVasModal(false)}
+        title="Buy data & airtime"
+        icon={<Icon name="mobile-screen-button" iconStyle="solid" size={20} color={colors.primary} />}>
+        <Segment
+          p={p}
+          value={vasPaymentMethod}
+          onChange={(k) => setVasPaymentMethod(k as typeof vasPaymentMethod)}
+          options={[
+            { key: 'PIPRO', label: 'Pay with PIPRO', icon: <Image source={PIPRO_LOGO} style={{ width: 14, height: 14 }} resizeMode="contain" /> },
+            { key: 'POINTS', label: 'Pay with points', icon: <Icon name="coins" iconStyle="solid" size={12} color="#FBBF24" /> },
+          ]}
+        />
+
+        <Text style={labelStyle}>Select a bundle</Text>
+        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 230 }}>
+          {!catalogItems ? (
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+          ) : catalogItems.length === 0 ? (
+            <Text style={[styles.hint, { color: p.textMuted, textAlign: 'center' }]}>No bundles available.</Text>
+          ) : (
+            catalogItems.map((item) => {
+              const selected = selectedCatalogId === item._id;
+              const priceInPipro = item.coinPrice ?? ((item.pointsPrice ?? 500) / (pointsPerPipro || 1000));
+              const displayCost =
+                vasPaymentMethod === 'PIPRO'
+                  ? `${priceInPipro.toFixed(4)} PIPRO`
+                  : `${item.pointsPrice ?? 0} PTS`;
+              return (
+                <TouchableOpacity
+                  key={item._id}
+                  style={[
+                    styles.bundle,
+                    { backgroundColor: p.surfaceAlt, borderColor: selected ? colors.primary : 'transparent' },
+                  ]}
+                  onPress={() => setSelectedCatalogId(item._id)}
+                  activeOpacity={0.8}>
+                  <View style={[styles.bundleIcon, { backgroundColor: p.primarySoft }]}>
+                    <Icon name={item.itemType === 'DATA' ? 'wifi' : 'phone'} iconStyle="solid" size={15} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowTitle, { color: p.text }]}>{item.name}</Text>
+                    <Text style={[styles.rowSub, { color: p.textMuted }]}>{item.itemType} bundle</Text>
+                  </View>
+                  <View style={styles.costChip}>
+                    <Text style={styles.costText}>{displayCost}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </ScrollView>
+
+        <Text style={labelStyle}>Phone number</Text>
+        <TextInput
+          style={inputStyle}
+          value={vasPhone}
+          onChangeText={setVasPhone}
+          placeholder="e.g. +234 801 234 5678"
+          placeholderTextColor={p.textFaint}
+          keyboardType="phone-pad"
+        />
+        <PrimaryButton
+          label="Confirm purchase"
+          icon="bolt"
+          onPress={handleBuyVas}
+          loading={vasLoading}
+          disabled={!selectedCatalogId || !vasPhone.trim()}
+          color={vasPaymentMethod === 'PIPRO' ? colors.primary : '#D97706'}
+        />
+      </Sheet>
+
+      {/* ─── Withdraw ─── */}
+      <Sheet
+        {...sheetProps}
+        visible={withdrawModal}
+        onClose={() => setWithdrawModal(false)}
+        title="Withdraw"
+        icon={<Icon name="arrow-up-from-bracket" iconStyle="solid" size={20} color={colors.primary} />}>
+        <Segment
+          p={p}
+          value={withdrawAsset}
+          onChange={(k) => setWithdrawAsset(k as typeof withdrawAsset)}
+          options={[
+            { key: 'VINTA', label: 'VINTA', icon: renderAssetLogo('VINTA', 16) },
+            { key: 'PIPRO', label: 'PIPRO', icon: <Image source={PIPRO_LOGO} style={{ width: 16, height: 16 }} resizeMode="contain" /> },
+            { key: 'SIDRA', label: 'SIDRA', icon: sidraLogo(16) },
+          ]}
+        />
+
+        {withdrawAsset === 'SIDRA' ? (
+          <View style={[styles.availBox, { backgroundColor: p.primarySoft }]}>
+            <Text style={[styles.availLabel, { color: dark ? '#C4B5FD' : colors.primaryDeep }]}>Paid from your points</Text>
+            <Text style={[styles.availValue, { color: dark ? '#E9D5FF' : colors.primaryDeep }]}>
+              {wallet ? wallet.pointsBalance.toLocaleString() : '…'} PTS
+            </Text>
+            <Text style={[styles.hint, { color: dark ? '#C4B5FD' : colors.primaryDeep, marginTop: 6, marginBottom: 0, textAlign: 'center' }]}>
+              {pointsPerSidra > 0
+                ? `≈ ${getAvailableBalance('SIDRA')} SIDRA at today's rate · 1 SIDRA = ${pointsPerSidra.toLocaleString()} PTS`
+                : 'SIDRA withdrawals are not available right now.'}
+            </Text>
           </View>
+        ) : (
+          <View style={[styles.availBox, { backgroundColor: p.primarySoft }]}>
+            <Text style={[styles.availLabel, { color: dark ? '#C4B5FD' : colors.primaryDeep }]}>Available</Text>
+            <Text style={[styles.availValue, { color: dark ? '#E9D5FF' : colors.primaryDeep }]}>
+              {getAvailableBalance(withdrawAsset)} {withdrawAsset}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.labelRow}>
+          <Text style={labelStyle}>{withdrawAsset === 'SIDRA' ? 'SIDRA to receive' : 'Amount'}</Text>
+          <TouchableOpacity onPress={() => setWithdrawAmount(String(getAvailableBalance(withdrawAsset)))} hitSlop={8}>
+            <Text style={styles.maxBtn}>MAX</Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+        <View style={[styles.amountBox, { backgroundColor: p.surfaceAlt }]}>
+          <TextInput
+            style={[styles.amountInput, { color: p.text }]}
+            value={withdrawAmount}
+            onChangeText={setWithdrawAmount}
+            keyboardType="numeric"
+            placeholder="0.00"
+            placeholderTextColor={p.textFaint}
+          />
+          <Text style={[styles.amountUnit, { color: p.textMuted }]}>{withdrawAsset}</Text>
+        </View>
+        {withdrawAsset === 'SIDRA' && withdrawSidraAmount > 0 && pointsPerSidra > 0 ? (
+          <View style={styles.receiveRow}>
+            <View style={styles.receiveLeft}>
+              <Icon name="coins" iconStyle="solid" size={16} color="#FBBF24" />
+              <Text style={styles.receiveLabel}>Points converted now</Text>
+            </View>
+            <Text style={styles.receiveValue}>−{withdrawSidraPointsCost.toLocaleString()} PTS</Text>
+          </View>
+        ) : null}
+
+        <Text style={labelStyle}>
+          Destination · {withdrawAsset === 'PIPRO' ? 'Solana SPL' : withdrawAsset === 'SIDRA' ? 'Sidra Chain EVM' : 'EVM or Solana'}
+        </Text>
+        <TextInput
+          style={inputStyle}
+          value={withdrawDestAddr}
+          onChangeText={setWithdrawDestAddr}
+          placeholder={withdrawAsset === 'PIPRO' ? 'Solana address…' : '0x… or Solana address'}
+          placeholderTextColor={p.textFaint}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <View style={styles.feeRow}>
+          <Icon name="circle-info" iconStyle="solid" size={12} color={p.textFaint} />
+          <Text style={[styles.feeText, { color: p.textMuted }]}>
+            Network fee <Text style={{ color: colors.success, fontWeight: '800' }}>FREE</Text> · platform sponsored
+          </Text>
+        </View>
+
+        <PrimaryButton
+          label={withdrawAsset === 'SIDRA' ? 'Convert & withdraw' : 'Submit withdrawal'}
+          icon="paper-plane"
+          onPress={handleWithdrawal}
+          loading={withdrawLoading}
+          disabled={!withdrawAmount || !withdrawDestAddr.trim() || (withdrawAsset === 'SIDRA' && pointsPerSidra <= 0)}
+        />
+      </Sheet>
     </View>
   );
 }
 
-// ─── Modern Glass & Gradient Styles ─────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  containerDark: { backgroundColor: colors.bgDark },
-  scroll: { paddingHorizontal: 16, paddingTop: 16 },
+  container: { flex: 1 },
+  scroll: { paddingHorizontal: 18 },
 
-  // Hero Card (gradient simulated with radial glows over deep indigo)
-  heroCard: {
-    borderRadius: radius.xl,
-    padding: 20,
-    backgroundColor: '#1E1B4B',
+  // Title row
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  title: { fontSize: 30, fontWeight: '900', letterSpacing: -0.8 },
+  titleSub: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Hero
+  hero: {
+    borderRadius: 28,
+    padding: 22,
+    backgroundColor: '#1E1B4B',
     overflow: 'hidden',
+    marginBottom: 18,
     ...shadow.float,
   },
   heroGlow1: {
     position: 'absolute',
-    top: -70,
-    right: -50,
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    backgroundColor: 'rgba(139, 92, 246, 0.38)',
+    top: -90,
+    right: -60,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(139, 92, 246, 0.42)',
   },
   heroGlow2: {
     position: 'absolute',
-    bottom: -60,
-    left: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    bottom: -80,
+    left: -60,
+    width: 190,
+    height: 190,
+    borderRadius: 95,
     backgroundColor: 'rgba(16, 185, 129, 0.22)',
   },
-  heroLogo: {
-    borderRadius: 14,
-    marginRight: 12,
-  },
-  heroHeaderRow: {
+  heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    zIndex: 1,
+    justifyContent: 'space-between',
+    marginBottom: 18,
   },
-  heroTitleCol: { flex: 1 },
-  heroTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 0.4,
-  },
-  heroSub: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  heroRateBadge: {
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    paddingHorizontal: 10,
+  heroAssetRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroAssetLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 14, fontWeight: '700' },
+  rateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(251, 191, 36, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.32)',
+    paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(251, 191, 36, 0.4)',
   },
-  heroRateText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#FBBF24',
-  },
+  rateChipText: { color: '#FBBF24', fontSize: 10.5, fontWeight: '800' },
+  balanceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  balanceValue: { color: '#FFFFFF', fontSize: 46, fontWeight: '900', letterSpacing: -1.8, flexShrink: 1 },
+  balanceUnit: { color: '#FBBF24', fontSize: 16, fontWeight: '800' },
+  balanceHint: { color: 'rgba(255,255,255,0.55)', fontSize: 12.5, fontWeight: '600', marginTop: 4, marginBottom: 18 },
 
-  // Balance Switcher
-  switcherRow: {
+  switcher: {
     flexDirection: 'row',
-    gap: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.28)',
     borderRadius: radius.pill,
     padding: 4,
     marginBottom: 16,
-    zIndex: 1,
   },
-  switcherItem: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-  },
-  switcherItemActive: {
-    backgroundColor: '#7C3AED',
-    ...shadow.raised,
-  },
-  switcherText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: 'rgba(255, 255, 255, 0.55)',
-    letterSpacing: 0.5,
-  },
-  switcherTextActive: { color: '#FFFFFF' },
+  switcherItem: { flex: 1, paddingVertical: 9, borderRadius: radius.pill, alignItems: 'center' },
+  switcherItemOn: { backgroundColor: '#FFFFFF' },
+  switcherText: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: 0.4 },
+  switcherTextOn: { color: '#1E1B4B' },
 
-  // Total Balance
-  balanceRow: {
-    zIndex: 1,
-    marginBottom: 16,
-  },
-  balanceLabel: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: 'rgba(255, 255, 255, 0.6)',
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  balanceValRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
-  },
-  balanceValue: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -1,
-  },
-  balanceUnit: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FBBF24',
-  },
-  balanceHint: {
-    fontSize: 11.5,
-    color: 'rgba(255, 255, 255, 0.55)',
-    fontWeight: '600',
-    marginTop: 4,
-  },
-
-  // Activity Chart (glass)
-  chartCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  chart: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: radius.lg,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 18,
     padding: 14,
-    marginBottom: 16,
-    zIndex: 1,
   },
-  chartTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginBottom: 12,
-  },
-  chartTitle: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#E9D5FF',
-    letterSpacing: 0.3,
-  },
-  chartEmpty: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontWeight: '600',
-  },
-  chartRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 48,
-    gap: 8,
-  },
+  chartHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  chartTitle: { color: '#E9D5FF', fontSize: 12.5, fontWeight: '800' },
+  chartMeta: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700' },
+  chartEmpty: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '600' },
+  chartRow: { flexDirection: 'row', alignItems: 'flex-end', height: 44, gap: 8 },
   chartCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  chartBar: {
-    width: '100%',
-    maxWidth: 22,
-    borderRadius: 5,
-  },
+  chartBar: { width: '100%', maxWidth: 20, borderRadius: 6 },
   chartBarPos: { backgroundColor: '#34D399' },
   chartBarNeg: { backgroundColor: '#F87171' },
 
-  // Quick Actions
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    zIndex: 1,
-  },
-  actionBtn: {
-    flex: 1,
-    minWidth: '22%',
-    height: 42,
-    borderRadius: radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    paddingHorizontal: 4,
-    ...shadow.raised,
-  },
-  actionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
+  // Quick actions
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 22, paddingHorizontal: 4 },
+  action: { alignItems: 'center', gap: 8, width: 72 },
+  actionCircle: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
+  actionLabel: { fontSize: 12, fontWeight: '700' },
 
-  // Glass cards
-  glassCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: 18,
-    marginBottom: 16,
-    ...shadow.card,
-    borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.08)',
-  },
-  glassCardDark: {
-    backgroundColor: colors.surfaceDark,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  cardDark: { backgroundColor: colors.surfaceDark },
-
-  // Asset rows (list style)
-  assetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    padding: 12,
-    marginBottom: 8,
-    gap: 12,
-  },
-  assetLogo: {
-    borderRadius: 20,
-  },
-  assetCol: { flex: 1 },
-  assetName: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  assetSub: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  assetRight: { alignItems: 'flex-end' },
-  assetValue: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: colors.text,
-  },
-  assetCode: {
-    fontSize: 10.5,
-    color: colors.textFaint,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-
-  // Info Card
-  infoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  infoCoinIcon: {
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  infoSub: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  infoText: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    color: colors.textMuted,
-  },
-  infoTextDark: { color: '#B7B7C4' },
-
-  // Section
-  sectionContainer: { marginBottom: 20 },
-  sectionHeaderRow: {
+  // Sections & cards
+  sectionHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  sectionTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.2 },
+  link: { fontSize: 13, fontWeight: '700', color: colors.primary },
+  card: { borderRadius: 22, paddingHorizontal: 16, marginBottom: 20 },
+  loadingRow: { paddingVertical: 28, alignItems: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  rowBody: { flex: 1 },
+  rowTitle: { fontSize: 14.5, fontWeight: '700' },
+  rowSub: { fontSize: 11.5, fontWeight: '600', marginTop: 2 },
+  rowRight: { alignItems: 'flex-end' },
+  rowValue: { fontSize: 14.5, fontWeight: '800' },
+  rowCode: { fontSize: 10.5, fontWeight: '800', marginTop: 2, letterSpacing: 0.3 },
+  pos: { color: colors.success },
+  neg: { color: colors.danger },
+  txLogo: { width: 42, height: 42, borderRadius: 21 },
+  txIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  empty: { alignItems: 'center', paddingVertical: 28, gap: 10 },
+  emptyIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { fontSize: 13, fontWeight: '600' },
+
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 8,
+  },
+  infoTitle: { fontSize: 14, fontWeight: '800' },
+  infoText: { fontSize: 12.5, lineHeight: 18, marginTop: 3, opacity: 0.85 },
+
+  // Bottom sheet
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(8, 8, 20, 0.6)', justifyContent: 'flex-end' },
+  sheet: {
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    maxHeight: '88%',
+  },
+  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 14 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  sheetTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sheetTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  sheetIconImg: { width: 26, height: 26 },
+  sheetClose: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+
+  segment: { flexDirection: 'row', gap: 4, borderRadius: 14, padding: 4, marginBottom: 16 },
+  segmentItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 11,
+  },
+  segmentText: { fontSize: 12.5, fontWeight: '800' },
+
+  fieldLabel: { fontSize: 12.5, fontWeight: '700', marginBottom: 7, marginTop: 4 },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  input: {
+    height: 52,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    fontWeight: '600',
     marginBottom: 12,
   },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
-  textLight: { color: colors.textDark },
-  viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  viewAllText: { fontSize: 13, fontWeight: '700', color: colors.primary },
-
-  // Transaction rows
-  txRow: {
+  amountBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: 14,
-    marginBottom: 8,
-    ...shadow.card,
+    height: 64,
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    marginBottom: 12,
   },
-  txCoinLogo: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    marginRight: 12,
-  },
-  txIconBg: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  txContent: { flex: 1 },
-  txType: { fontSize: 13.5, fontWeight: '700', color: colors.text },
-  txNote: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  txAmounts: { alignItems: 'flex-end' },
-  txDelta: { fontSize: 13, fontWeight: '800' },
-  deltaPos: { color: colors.success },
-  deltaNeg: { color: colors.danger },
+  amountInput: { flex: 1, fontSize: 28, fontWeight: '900', letterSpacing: -0.8, padding: 0 },
+  amountUnit: { fontSize: 14, fontWeight: '800' },
+  maxBtn: { color: colors.primary, fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
 
-  // Empty state
-  emptyCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: 28,
-    alignItems: 'center',
-    gap: 8,
-    ...shadow.card,
-  },
-  emptyText: { fontSize: 13, color: colors.textMuted },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(10, 10, 20, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: 20,
-    paddingBottom: 36,
-    maxHeight: '85%',
-  },
-  modalCardDark: { backgroundColor: colors.surfaceDark },
-  modalHeader: {
+  receiveRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: { fontSize: 19, fontWeight: '900', color: colors.text },
-
-  // Tabs
-  tabRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 18,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.sm,
-    padding: 4,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: radius.sm - 2,
-    alignItems: 'center',
-  },
-  tabActive: { backgroundColor: colors.primary, ...shadow.raised },
-  tabText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
-  tabTextActive: { color: '#FFF' },
-
-  // Swap
-  swapInputGroup: { marginBottom: 14 },
-  swapLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted, marginBottom: 6 },
-  swapInput: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    height: 48,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 10,
-  },
-  swapInputDark: { backgroundColor: colors.surfaceAltDark, color: colors.textDark },
-  swapReceiveRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
     backgroundColor: colors.successSoft,
-    borderRadius: radius.md,
-    padding: 14,
-  },
-  swapReceiveLabel: { fontSize: 13, fontWeight: '700', color: colors.success },
-  swapReceiveValue: { fontSize: 17, fontWeight: '900', color: colors.success },
-  swapRateHint: { fontSize: 11, color: colors.textFaint, textAlign: 'center', marginBottom: 16, fontWeight: '600' },
-  swapConfirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    ...shadow.raised,
-  },
-  swapConfirmText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-  btnDisabled: { opacity: 0.5 },
-
-  // Deposit
-  depositSection: { marginTop: 4 },
-  depositHint: { fontSize: 13, lineHeight: 19, color: colors.textMuted, marginBottom: 14 },
-  depositLabel: { fontSize: 13, fontWeight: '700', color: colors.textMuted, marginBottom: 6, marginTop: 8 },
-  payNowBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    height: 50,
-    borderRadius: radius.md,
-    backgroundColor: '#D97706',
-    ...shadow.raised,
-  },
-  payNowText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-  submitDepositBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 50,
-    borderRadius: radius.md,
-    backgroundColor: colors.success,
-    ...shadow.raised,
-    marginTop: 12,
-  },
-  submitDepositText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: 16 },
-
-  // Address card
-  addrCard: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
+    borderRadius: 14,
     padding: 14,
     marginBottom: 8,
   },
-  addrCardDark: { backgroundColor: colors.surfaceAltDark },
-  addrLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted, marginBottom: 6 },
-  addrValue: { fontSize: 13, fontFamily: 'monospace', color: colors.text, marginBottom: 8 },
-  copyRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  copyText: { fontSize: 12, color: colors.primary, fontWeight: '700' },
+  receiveLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  receiveLabel: { fontSize: 13, fontWeight: '700', color: colors.success },
+  receiveValue: { fontSize: 17, fontWeight: '900', color: colors.success },
+  rateHint: { fontSize: 11.5, fontWeight: '600', textAlign: 'center', marginBottom: 14 },
+  hint: { fontSize: 13, lineHeight: 19, fontWeight: '500', marginBottom: 12 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 18 },
 
-  // Warning
-  warningBox: {
+  primaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 54,
+    borderRadius: 16,
+    marginTop: 4,
+    ...shadow.raised,
+  },
+  primaryBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  btnDisabled: { opacity: 0.45 },
+
+  addrCard: { borderRadius: 14, padding: 14, marginBottom: 12 },
+  addrLabel: { fontSize: 11, fontWeight: '700', marginBottom: 6 },
+  addrValue: { fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', marginBottom: 8 },
+  copyRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  copyText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  warn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#FEF3C7',
-    borderRadius: radius.md,
+    borderRadius: 14,
     padding: 12,
-    marginBottom: 8,
-  },
-  warningText: { fontSize: 12, color: '#92400E', flex: 1, fontWeight: '600' },
-
-  // Withdrawal Modal
-  withdrawAvailBox: {
-    backgroundColor: 'rgba(124, 58, 237, 0.12)',
-    borderRadius: radius.md,
-    padding: 12,
-    alignItems: 'center',
     marginBottom: 12,
   },
-  withdrawAvailLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: colors.primary,
-    marginBottom: 2,
-  },
-  withdrawAvailVal: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: colors.primary,
-  },
-  maxBtnText: {
-    color: colors.primary,
-    fontWeight: '900',
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
-  feeInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
-    marginBottom: 14,
-    paddingHorizontal: 4,
-  },
-  feeInfoText: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  warnText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#92400E' },
 
-  // Bundle Items
-  bundleItem: {
+  availBox: { borderRadius: 14, padding: 14, alignItems: 'center', marginBottom: 14 },
+  availLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
+  availValue: { fontSize: 20, fontWeight: '900', marginTop: 2 },
+  feeRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 14, paddingHorizontal: 2 },
+  feeText: { fontSize: 12, fontWeight: '600' },
+
+  bundle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: colors.surfaceAlt,
     borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 8,
   },
-  bundleItemDark: {
-    backgroundColor: colors.surfaceAltDark,
-    borderColor: colors.borderDark,
-  },
-  bundleItemSelected: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(124, 58, 237, 0.12)',
-  },
-  bundleIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bundleName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: colors.text,
-  },
-  bundleType: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
-  bundleCostBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-  },
-  bundleCostText: {
-    color: colors.success,
-    fontWeight: '800',
-    fontSize: 12,
-  },
+  bundleIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  costChip: { backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
+  costText: { color: colors.success, fontWeight: '800', fontSize: 12 },
 });

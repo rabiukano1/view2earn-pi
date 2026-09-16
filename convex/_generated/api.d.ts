@@ -11,6 +11,7 @@
 import type * as PiProvider from "../PiProvider.js";
 import type * as ResendOTP from "../ResendOTP.js";
 import type * as TelegramProvider from "../TelegramProvider.js";
+import type * as WalletHandoffProvider from "../WalletHandoffProvider.js";
 import type * as academy from "../academy.js";
 import type * as achievements from "../achievements.js";
 import type * as activities from "../activities.js";
@@ -59,6 +60,7 @@ import type * as referrals from "../referrals.js";
 import type * as reports from "../reports.js";
 import type * as rewards from "../rewards.js";
 import type * as rewardsConfig from "../rewardsConfig.js";
+import type * as sidra from "../sidra.js";
 import type * as sidraAuth from "../sidraAuth.js";
 import type * as spin from "../spin.js";
 import type * as streaks from "../streaks.js";
@@ -71,6 +73,7 @@ import type * as vas from "../vas.js";
 import type * as verifications from "../verifications.js";
 import type * as videos from "../videos.js";
 import type * as visitors from "../visitors.js";
+import type * as walletAuth from "../walletAuth.js";
 import type * as wallets from "../wallets.js";
 import type * as xp from "../xp.js";
 
@@ -84,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   PiProvider: typeof PiProvider;
   ResendOTP: typeof ResendOTP;
   TelegramProvider: typeof TelegramProvider;
+  WalletHandoffProvider: typeof WalletHandoffProvider;
   academy: typeof academy;
   achievements: typeof achievements;
   activities: typeof activities;
@@ -132,6 +136,7 @@ declare const fullApi: ApiFromModules<{
   reports: typeof reports;
   rewards: typeof rewards;
   rewardsConfig: typeof rewardsConfig;
+  sidra: typeof sidra;
   sidraAuth: typeof sidraAuth;
   spin: typeof spin;
   streaks: typeof streaks;
@@ -144,6 +149,7 @@ declare const fullApi: ApiFromModules<{
   verifications: typeof verifications;
   videos: typeof videos;
   visitors: typeof visitors;
+  walletAuth: typeof walletAuth;
   wallets: typeof wallets;
   xp: typeof xp;
 }>;

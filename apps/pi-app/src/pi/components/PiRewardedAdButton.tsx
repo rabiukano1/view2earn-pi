@@ -45,7 +45,8 @@ export function PiRewardedAdButton({
       if (isRewarded) {
         const newBal = await rewardForAd({
           userId,
-          provider: ad.adId,
+          provider: "pi_ad_network",
+          piAdId: ad.adId,
           adType: "pi_rewarded_ad",
           rewardAmount: pointsToAward,
         });
@@ -60,15 +61,7 @@ export function PiRewardedAdButton({
             : `Ad not completed: ${ad.reason}`,
         });
       } else {
-        // Fallback for dev / browser testing outside Pi Browser
-        const newBal = await rewardForAd({
-          userId,
-          provider: "pi_ad_simulated",
-          adType: "pi_rewarded_ad",
-          rewardAmount: pointsToAward,
-        });
-        setMsg({ ok: true, text: `🎉 Bonus +${pointsToAward} PTS credited!` });
-        if (onSuccess) onSuccess(newBal);
+        setMsg({ ok: false, text: "Ads need the latest Pi Browser. Please update and try again." });
       }
     } catch (e) {
       setMsg({

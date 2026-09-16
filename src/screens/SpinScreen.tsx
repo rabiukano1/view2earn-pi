@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -13,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery } from 'convex/react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
 import type { RootStackParamList } from '../navigation/types';
@@ -52,6 +53,20 @@ export default function SpinScreen() {
   const doSpin = useMutation(api.spin.spin);
   const claimSpin = useMutation(api.spin.claimSpin);
   const earnBonusSpin = useMutation(api.spin.earnBonusSpin);
+  const syncSpins = useMutation(api.spin.syncUnclaimedSpins);
+
+  // Server-authoritative balance from the latest mutation response. Shown
+  // immediately so the total never depends on subscription timing. Cleared
+  // only once the reactive query proves it caught up — never on a timer, so
+  // a slow/stale subscription can never drag the display back down.
+  const [liveBalance, setLiveBalance] = useState<number | null>(null);
+  const shownBalance = liveBalance ?? balance;
+  useEffect(() => {
+    if (liveBalance === null || balance === undefined) return;
+    if (balance >= liveBalance) {
+      setLiveBalance(null);
+    }
+  }, [liveBalance, balance]);
 
   const wheelAnimatedValue = useRef(new Animated.Value(0)).current;
   const currentRotationRef = useRef(0);
@@ -68,7 +83,6 @@ export default function SpinScreen() {
   const [pendingAdAction, setPendingAdAction] = useState<'spin' | 'bonusSpin' | 'doubleReward' | null>(null);
   const pendingResultAction = useRef<'spinAgain' | 'claimReward' | null>(null);
   const [doubleClaimed, setDoubleClaimed] = useState(false);
-  const [doubleUnlocked, setDoubleUnlocked] = useState(false);
 
   const popScale = useRef(new Animated.Value(0)).current;
   const shine = useRef(new Animated.Value(-1)).current;
@@ -87,6 +101,55 @@ export default function SpinScreen() {
       setRefillMs(status.nextRefillMs);
     }
   }, [status?.nextRefillMs]);
+
+  // Self-heal: instantly pay out any points orphaned by an older session
+  // (spin consumed, claim never landed). Runs on mount and every time the
+  // screen regains focus (e.g. back from Wallet after spending), best-effort.
+  // Missing on old backends — the catch below makes that a silent no-op.
+  const runSync = useCallback(() => {
+    if (!userId) return;
+    syncSpins({ userId })
+      .then((res) => {
+        if (res) {
+          if (typeof res.balanceAfter === 'number') setLiveBalance(res.balanceAfter);
+          if (res.recovered > 0) {
+            Alert.alert(
+              'Points recovered',
+              `${res.recovered} missing spin reward${res.recovered === 1 ? '' : 's'} ${res.recovered === 1 ? 'was' : 'were'} added to your balance.`,
+            );
+          }
+        }
+      })
+      .catch(() => {});
+  }, [userId, syncSpins]);
+
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (!userId || syncedRef.current) return;
+    syncedRef.current = true;
+    runSync();
+  }, [userId, runSync]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Refresh on every return to this screen (mount sync already covered
+      // the first focus; the call is idempotent so an extra run is harmless).
+      runSync();
+    }, [runSync]),
+  );
+
+  // Safety net: if the user leaves mid-result with an unclaimed pending spin,
+  // claim it (best-effort) so the reward is never lost. Base points are
+  // already credited server-side; this only finalizes the pending row.
+  useEffect(() => {
+    return () => {
+      const pending = pendingSpinRef.current;
+      if (pending && userId) {
+        claimSpin({ userId: userId as any, spinId: pending.spinId as any, doubled: false }).catch(() => {});
+        pendingSpinRef.current = null;
+      }
+    };
+  }, [userId, claimSpin]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -181,13 +244,14 @@ export default function SpinScreen() {
     return () => loop.stop();
   }, [disabled, shine]);
 
-  // Execute Exact Mathematical Rotation around center — points are only credited after wheel stops via claimSpin
+  // Execute Exact Mathematical Rotation around center — points credit when
+  // the user claims after the wheel stops (claimSpin); the header then shows
+  // the server-authoritative total instantly.
   const executeSpin = async (force = false) => {
     if (!userId || spinning || spinsRemaining <= 0 || (!force && result !== null)) return;
     setSpinning(true);
     setResult(null);
     setDoubleClaimed(false);
-    setDoubleUnlocked(false);
     pendingSpinRef.current = null;
     setHasPending(false);
     try {
@@ -217,10 +281,12 @@ export default function SpinScreen() {
         setSpinning(false);
         startCelebration();
       });
-    } catch {
+    } catch (e) {
       setSpinning(false);
       pendingSpinRef.current = null;
       setHasPending(false);
+      setLiveBalance(null);
+      Alert.alert('Spin failed', `Could not start the spin. ${e instanceof Error ? e.message : 'Please try again.'}`);
     }
   };
 
@@ -250,21 +316,36 @@ export default function SpinScreen() {
       console.log('[Spin] claimSpin result:', JSON.stringify(res));
       pendingSpinRef.current = null;
       setHasPending(false);
+      if (typeof res.balanceAfter === 'number') {
+        // New backend: same-transaction authoritative total.
+        setLiveBalance(res.balanceAfter);
+      } else if (typeof res.credited === 'number' && res.credited > 0) {
+        // Old backend (no balanceAfter field): accumulate the credited prize
+        // onto the displayed total so the header is exact immediately.
+        const add = res.credited;
+        setLiveBalance((prev) => (prev ?? balance ?? 0) + add);
+      }
       if (res.pts < 0) {
         // bonus spins credited
         setResult(null);
       } else if (doubled) {
         setDoubleClaimed(true);
-        setDoubleUnlocked(false);
         // Exact 2x of the wheel prize — never anything extra (e.g. 10 → 20).
         // Use the server-returned value as the single source of truth.
         setResult(res.credited);
       } else {
         setResult(res.credited);
       }
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       pendingSpinRef.current = null;
       setHasPending(false);
+      if (msg.includes('Already claimed')) {
+        // Points are already in the balance (credited by spin() or a
+        // recovery sweep) — treat as success, keep showing the prize.
+      } else {
+        Alert.alert('Claim failed', `Your reward was not lost — reopen this screen to recover it. ${msg}`);
+      }
     } finally {
       setClaiming(false);
     }
@@ -280,7 +361,12 @@ export default function SpinScreen() {
     }
   };
 
-  const handleTryAgain = () => {
+  const handleTryAgain = async () => {
+    // Never discard an unclaimed pending spin (e.g. a bonus-spin prize):
+    // finalize it first so the reward is never lost, then move on.
+    if (pendingSpinRef.current) {
+      await doClaim(false);
+    }
     if (spinsRemaining > 0) {
       showInterstitial().catch(() => { });
       setResult(null);
@@ -313,13 +399,21 @@ export default function SpinScreen() {
       if (action === 'bonusSpin') {
         await earnBonusSpin({ userId, amount: 1 });
       } else if (action === 'doubleReward') {
-        // Ad watched — unlock 2x reward so the user can review and click Claim button
-        setDoubleUnlocked(true);
+        // Ad watched — credit the 2x reward immediately. Do NOT wait for a
+        // second manual "Claim" tap: if the user backs out, backgrounds the
+        // app, or the screen unmounts before tapping it, the safety-net
+        // unmount effect below claims the pending spin as doubled:false and
+        // the user silently gets only the base (1x) reward even though they
+        // watched the ad for double — this was why "double reward" appeared
+        // broken. Claiming right here makes the credited amount always match
+        // what was promised on the button.
         pendingResultAction.current = null;
+        await doClaim(true);
       } else {
         await executeSpin();
       }
-    } catch {
+    } catch (e) {
+      Alert.alert('Reward failed', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setPendingAdAction(null);
     }
@@ -348,7 +442,7 @@ export default function SpinScreen() {
         <View style={styles.totalWinPill}>
           <Text style={styles.totalWinLabel}>Total win:</Text>
           <Icon name="coins" iconStyle="solid" size={13} color="#DDD6FE" />
-          <Text style={styles.totalWinValue}>{balance === undefined ? '70' : balance}</Text>
+          <Text style={styles.totalWinValue}>{shownBalance === undefined ? '70' : shownBalance}</Text>
         </View>
       </View>
 
@@ -444,41 +538,30 @@ export default function SpinScreen() {
             )}
             <Animated.Text style={[styles.resultPts, { transform: [{ scale: popScale }] }]}>
               {result > 0
-                ? doubleUnlocked
-                  ? `+${result * 2} PTS`
-                  : `+${result} PTS`
+                ? `+${result} PTS`
                 : result < 0
                 ? `+${Math.abs(result)} SPINS`
                 : 'TRY AGAIN'}
             </Animated.Text>
 
             {Boolean(result && result > 0 && !doubleClaimed && hasPending) ? (
-              doubleUnlocked ? (
-                <View style={styles.resultButtonGroup}>
-                  <TouchableOpacity style={styles.doubleBtn} onPress={() => doClaim(true)} activeOpacity={0.88} disabled={claiming}>
-                    {claiming ? (
-                      <ActivityIndicator size="small" color="#FFF" />
-                    ) : (
-                      <>
-                        <Icon name="check-double" iconStyle="solid" size={15} color="#FFF" />
-                        <Text style={styles.doubleBtnText}>{`CLAIM +${result * 2} PTS (2X REWARD)`}</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.resultButtonGroup}>
-                  <TouchableOpacity style={styles.doubleBtn} onPress={handleResultPress} activeOpacity={0.88} disabled={claiming}>
-                    <Icon name="circle-play" iconStyle="solid" size={15} color="#FFF" />
-                    <Text style={styles.doubleBtnText}>{`WATCH VIDEO TO DOUBLE (+${result} → +${result * 2})`}</Text>
-                  </TouchableOpacity>
+              <View style={styles.resultButtonGroup}>
+                <TouchableOpacity style={styles.doubleBtn} onPress={handleResultPress} activeOpacity={0.88} disabled={claiming}>
+                  {claiming ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Icon name="circle-play" iconStyle="solid" size={15} color="#FFF" />
+                      <Text style={styles.doubleBtnText}>{`WATCH VIDEO TO DOUBLE (+${result} → +${result * 2})`}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.directClaimBtn} onPress={handleDirectClaim} activeOpacity={0.85} disabled={claiming}>
-                    {claiming ? <ActivityIndicator size="small" color="#C4B5FD" /> : <Icon name="check" iconStyle="solid" size={13} color="#C4B5FD" />}
-                    <Text style={styles.directClaimText}>{claiming ? 'Claiming…' : `Claim +${result} PTS (Skip Ad)`}</Text>
-                  </TouchableOpacity>
-                </View>
-              )
+                <TouchableOpacity style={styles.directClaimBtn} onPress={handleDirectClaim} activeOpacity={0.85} disabled={claiming}>
+                  {claiming ? <ActivityIndicator size="small" color="#C4B5FD" /> : <Icon name="check" iconStyle="solid" size={13} color="#C4B5FD" />}
+                  <Text style={styles.directClaimText}>{claiming ? 'Claiming…' : `Claim +${result} PTS (Skip Ad)`}</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={styles.resultButtonGroup}>
                 <TouchableOpacity style={styles.doubleBtn} onPress={handleTryAgain} activeOpacity={0.88} disabled={claiming}>

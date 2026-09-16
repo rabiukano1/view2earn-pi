@@ -27,6 +27,49 @@ export const colors = {
   white: '#FFFFFF',
 } as const;
 
+// Resolved light/dark palette so screens can write `p.surface` once instead of
+// pairing every style with a `dark && styles.xDark` twin.
+export type Palette = {
+  isDark: boolean;
+  bg: string;
+  surface: string;
+  surfaceAlt: string;
+  border: string;
+  text: string;
+  textMuted: string;
+  textFaint: string;
+  primarySoft: string;
+  iconBtn: string;
+};
+
+export function getPalette(isDark: boolean): Palette {
+  return isDark
+    ? {
+        isDark,
+        bg: colors.bgDark,
+        surface: colors.surfaceDark,
+        surfaceAlt: colors.surfaceAltDark,
+        border: colors.borderDark,
+        text: colors.textDark,
+        textMuted: '#A1A1AA',
+        textFaint: '#71717A',
+        primarySoft: colors.primarySoftDark,
+        iconBtn: colors.surfaceAltDark,
+      }
+    : {
+        isDark,
+        bg: colors.bg,
+        surface: colors.surface,
+        surfaceAlt: colors.surfaceAlt,
+        border: colors.border,
+        text: colors.text,
+        textMuted: colors.textMuted,
+        textFaint: colors.textFaint,
+        primarySoft: colors.primarySoft,
+        iconBtn: colors.surface,
+      };
+}
+
 export const radius = {
   sm: 12,
   md: 16,

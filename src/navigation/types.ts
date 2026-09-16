@@ -32,5 +32,6 @@ export type RootStackParamList = {
   LiveTV: { channelId?: string } | undefined;
   WatchHub: undefined;
   LiveStreams: { kind: 'youtube' | 'other' } | undefined;
+  WalletAuth: { nonce: string };
 };
 

@@ -1,8 +1,12 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
+import type { Economy } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
-import { appendLedger } from "./lib/ledger";
+import { appendLedger, economyOfUser, lastBalance } from "./lib/ledger";
+import { consumeRewardedAd } from "./piAds";
 
 // Wheel sector order must match SvgSpinWheel TEN_WHEEL_PRIZES exactly
 const WHEEL_PTS = [10, 25, 50, -1, 100, 15, -2, -3, 0, 35] as const;
@@ -70,6 +74,51 @@ function resolveBalance(
   return { granted, used, bonus, remaining: Math.max(0, granted - used) + bonus };
 }
 
+// Shared points credit: ledger row + wallet balance mirror + wallet history.
+// Used by spin() (immediate base credit), claimSpin() (2x extra / legacy
+// rows) and the stale-pending recovery sweep so all paths stay identical.
+async function creditSpinPoints(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  economy: Economy,
+  pts: number,
+  reason: string,
+  refId: string,
+  note: string,
+): Promise<number> {
+  const balanceAfter = await appendLedger(ctx, userId, economy, pts, reason, refId);
+
+  const wallet = await ctx.db
+    .query("wallets")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+
+  if (wallet) {
+    const newPoints =
+      economy === "pi-browser"
+        ? (wallet.piBrowserPointsBalance ?? 0) + pts
+        : wallet.pointsBalance + pts;
+    await ctx.db.patch(
+      wallet._id,
+      economy === "pi-browser"
+        ? { piBrowserPointsBalance: newPoints }
+        : { pointsBalance: newPoints },
+    );
+
+      await ctx.db.insert("walletTransactions", {
+      userId,
+      type: "earn_points",
+      pointsDelta: pts,
+      piproDelta: 0,
+      pointsBalanceAfter: newPoints,
+      piproBalanceAfter: wallet.piproBalance,
+      note,
+    });
+  }
+
+  return balanceAfter;
+}
+
 export const getSpinStatus = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
@@ -121,7 +170,7 @@ export const getSpinStatus = query({
 export const spin = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUserAndEconomy(ctx, userId);
+    const { economy } = await requireUserAndEconomy(ctx, userId);
     const now = Date.now();
     const spinsPerWindow = await getNum(ctx, "spinsPerWindow");
     const windowHours = await getNum(ctx, "spinWindowHours") || 3;
@@ -161,14 +210,15 @@ export const spin = mutation({
     const prizeIndex = weightedPickIndex(wheelPrizes);
     const pts = wheelPrizes[prizeIndex].pts;
 
-    // Do NOT credit bonus-spins for negative pts here — that happens on claimSpin
-    // so the user only gets the reward after the wheel animation finishes.
+    // Bonus-spin prizes (negative pts) are added to bonusSpins right away —
+    // there is no "double" option for them, so there is nothing left to wait for.
+    const bonusSpinsToAdd = pts < 0 ? Math.abs(pts) : 0;
 
     if (spinRecord) {
       await ctx.db.patch(spinRecord._id, {
         windowStart: dayStart,
         spinsUsedInWindow: newSpinsUsed,
-        bonusSpins: newBonusSpins,
+        bonusSpins: newBonusSpins + bonusSpinsToAdd,
         adBonusEarned: newAdBonusEarned,
       });
     } else {
@@ -176,96 +226,292 @@ export const spin = mutation({
         userId,
         windowStart: dayStart,
         spinsUsedInWindow: newSpinsUsed,
-        bonusSpins: newBonusSpins,
+        bonusSpins: newBonusSpins + bonusSpinsToAdd,
         adBonusEarned: 0,
       });
     }
 
-    // Create pending spin — points/bonus are only credited when claimSpin is called
-    // after the 4.2s wheel animation, so the wheel number and the reward match.
+    // Base points are credited RIGHT HERE, synchronously, before the client
+    // does anything else. This used to be deferred to a separate claimSpin()
+    // call that the client had to remember to trigger (a tap, or an
+    // unmount-time fallback that never fires on a force-close/app-kill) —
+    // when that follow-up call never landed, the reward was silently never
+    // credited. Crediting immediately closes that gap entirely, for every
+    // client version that calls this mutation, not just an updated one.
+    // claimSpin() is now used ONLY for the optional watch-ad-to-double
+    // top-up on a positive-pts row (or as a legacy fallback/no-op for older
+    // clients that still call it after a plain claim).
     const pendingId = await ctx.db.insert("pendingSpins", {
       userId,
       pts,
       prizeIndex,
-      claimed: false,
+      claimed: pts <= 0,
       createdAt: now,
+      baseCredited: false,
     });
 
-    return { spinId: pendingId, pts, prizeIndex, spinsRemaining: remaining - 1 };
+    if (pts > 0) {
+      await creditSpinPoints(
+        ctx,
+        userId,
+        economy,
+        pts,
+        "SPIN_WHEEL",
+        `spin-${pendingId}`,
+        `Spin Wheel Prize (+${pts} PTS, ${economy})`,
+      );
+      await ctx.db.patch(pendingId, { baseCredited: true });
+    }
+
+    const balanceAfter = await lastBalance(ctx, userId, economy);
+    return {
+      spinId: pendingId,
+      pts,
+      prizeIndex,
+      spinsRemaining: remaining - 1,
+      credited: pts > 0 ? pts : 0,
+      balanceAfter,
+    };
   },
 });
 
 export const claimSpin = mutation({
-  args: { userId: v.id("users"), spinId: v.id("pendingSpins"), doubled: v.optional(v.boolean()) },
-  handler: async (ctx, { userId, spinId, doubled }) => {
+  args: {
+    userId: v.id("users"),
+    spinId: v.id("pendingSpins"),
+    doubled: v.optional(v.boolean()),
+    adId: v.optional(v.string()),
+  },
+  handler: async (ctx, { userId, spinId, doubled, adId }) => {
     const { economy } = await requireUserAndEconomy(ctx, userId);
+    // Pi Ad Network 2x: verify the rewarded adId before paying the double.
+    if (doubled && adId) await consumeRewardedAd(ctx, userId, adId);
     const pending = await ctx.db.get(spinId);
     if (!pending || pending.userId !== userId) throw new Error("Spin not found");
     if (pending.claimed) throw new Error("Already claimed");
     const pts = pending.pts;
     const isDoubled = doubled === true && pts > 0;
-    const creditPts = isDoubled ? pts * 2 : pts;
 
-    await ctx.db.patch(spinId, { claimed: true });
-
-    // Negative pts means bonus spins — credit them now (after animation).
-    if (pts < 0) {
-      const now = Date.now();
-      const dayStart = nigerianDayStart(now);
-      const spinRecord = await ctx.db
-        .query("dailySpins")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .unique();
-      const extra = Math.abs(pts);
-      if (spinRecord) {
-        await ctx.db.patch(spinRecord._id, {
-          bonusSpins: (spinRecord.bonusSpins ?? 0) + extra,
-        });
-      } else {
-        await ctx.db.insert("dailySpins", {
-          userId,
-          windowStart: dayStart,
-          spinsUsedInWindow: 0,
-          bonusSpins: extra,
-          adBonusEarned: 0,
-        });
-      }
-      return { pts, prizeIndex: pending.prizeIndex, credited: 0, doubled: false, bonusSpins: extra };
+    // pts <= 0 rows (bonus spins / no-bonus) are fully handled by spin()
+    // itself now — this just finalizes the row for an older client that
+    // still calls claimSpin() after every spin.
+    if (pts <= 0) {
+      await ctx.db.patch(spinId, { claimed: true });
+      return {
+        pts,
+        prizeIndex: pending.prizeIndex,
+        credited: 0,
+        doubled: false,
+        bonusSpins: pts < 0 ? Math.abs(pts) : 0,
+        balanceAfter: await lastBalance(ctx, userId, economy),
+      };
     }
 
-    if (creditPts > 0) {
-      await appendLedger(ctx, userId, economy, creditPts, "SPIN_WHEEL", `spin-${pending.createdAt}${isDoubled ? "-2x" : ""}`);
+    // Base points were already credited by spin() itself (baseCredited).
+    // This call either adds the 2x-double extra, credits the base as a
+    // fallback for a legacy pending row that predates that change, or — for
+    // a plain (non-doubled) claim on an already-credited row — just reports
+    // the amount without crediting again. A plain claim deliberately does
+    // NOT mark the row `claimed`, so a later "watch ad to double" tap on the
+    // same spin can still succeed.
+    const alreadyBased = pending.baseCredited === true;
+    let credited = alreadyBased ? pts : 0;
 
-      const wallet = await ctx.db
-        .query("wallets")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .unique();
-
-      if (wallet) {
-        const newPoints =
-          economy === "pi-browser"
-            ? (wallet.piBrowserPointsBalance ?? 0) + creditPts
-            : wallet.pointsBalance + creditPts;
-        await ctx.db.patch(
-          wallet._id,
-          economy === "pi-browser"
-            ? { piBrowserPointsBalance: newPoints }
-            : { pointsBalance: newPoints },
+    if (isDoubled) {
+      const extra = alreadyBased ? pts : pts * 2;
+      if (extra > 0) {
+        await creditSpinPoints(
+          ctx,
+          userId,
+          economy,
+          extra,
+          "SPIN_WHEEL",
+          `spin-${spinId}-2x`,
+          `Spin Wheel 2x Extra (+${extra} PTS, ${economy})`,
         );
-
-        await ctx.db.insert("walletTransactions", {
-          userId,
-          type: "earn_points",
-          pointsDelta: creditPts,
-          piproDelta: 0,
-          pointsBalanceAfter: newPoints,
-          piproBalanceAfter: wallet.piproBalance,
-          note: `Spin Wheel Prize (+${creditPts} PTS${isDoubled ? " 2x" : ""}, ${economy})`,
-        });
       }
+      await ctx.db.patch(spinId, { baseCredited: true, claimed: true });
+      credited = pts * 2;
+    } else if (!alreadyBased) {
+      await creditSpinPoints(
+        ctx,
+        userId,
+        economy,
+        pts,
+        "SPIN_WHEEL",
+        `spin-${spinId}`,
+        `Spin Wheel Prize (+${pts} PTS, ${economy})`,
+      );
+      await ctx.db.patch(spinId, { baseCredited: true, claimed: true });
+      credited = pts;
     }
 
-    return { pts, prizeIndex: pending.prizeIndex, credited: creditPts, doubled: isDoubled, bonusSpins: 0 };
+    // Same-transaction authoritative balance so the client never depends on
+    // subscription timing to show the exact new total.
+    const balanceAfter = await lastBalance(ctx, userId, economy);
+    return { pts, prizeIndex: pending.prizeIndex, credited, doubled: isDoubled, bonusSpins: 0, balanceAfter };
+  },
+});
+
+// A spin row stays open (claimed:false) after its base credit so a later
+// watch-ad-to-double can still top it up. Only close one out once it is old
+// enough that no double can still be in flight for it.
+const SPIN_CLOSEOUT_AFTER_MS = 15 * 60 * 1000;
+
+/**
+ * Applies the watch-ad "2x" top-up to the user's most recent still-open spin.
+ *
+ * The build currently on the Play Store calls ads.rewardForAd({ adType:
+ * "spin_double_bonus" }) the moment the rewarded ad finishes — that call is the
+ * only server-visible proof the ad was actually watched on that build. Crediting
+ * from there means the 2x lands without depending on any follow-up call from the
+ * app, which is what was silently dropping the double.
+ *
+ * Idempotent: the row is marked claimed, so a later claimSpin(doubled:true) for
+ * the same spin finds nothing left to pay out and cannot double-credit.
+ * Returns the number of points credited (0 if there was no eligible spin).
+ */
+export async function applySpinDouble(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  economy: Economy,
+): Promise<number> {
+  const now = Date.now();
+  const pendings = await ctx.db
+    .query("pendingSpins")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+
+  let target: (typeof pendings)[number] | null = null;
+  for (const p of pendings) {
+    if (p.claimed || p.pts <= 0) continue;
+    if (now - p.createdAt > SPIN_CLOSEOUT_AFTER_MS) continue;
+    if (!target || p.createdAt > target.createdAt) target = p;
+  }
+  if (!target) return 0;
+
+  // Base is normally already paid by spin(); a legacy row may still owe it.
+  const extra = target.baseCredited === true ? target.pts : target.pts * 2;
+  await creditSpinPoints(
+    ctx,
+    userId,
+    economy,
+    extra,
+    "SPIN_WHEEL",
+    `spin-${target._id}-2x`,
+    `Spin Wheel 2x Extra (+${extra} PTS, ${economy})`,
+  );
+  await ctx.db.patch(target._id, { baseCredited: true, claimed: true });
+  return extra;
+}
+
+// Credits legacy unclaimed positive pendings for one user (rows written before
+// spin() started crediting base points immediately). Marks them claimed so
+// they can never be paid twice. Returns the number of rows recovered.
+async function recoverUserPendings(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  economy: Economy,
+  onlyOlderThanMs: number | null,
+): Promise<number> {
+  const pendings = await ctx.db
+    .query("pendingSpins")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  const now = Date.now();
+  let recovered = 0;
+  for (const p of pendings) {
+    if (p.claimed) continue;
+    if (p.baseCredited === true || p.pts <= 0) {
+      // Base already paid (by spin() itself) and never doubled — close the row
+      // out so it stops showing up in every future unclaimed scan, but only
+      // once no watch-ad-to-double can still be in flight for it.
+      if (now - p.createdAt > SPIN_CLOSEOUT_AFTER_MS) {
+        await ctx.db.patch(p._id, { claimed: true });
+      }
+      continue;
+    }
+    if (onlyOlderThanMs !== null && now - p.createdAt < onlyOlderThanMs) continue;
+    await creditSpinPoints(
+      ctx,
+      userId,
+      economy,
+      p.pts,
+      "SPIN_WHEEL",
+      `spin-recover-${p._id}`,
+      `Spin recovery (+${p.pts} PTS, ${economy})`,
+    );
+    await ctx.db.patch(p._id, { baseCredited: true, claimed: true });
+    recovered++;
+  }
+  return recovered;
+}
+
+/**
+ * Client self-heal: call on SpinScreen mount. Instantly pays out any points
+ * orphaned by an older client (spin consumed, claim never landed) and reports
+ * how many were recovered so the UI can tell the user.
+ */
+export const syncUnclaimedSpins = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const { economy } = await requireUserAndEconomy(ctx, userId);
+    const recovered = await recoverUserPendings(ctx, userId, economy, null);
+    const balanceAfter = await lastBalance(ctx, userId, economy);
+    return { recovered, balanceAfter };
+  },
+});
+
+/**
+ * Server safety net (called hourly by cron): recovers points for users on old
+ * app versions that never call syncUnclaimedSpins. Only touches pendings
+ * older than 15 minutes so live double-or-claim sessions are never disturbed.
+ */
+export const recoverStalePendingSpins = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const stale = await ctx.db
+      .query("pendingSpins")
+      .filter((q) => q.eq(q.field("claimed"), false))
+      .take(200);
+    const byUser = new Map<string, typeof stale>();
+    for (const p of stale) {
+      const list = byUser.get(p.userId) ?? [];
+      list.push(p);
+      byUser.set(p.userId, list);
+    }
+    let recovered = 0;
+    for (const [userId, rows] of byUser) {
+      try {
+        const economy = await economyOfUser(ctx, userId as Id<"users">);
+        for (const p of rows) {
+          if (p.baseCredited === true || p.pts <= 0) {
+            // Base already paid and never doubled — close it out so it doesn't
+            // keep occupying the 200-row scan window every hour, but only once
+            // no watch-ad-to-double can still be in flight for it.
+            if (Date.now() - p.createdAt > SPIN_CLOSEOUT_AFTER_MS) {
+              await ctx.db.patch(p._id, { claimed: true });
+            }
+            continue;
+          }
+          if (Date.now() - p.createdAt < SPIN_CLOSEOUT_AFTER_MS) continue;
+          await creditSpinPoints(
+            ctx,
+            userId as Id<"users">,
+            economy,
+            p.pts,
+            "SPIN_WHEEL",
+            `spin-recover-${p._id}`,
+            `Spin recovery (+${p.pts} PTS, ${economy})`,
+          );
+          await ctx.db.patch(p._id, { baseCredited: true, claimed: true });
+          recovered++;
+        }
+      } catch {
+        // Deleted/suspended user — skip, retry next run.
+      }
+    }
+    return { scanned: stale.length, recovered };
   },
 });
 

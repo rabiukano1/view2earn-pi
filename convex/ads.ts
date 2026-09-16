@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
+import { applySpinDouble } from "./spin";
+import { consumeRewardedAd } from "./piAds";
 
 /** Query active ad config including admin-configured reward points. */
 export const getAdRewardConfig = query({
@@ -92,22 +94,31 @@ export const rewardForAd = mutation({
     provider: v.optional(v.string()),
     adType: v.optional(v.string()),
     rewardAmount: v.optional(v.number()),
+    piAdId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { economy } = await requireUserAndEconomy(ctx, args.userId);
+    // Pi Ad Network: verify adId against the Platform API (+ replay-protect)
+    // before crediting anything. Native AdMob callers don't send piAdId.
+    if (args.piAdId) await consumeRewardedAd(ctx, args.userId, args.piAdId);
     const normalizedAdType = args.adType?.trim().toLowerCase() ?? "";
 
-    // Spin double/bonus rewards are credited by spin.ts (claimSpin /
-    // doubleSpinReward / earnBonusSpin) — never via this generic flat-reward
-    // path, which would credit the wrong amount (a flat adRewardPoints) or
-    // double-credit. Guard kept as a defensive backstop.
+    // Spin rewards never take the generic flat-reward path below — that would
+    // credit a flat adRewardPoints instead of the actual wheel prize.
     const isSpinRelatedAd =
       normalizedAdType.includes("spin") || normalizedAdType.includes("double");
 
     if (isSpinRelatedAd) {
-      console.warn(
-        `[ads.rewardForAd] blocked generic credit for ${args.adType} — use claimSpin/earnBonusSpin`,
-      );
+      // The build on the Play Store fires this the instant the rewarded ad
+      // finishes, and it is the only server-visible proof that the 2x ad was
+      // actually watched on that build — so the top-up is credited here rather
+      // than dropped. applySpinDouble marks the spin claimed, so the
+      // claimSpin(doubled:true) that same flow sends next cannot pay it twice.
+      // Bonus-spin ads ("spin_bonus_spin") are granted by spin.earnBonusSpin
+      // and must stay a no-op here.
+      if (normalizedAdType.includes("double")) {
+        await applySpinDouble(ctx, args.userId, economy);
+      }
       const last0 = await ctx.db
         .query("pointsLedger")
         .withIndex("by_user_economy", (q) =>

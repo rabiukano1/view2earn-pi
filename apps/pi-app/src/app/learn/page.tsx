@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { showPiInterstitial } from "@/pi/pi";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
@@ -79,6 +80,7 @@ export default function PiLearn() {
         answers: ordered,
       });
       setResult(res as SubmitResult);
+      void showPiInterstitial();
     } catch (e) {
       alert(String(e).replace("[CONVEX] ", ""));
     } finally {

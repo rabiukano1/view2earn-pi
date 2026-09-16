@@ -1,13 +1,15 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { RootTabParamList, RootStackParamList } from './types';
 import Icon from '../components/Icon';
+import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 
+import SignInScreen from '../screens/SignInScreen';
 import WalletScreen from '../screens/WalletScreen';
 import RewardsScreen from '../screens/RewardsScreen';
 import WalletHistoryScreen from '../screens/WalletHistoryScreen';
@@ -101,6 +103,24 @@ function MainTabs() {
 }
 
 export default function AppNavigator() {
+  const dark = useColorScheme() === 'dark';
+  const { ready, isAuthenticated } = useAuth();
+
+  // Every wallet query is keyed on the signed-in user, so nothing past this
+  // point can render meaningfully without a session. Restoring one from
+  // storage is async, hence the brief loader before deciding.
+  if (!ready) {
+    return (
+      <View style={[styles.boot, { backgroundColor: dark ? colors.bgDark : colors.bg }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <SignInScreen />;
+  }
+
   return (
     <Stack.Navigator id="RootStack" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
@@ -112,6 +132,7 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
+  boot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabBar: {
     position: 'absolute',
     left: 14,

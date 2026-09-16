@@ -1,6 +1,7 @@
 "use client";
 
 import { PiRewardedAdButton } from "@/pi/components/PiRewardedAdButton";
+import { showPiInterstitial } from "@/pi/pi";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -110,6 +111,7 @@ export default function DailyQuizPage() {
 
       setResult(res);
       setGameState("result");
+      void showPiInterstitial();
     } catch (e) {
       alert(String((e as Error)?.message ?? e).replace("[CONVEX] ", ""));
     } finally {

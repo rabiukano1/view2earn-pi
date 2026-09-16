@@ -7,7 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@convex/api";
 import type { Id } from "@convex/dataModel";
-import { showPiRewardedAd } from "@/pi/pi";
+import { showPiInterstitial, showPiRewardedAd } from "@/pi/pi";
 import { PiSvgSpinWheel, TEN_WHEEL_PRIZES } from "@/pi/components/PiSvgSpinWheel";
 
 const NUM_SECTORS = TEN_WHEEL_PRIZES.length;
@@ -61,6 +61,7 @@ export default function PiSpin() {
   const [doubleAdBusy, setDoubleAdBusy] = useState(false);
   const [doubleClaimed, setDoubleClaimed] = useState(false);
   const [doubleUnlocked, setDoubleUnlocked] = useState(false);
+  const doubleAdIdRef = useRef<string | undefined>(undefined);
   const [claiming, setClaiming] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -159,7 +160,9 @@ export default function PiSpin() {
         userId,
         spinId: pending.spinId,
         doubled,
+        adId: doubled ? doubleAdIdRef.current : undefined,
       });
+      doubleAdIdRef.current = undefined;
       pendingSpinRef.current = null;
       if (res.pts < 0) {
         // bonus-spin prize — credited as extra spins, not points
@@ -167,10 +170,11 @@ export default function PiSpin() {
         setDoubleClaimed(true);
         setMsg({ ok: true, text: `🎉 +${res.bonusSpins} bonus spin${res.bonusSpins === 1 ? "" : "s"} added!` });
       } else {
-        setDoubleClaimed(doubled);
+        // Claimed (doubled or not) → card switches to SPIN AGAIN / DONE.
+        setDoubleClaimed(true);
         setDoubleUnlocked(false);
         setResult(res.credited);
-        if (doubled) setMsg({ ok: true, text: `🎉 Doubled! +${res.credited} PTS credited.` });
+        setMsg({ ok: true, text: doubled ? `🎉 Doubled! +${res.credited} PTS credited.` : `✅ +${res.credited} PTS credited.` });
       }
       return res;
     } catch (e) {
@@ -224,6 +228,7 @@ export default function PiSpin() {
         // Unlock 2x reward so the user can review and click Claim button.
         // Do not show an extra message here; the final claim message is shown
         // once the user confirms the doubled reward.
+        doubleAdIdRef.current = ad.adId;
         setDoubleUnlocked(true);
         setMsg(null);
       } else if (ad.supported) {
@@ -250,6 +255,7 @@ export default function PiSpin() {
   const handleSkipDouble = async () => {
     if (claiming) return;
     await claimPending(false);
+    void showPiInterstitial();
   };
 
   return (

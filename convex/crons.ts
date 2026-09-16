@@ -29,4 +29,12 @@ crons.interval("count-delta-scan", { hours: 12 }, internal.countDelta.scan);
 // Recompute fraud scores so they decay as old events age out (plan §7.9).
 crons.interval("recompute-fraud-scores", { hours: 24 }, internal.fraud.recomputeAll);
 
+// Recover spin points orphaned by old clients (spin consumed, claim never
+// landed). Hourly; only touches pendings older than 15 minutes.
+crons.interval("recover-unclaimed-spins", { hours: 1 }, internal.spin.recoverStalePendingSpins, {});
+
+// Auto-detect SIDRA sent to the platform address from registered user
+// addresses, so deposits credit without the user pasting a hash.
+crons.interval("scan-sidra-deposits", { minutes: 2 }, internal.sidra.scanPlatformDeposits, {});
+
 export default crons;

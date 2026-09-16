@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>View2Earn Testnet</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px 16px; background: #f6f3fb; color: #222; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; max-width: 480px; margin: 0 auto; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  button { width: 100%; padding: 14px; border: 0; border-radius: 10px; background: #7b3fa0; color: #fff; font-size: 16px; font-weight: 700; }
+  code { display: block; word-break: break-all; background: #f1eef7; padding: 10px; border-radius: 8px; margin-top: 8px; font-size: 15px; }
+  .muted { color: #666; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>View2Earn – Testnet</h2>
+  <p class="muted">Sign in with Pi so we can send you Test‑Pi. Then send a screenshot of your UID to the team.</p>
+  <button id="btn">Sign in with Pi</button>
+  <div id="out"></div>
+</div>
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
+<script>
+  Pi.init({ version: "2.0" });
+  document.getElementById("btn").onclick = async () => {
+    const out = document.getElementById("out");
+    try {
+      const auth = await Pi.authenticate(["username"], () => {});
+      out.innerHTML = "<p>Username</p><code>" + auth.user.username + "</code><p>UID</p><code>" + auth.user.uid + "</code>";
+    } catch (e) {
+      out.innerHTML = "<p style='color:#c00'>" + (e && e.message || e) + "</p>";
+    }
+  };
+</script>
+</body>
+</html>

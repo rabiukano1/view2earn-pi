@@ -2,11 +2,20 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+
 react {
-    root = file("../../")
-    reactNativeDir = file("../../../../node_modules/react-native")
-    codegenDir = file("../../../../node_modules/@react-native/codegen")
-    cliFile = file("../../../../node_modules/react-native/cli.js")
+    // Expo CLI does the bundling ("export:embed") so the embedded update
+    // manifest expo-updates needs is generated as part of every release build.
+    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
+    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    hermesCommand = new File(["node", "--print", "require.resolve('hermes-compiler/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/hermesc/%OS-BIN%/hermesc"
+    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
+    bundleCommand = "export:embed"
+
+    enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
+
     autolinkLibrariesWithApp()
 }
 
@@ -22,6 +31,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+
+        buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
 
     signingConfigs {
@@ -44,6 +55,13 @@ android {
         }
     }
 
+    packagingOptions {
+        jniLibs {
+            def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
+            useLegacyPackaging enableLegacyPackaging.toBoolean()
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -58,4 +76,13 @@ dependencies {
     implementation("com.facebook.react:hermes-android")
 }
 
+// fonts.gradle defaults to "../../node_modules/…" relative to this module, which
+// in this monorepo resolves to apps/wallet-app/node_modules — a folder that does
+// not exist (packages are hoisted to the repo root). With no fonts found the
+// copy task silently bundles nothing and every icon renders blank, so point it
+// at the hoisted location explicitly. Only FontAwesome6 is used in this app.
+project.ext.vectoricons = [
+    iconFontsDir: "../../../../node_modules/react-native-vector-icons/Fonts",
+    iconFontNames: [ "FontAwesome6_*.ttf" ]
+]
 apply from: file("../../../../node_modules/react-native-vector-icons/fonts.gradle")

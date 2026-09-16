@@ -34,7 +34,9 @@ import LiveStreamsScreen from '../screens/LiveStreamsScreen';
 
 import LoginScreen from '../screens/LoginScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import WalletAuthScreen from '../screens/WalletAuthScreen';
 import { useAuth } from '../auth/AuthContext';
+import { takePendingWalletNonce } from '../auth/walletHandoff';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -134,11 +136,25 @@ interface AppNavigatorProps {
 export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
   const { userId } = useAuth();
 
+  // A wallet sign-in link that arrived while logged out is finished here:
+  // once the signed-in tree mounts, open WalletAuth first so it can approve.
+  const pendingWalletNonce = React.useMemo(
+    () => (userId ? takePendingWalletNonce() : null),
+    [userId],
+  );
+
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false }}
+      initialRouteName={userId && pendingWalletNonce ? 'WalletAuth' : undefined}>
       {userId ? (
         <>
           <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen
+            name="WalletAuth"
+            component={WalletAuthScreen}
+            initialParams={pendingWalletNonce ? { nonce: pendingWalletNonce } : undefined}
+          />
           <Stack.Screen name="Level" component={LevelScreen} />
           <Stack.Screen name="Marketplace" component={MarketplaceScreen} />
           <Stack.Screen
@@ -171,6 +187,7 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Terms" component={TermsScreen} />
           <Stack.Screen name="Policy" component={PolicyScreen} />
+          <Stack.Screen name="WalletAuth" component={WalletAuthScreen} />
         </>
       )}
     </Stack.Navigator>

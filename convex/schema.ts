@@ -47,6 +47,12 @@ export default defineSchema({
     // Legacy optional flag: set by an earlier revision of the 2x flow. Kept so
     // rows written while it existed still validate. No longer written by code.
     doubled: v.optional(v.boolean()),
+    // True once the BASE wheel points have been credited to the ledger.
+    // spin() credits base points immediately (so points can never be orphaned
+    // if the client never calls claimSpin); claimSpin() then only credits the
+    // 2x EXTRA on double, or marks the row claimed. Absent on rows written
+    // before this change — treated as "not yet credited".
+    baseCredited: v.optional(v.boolean()),
   }).index("by_user", ["userId"]),
 
   // Pi Ad Network rewarded-ad completions (plan §7.9 / Pi Ads). One row per
@@ -99,7 +105,8 @@ export default defineSchema({
     referredBy: v.optional(v.id("users")), // set at signup if a referral code was applied
   }).index("by_ecosystem", ["ecosystem"])
     .index("by_externalUid", ["externalUid"])
-    .index("email", ["email"]),
+    .index("email", ["email"])
+    .index("by_payoutEvm", ["payoutEvm"]),
 
   linkedProfiles: defineTable({
     userId: v.id("users"),
@@ -200,10 +207,14 @@ export default defineSchema({
   withdrawals: defineTable({
     userId: v.id("users"),
     asset: v.string(), // "VINTA" | "PIPRO" | "SIDRA"
-    amount: v.number(),
+    amount: v.number(), // amount of `asset` to pay out on-chain
     destinationAddress: v.string(),
     status: v.string(), // "pending" | "processing" | "completed" | "rejected"
     txHash: v.optional(v.string()),
+    // SIDRA payouts are funded from POINTS at request time (SIDRA is never a
+    // stored balance) — the rate and points taken are locked here for audit.
+    pointsDebited: v.optional(v.number()),
+    pointsPerSidra: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
@@ -254,6 +265,29 @@ export default defineSchema({
     confirmedAt: v.optional(v.number()), // when the deposit was verified
   }).index("by_user", ["userId"])
     .index("by_txSignature", ["txSignature"]),
+
+  // Real Sidra Chain (EVM) deposits of the native SIDRA coin to the platform
+  // address. SIDRA is never held as a balance: once verified on-chain the
+  // deposit is converted to POINTS at that moment's pointsPerSidra rate, so
+  // the platform carries no floating SIDRA liability users could time.
+  // Attributed to the user whose registered payoutEvm address SENT it — never
+  // to whoever submits the hash — and each tx hash is credited at most once.
+  sidraDeposits: defineTable({
+    userId: v.id("users"),
+    txHash: v.string(),                  // 0x-prefixed 32-byte tx hash (lowercase)
+    fromAddress: v.string(),             // sender EVM address (lowercase)
+    amount: v.number(),                  // SIDRA received on-chain (filled on confirm)
+    pointsPerSidra: v.optional(v.number()), // rate locked at confirmation
+    pointsCredited: v.optional(v.number()), // amount × rate, floored
+    status: v.string(),                  // "pending" | "confirmed" | "failed"
+    source: v.string(),                  // "manual" (user pasted hash) | "scan" (poller found it)
+    failReason: v.optional(v.string()),
+    blockNumber: v.optional(v.number()),
+    attempts: v.optional(v.number()),
+    confirmedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"])
+    .index("by_txHash", ["txHash"])
+    .index("by_status", ["status"]),
 
   // Full transaction history for the app wallet (swaps, deposits, deductions)
   walletTransactions: defineTable({
@@ -431,6 +465,18 @@ export default defineSchema({
     used: v.boolean(),
     telegramUserId: v.optional(v.string()),
     telegramName: v.optional(v.string()),
+    expiresAt: v.number(),
+  }).index("by_nonce", ["nonce"]),
+
+  // "Sign in with View2Earn" handoff for the companion wallet app. The wallet
+  // creates a nonce and deep-links into the main app; the signed-in main app
+  // binds its user to the nonce (approve); the wallet then exchanges the
+  // nonce for a session via the "wallet-handoff" auth provider. Single-use.
+  walletAuthNonces: defineTable({
+    nonce: v.string(),
+    approved: v.boolean(),
+    used: v.boolean(),
+    userId: v.optional(v.id("users")),
     expiresAt: v.number(),
   }).index("by_nonce", ["nonce"]),
 

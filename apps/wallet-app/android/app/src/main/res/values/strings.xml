@@ -1,3 +1,6 @@
 <resources>
-    <string name="app_name">View2Earn Wallet</string>
+  <string name="app_name">View2Earn Wallet</string>
+  <!-- Must match "runtimeVersion" in app.json. Bump both together whenever
+       native code changes; OTA updates only reach binaries with the same value. -->
+  <string name="expo_runtime_version">1.0.0</string>
 </resources>

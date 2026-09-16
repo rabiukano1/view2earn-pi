@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { showPiInterstitial } from "@/pi/pi";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
@@ -107,6 +108,7 @@ function KnowledgeInner() {
         answers: ordered,
       });
       setResult(res as LessonQuizResult);
+      void showPiInterstitial();
     } catch (e) {
       alert(String(e).replace("[CONVEX] ", ""));
     } finally {

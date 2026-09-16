@@ -130,7 +130,6 @@ export default function PiHome() {
         { href: "/tasks", label: "Tasks", emoji: "✅", desc: "Social media tasks", tint: "#3B82F6" },
         { href: "/quiz", label: "Daily Quiz", emoji: "🧠", desc: "Answer & score bonus", tint: "#6366F1" },
         { href: "/spin", label: "Spin & Win", emoji: "🎰", desc: "Daily lucky wheel", tint: "#EC4899" },
-        { href: "/surveys", label: "Surveys", emoji: "📝", desc: "Share your feedback", tint: "#F97316" },
       ],
     },
     {

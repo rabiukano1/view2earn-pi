@@ -1,4 +1,23 @@
 {
   "name": "View2EarnWallet",
-  "displayName": "View2Earn Wallet"
+  "displayName": "View2Earn Wallet",
+  "expo": {
+    "name": "View2Earn Wallet",
+    "slug": "view2earn-wallet",
+    "owner": "rabiukano",
+    "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
+    "android": {
+      "package": "com.view2earn.wallet"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "55a96795-4698-43ea-ba43-1fe4653b4c0a"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/55a96795-4698-43ea-ba43-1fe4653b4c0a"
+    },
+    "ios": {}
+  }
 }
