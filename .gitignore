@@ -100,3 +100,6 @@ apps/pi-app/out/
 
 # EAS Update export output
 dist/
+
+# Tutorial videos (large binaries)
+app-video/
