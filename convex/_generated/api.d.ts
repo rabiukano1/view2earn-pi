@@ -17,6 +17,7 @@ import type * as achievements from "../achievements.js";
 import type * as activities from "../activities.js";
 import type * as admin from "../admin.js";
 import type * as ads from "../ads.js";
+import type * as adsgram from "../adsgram.js";
 import type * as auth from "../auth.js";
 import type * as backfill from "../backfill.js";
 import type * as bonus from "../bonus.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   activities: typeof activities;
   admin: typeof admin;
   ads: typeof ads;
+  adsgram: typeof adsgram;
   auth: typeof auth;
   backfill: typeof backfill;
   bonus: typeof bonus;

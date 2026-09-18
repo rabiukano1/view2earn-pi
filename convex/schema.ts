@@ -459,6 +459,14 @@ export default defineSchema({
   // Academy progress (plan §7.11b): one row per level a user has passed.
   // "Sign in with Telegram" one-time nonces. Client creates one, opens the bot
   // deep link; the bot webhook marks it verified with the Telegram user.
+  // Adsgram (Telegram Mini App ads) server-side REWARD postbacks, keyed by the
+  // Telegram user id Adsgram substitutes into the Reward URL. Audit trail for
+  // the client-side `done` grants; not yet consumed by reward mutations.
+  adsgramRewards: defineTable({
+    telegramUserId: v.string(),
+    at: v.number(),
+  }).index("by_telegramUserId", ["telegramUserId"]),
+
   telegramNonces: defineTable({
     nonce: v.string(),
     verified: v.boolean(),

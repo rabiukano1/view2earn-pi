@@ -17,7 +17,11 @@ if (fs.existsSync(envFile)) {
 
 execSync("npx next build", { cwd: piApp, stdio: "inherit", env });
 
+// With a custom distDir, `output: "export"` writes the site into distDir itself.
 const out = path.join(__dirname, "out");
 fs.rmSync(out, { recursive: true, force: true });
-fs.cpSync(path.join(piApp, "out"), out, { recursive: true });
+fs.cpSync(path.join(piApp, ".next-tg"), out, {
+  recursive: true,
+  filter: (src) => !/[\/]\.next-tg[\/](cache|server|static|types|diagnostics)([\/]|$)|BUILD_ID$|\.json$|\.nft$/.test(src),
+});
 console.log(`tg-app: static export copied to ${out}`);

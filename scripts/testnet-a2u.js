@@ -5,7 +5,7 @@
 //   set PI_TESTNET_WALLET_SEED=S...   (Testnet app wallet secret key)
 //   node scripts/testnet-a2u.js <uid1> <uid2> <uid3> <uid4> <uid5>
 //
-// UIDs come from users signing in at https://pi.view2earn.org/testnet/
+// UIDs come from users signing in at https://testnet.view2earn.org/
 const PiNetwork = require("pi-backend");
 
 const apiKey = process.env.PI_TESTNET_API_KEY;

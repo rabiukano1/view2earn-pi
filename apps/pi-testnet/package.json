@@ -1,0 +1,13 @@
+{
+  "name": "@view2earn/pi-testnet",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Static site for the paired Pi TESTNET app (testnet.view2earn.org): sign-in page that shows UIDs + its own validation-key.txt.",
+  "scripts": {
+    "deploy": "wrangler pages deploy --branch production",
+    "deploy:setup": "wrangler pages project create view2earn-pi-testnet --production-branch production"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
+  }
+}

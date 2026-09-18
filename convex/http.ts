@@ -343,6 +343,23 @@ router.route({ path: "/survey/postback", method: "POST", handler: handleSurveyPo
 router.route({ path: "/vas/webhook", method: "POST", handler: handleVasWebhook });
 router.route({ path: "/telegram/webhook", method: "POST", handler: handleTelegramWebhook });
 router.route({ path: "/survey/cpx", method: "GET", handler: handleCpxPostback });
+
+// Adsgram Reward URL (partner.adsgram.ai -> block -> Reward URL):
+//   https://<deployment>.convex.site/adsgram/reward?userid=[userId]&key=<ADSGRAM_REWARD_SECRET>
+// Adsgram only substitutes [userId]; the static key stops random callers.
+router.route({
+  path: "/adsgram/reward",
+  method: "GET",
+  handler: httpAction(async (ctx, req) => {
+    const url = new URL(req.url);
+    const secret = process.env.ADSGRAM_REWARD_SECRET;
+    if (secret && url.searchParams.get("key") !== secret) return new Response("forbidden", { status: 403 });
+    const telegramUserId = url.searchParams.get("userid")?.trim();
+    if (!telegramUserId) return new Response("missing userid", { status: 400 });
+    await ctx.runMutation(internal.adsgram.record, { telegramUserId });
+    return new Response("ok", { status: 200 });
+  }),
+});
 router.route({ path: "/wallet/verify-deposit", method: "POST", handler: handleVerifyDeposit });
 export default router;
 

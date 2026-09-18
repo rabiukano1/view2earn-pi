@@ -1,0 +1,5 @@
+{
+  "$schema": "../pi-app/node_modules/wrangler/config-schema.json",
+  "name": "view2earn-pi-testnet",
+  "pages_build_output_dir": "./public"
+}
