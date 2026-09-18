@@ -61,6 +61,7 @@ export default function PiWallet() {
   const history = useQuery(api.points.history, userId ? { userId } : "skip");
   const withdrawalRate = useQuery(api.piWithdrawals.getWithdrawalRate, userId ? { userId } : "skip");
   const withdrawals = useQuery(api.piWithdrawals.listMyWithdrawals, userId ? { userId } : "skip");
+  const overview = useQuery(api.identity.overview, userId ? { userId } : "skip");
 
   const getPiBalance = useAction(api.piWallet.getPiBalance);
   const requestWithdrawal = useMutation(api.piWithdrawals.requestPiWithdrawal);
@@ -256,6 +257,40 @@ export default function PiWallet() {
               <span className="pi-stat-label">Spent · 7d</span>
               <span className="pi-stat-value pi-stat-minus">−{summary.weekSpent.toLocaleString()}</span>
             </div>
+          </section>
+        )}
+
+        {/* 3-in-1: balances + level on every surface, and the cash-out gate */}
+        {overview && (
+          <section className="pi-card pi-card-glass">
+            <div className="pi-card-head">
+              <h2>All your balances</h2>
+              <span className={`pi-badge ${overview.ok ? "pi-badge-live" : "pi-badge-accent"}`}>
+                {overview.ok ? "Withdrawals unlocked" : `Unlock at level ${overview.minLevel} ×3`}
+              </span>
+            </div>
+            <div className="pi-limits-grid">
+              {([
+                ["pi-browser", "π Pi Browser"],
+                ["telegram", "✈️ Telegram"],
+                ["android", "🤖 Android"],
+              ] as const).map(([k, name]) => (
+                <div key={k} className="pi-limit-box" style={overview.current === k ? { outline: "1px solid var(--accent)" } : undefined}>
+                  <p className="pi-muted" style={{ fontSize: 11, margin: 0 }}>{name}{overview.current === k ? " · here" : ""}</p>
+                  <p style={{ fontSize: 16, fontWeight: 900, margin: "2px 0" }}>
+                    {overview.linked[k] ? `${overview.balances[k].toLocaleString()} PTS` : "Not linked"}
+                  </p>
+                  <p className="pi-muted" style={{ fontSize: 11, margin: 0 }}>
+                    {overview.linked[k] ? `Level ${overview.levels[k]}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {!overview.ok && (
+              <p className="pi-muted" style={{ fontSize: 12, marginTop: 10 }}>
+                {overview.reasons.join(" · ")} — <Link href="/linked-accounts" className="pi-link-text">Link accounts →</Link>
+              </p>
+            )}
           </section>
         )}
 

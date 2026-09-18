@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUser, requireEconomy } from "./lib/guards";
+import { assertCanCashOut } from "./identity";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { appendLedger } from "./lib/ledger";
 
@@ -57,6 +58,7 @@ export const requestPiWithdrawal = mutation({
     // Pi cash-out is a Pi-Browser-economy privilege ONLY. The Android economy
     // has no Pi withdrawal path (no cross-redemption).
     await requireEconomy(ctx, userId, "pi-browser");
+    await assertCanCashOut(ctx, userId); // 3-in-1 gate (identity.ts)
     await enforceRateLimit(ctx, userId, "withdraw");
 
     const user = await ctx.db.get(userId);

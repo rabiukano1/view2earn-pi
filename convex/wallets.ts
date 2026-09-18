@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
+import { assertCanCashOut } from "./identity";
 import { isEvmAddress, isSolanaAddress } from "@view2earn/core";
 import { lastBalance, appendLedger } from "./lib/ledger";
 import { readPointsPerSidra } from "./sidra";
@@ -390,6 +391,7 @@ export const requestWithdrawal = mutation({
   },
   handler: async (ctx, { userId, asset, amount, destinationAddress }) => {
     const { economy } = await requireUserAndEconomy(ctx, userId);
+    await assertCanCashOut(ctx, userId); // 3-in-1 gate (identity.ts)
     if (amount <= 0) throw new Error("Amount must be greater than 0");
 
     const addr = destinationAddress.trim();

@@ -21,11 +21,21 @@ export const TelegramProvider = ConvexCredentials({
       ? await ctx.runAction(internal.telegramAuth.verifyInitData, { initData })
       : await ctx.runMutation(internal.telegramAuth.consumeNonce, { nonce: nonce! });
 
+    // Which surface this session runs on: the Telegram Mini App itself, or the
+    // Android app using "Sign in with Telegram" (nonce deep link).
+    const surface = initData ? "telegram" : "android";
+
     const account = { id: `telegram:${consumed.telegramUserId}` };
     const existing = await retrieveAccount(ctx, { provider: "telegram", account }).catch(
       () => null,
     );
-    if (existing) return { userId: existing.user._id as Id<"users"> };
+    if (existing) {
+      await ctx.runMutation(internal.surfaces.markPending, {
+        userId: existing.user._id as Id<"users">,
+        surface,
+      });
+      return { userId: existing.user._id as Id<"users"> };
+    }
 
     const country = credentials.country as string | undefined;
     const profile: Record<string, string> = { name: consumed.telegramName, telegramId: consumed.telegramUserId };
@@ -35,6 +45,10 @@ export const TelegramProvider = ConvexCredentials({
       provider: "telegram",
       account,
       profile,
+    });
+    await ctx.runMutation(internal.surfaces.markPending, {
+      userId: created.user._id as Id<"users">,
+      surface,
     });
     return { userId: created.user._id as Id<"users"> };
   },

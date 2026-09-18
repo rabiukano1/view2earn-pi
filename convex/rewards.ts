@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { requireUser, requireEconomy, requireUserAndEconomy } from "./lib/guards";
+import { assertCanCashOut } from "./identity";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { appendLedger, lastBalance, economyOfUser } from "./lib/ledger";
 
@@ -65,6 +66,7 @@ export const redeem = mutation({
     // Airtime & Data redemption is a Pi-Browser-economy privilege ONLY.
     // The Android economy has no cash-out path (no cross-redemption).
     await requireEconomy(ctx, userId, "pi-browser");
+    if (paidWith === "POINTS") await assertCanCashOut(ctx, userId); // 3-in-1 gate (identity.ts)
     await enforceRateLimit(ctx, userId, "redeem");
 
     // IP Reputation & VPN Restriction Check (Fraud Layer 3)

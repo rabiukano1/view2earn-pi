@@ -89,7 +89,7 @@ export const summary = query({
 export const creditHelper = internalMutation({
   args: {
     userId: v.id("users"),
-    economy: v.union(v.literal("android"), v.literal("pi-browser")),
+    economy: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram")),
     delta: v.number(),
     reason: v.string(),
     refId: v.optional(v.string()),

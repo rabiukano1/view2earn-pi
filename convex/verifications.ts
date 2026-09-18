@@ -8,7 +8,7 @@ import {
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { enforceRateLimit } from "./lib/ratelimit";
-import { requireUser, requireAuth } from "./lib/guards";
+import { requireUser, requireAuth, requireUserAndEconomy } from "./lib/guards";
 import { isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
 import { targetUrlsOf } from "./tasks";
@@ -117,7 +117,8 @@ import { checkIpReputation, recordIpFraudSignal } from "./ipReputation";
 export const claim = mutation({
   args: { taskId: v.id("tasks"), userId: v.id("users"), clientIp: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireUser(ctx, args.userId);
+    // The claim remembers the surface it was made on; release() pays into it.
+    const { economy } = await requireUserAndEconomy(ctx, args.userId);
     await enforceRateLimit(ctx, args.userId, "claim");
 
     // IP Reputation & VPN Detection (Fraud Layer 3)
@@ -145,6 +146,7 @@ export const claim = mutation({
       taskId: args.taskId,
       userId: args.userId,
       platform: task.platform,
+      economy,
       state: "USER_CLAIMED_DONE",
     });
   },
@@ -492,7 +494,7 @@ export const releaseImmediately = internalMutation({
 
     await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
-      economy: await economyOfUser(ctx, verification.userId),
+      economy: verification.economy ?? (await economyOfUser(ctx, verification.userId)),
       delta: task.points,
       reason: "TASK_COMPLETED",
       refId: verification.taskId,
@@ -573,7 +575,7 @@ export const release = internalMutation({
     });
     await ctx.runMutation(internal.points.creditHelper, {
       userId: verification.userId,
-      economy: await economyOfUser(ctx, verification.userId),
+      economy: verification.economy ?? (await economyOfUser(ctx, verification.userId)),
       delta: task.points,
       reason: "TASK_COMPLETED",
       refId: verification.taskId,

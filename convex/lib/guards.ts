@@ -1,6 +1,6 @@
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
+import { getAuthSessionId, getAuthUserId } from "@convex-dev/auth/server";
 
 // Just requires an authenticated session; returns the auth user id.
 export async function requireAuth(ctx: QueryCtx | MutationCtx): Promise<string> {
@@ -22,6 +22,7 @@ export async function requireUser(
   const userDoc = await ctx.db.get(userId as any) as Doc<"users"> | null;
   if (!userDoc) throw new Error("User not found");
   if (userDoc.accountStatus === "suspended") throw new Error("ACCOUNT_SUSPENDED");
+  if (userDoc.accountStatus === "merged") throw new Error("ACCOUNT_MERGED"); // linked into another account: sign in again
   return userDoc;
 }
 
@@ -79,20 +80,60 @@ export async function requireTier(
 //                  Never withdrawable.
 // ---------------------------------------------------------------------------
 
-export type Economy = "android" | "pi-browser";
+export type Economy = "android" | "pi-browser" | "telegram";
 
+// One user, three surfaces. A user's ledgers are keyed by the surface the
+// request comes from (Pi Browser / Telegram Mini App / Android app), not by
+// the user row. The surface is fixed per auth session:
+//   - Pi/Telegram providers and beforeSessionCreation stamp
+//     users.pendingSurface(+At) in the same transaction that creates the
+//     session, so session._creationTime matches pendingSurfaceAt.
+//   - The first mutation on that session persists the match in sessionSurfaces.
+//   - Sessions created before this scheme fall back to deriveEconomy (legacy).
+const PENDING_MATCH_MS = 1500;
+
+// Legacy / session-less resolution (cron, postbacks, admin): the user's "home"
+// economy from their identity anchor.
 export function deriveEconomy(user: Doc<"users">): Economy {
-  return user.externalUid?.startsWith("pi:") ? "pi-browser" : "android";
+  if (user.externalUid?.startsWith("pi:")) return "pi-browser";
+  if (user.externalUid?.startsWith("telegram:")) return "telegram";
+  return "android";
 }
 
-// requireUser + the derived economy of that user, resolved server-side.
+export async function sessionEconomy(
+  ctx: QueryCtx | MutationCtx,
+  user: Doc<"users">,
+): Promise<Economy> {
+  const sessionId = await getAuthSessionId(ctx);
+  if (!sessionId) return deriveEconomy(user);
+  const bound = await ctx.db
+    .query("sessionSurfaces")
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+    .unique();
+  if (bound) return bound.surface;
+
+  const session = await ctx.db.get(sessionId);
+  const matches =
+    session &&
+    user.pendingSurface &&
+    user.pendingSurfaceAt !== undefined &&
+    Math.abs(session._creationTime - user.pendingSurfaceAt) <= PENDING_MATCH_MS;
+  const surface: Economy = matches ? user.pendingSurface! : deriveEconomy(user);
+  if ("scheduler" in ctx) {
+    // MutationCtx: persist once so later requests (and queries) are stable.
+    await (ctx as MutationCtx).db.insert("sessionSurfaces", { sessionId, userId: user._id, surface });
+  }
+  return surface;
+}
+
+// requireUser + the economy of the calling session, resolved server-side.
 export async function requireUserAndEconomy(
   ctx: QueryCtx | MutationCtx,
   userId: string,
 ): Promise<{ user: Doc<"users">; economy: Economy }> {
   const user = await requireUser(ctx, userId);
   if (user.accountStatus === "paused") throw new Error("ACCOUNT_PAUSED");
-  return { user, economy: deriveEconomy(user) };
+  return { user, economy: await sessionEconomy(ctx, user) };
 }
 
 // requireUser + assert the derived economy equals the expected one. Every

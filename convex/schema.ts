@@ -88,7 +88,8 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     // App fields:
-    accountStatus: v.optional(v.union(v.literal("active"), v.literal("suspended"), v.literal("paused"))),
+    accountStatus: v.optional(v.union(v.literal("active"), v.literal("suspended"), v.literal("paused"), v.literal("merged"))),
+    mergedInto: v.optional(v.id("users")), // set when this row was linked into another account
     ecosystem: v.union(v.literal("PI"), v.literal("SIDRA")),
     externalUid: v.string(),
     username: v.string(),
@@ -99,6 +100,12 @@ export default defineSchema({
     signupIp: v.string(),
     country: v.string(),
     telegramUserId: v.optional(v.string()), // set at Telegram sign-in; used for channel-join checks
+    // Surface (economy) of the sign-in currently being created. Written by the
+    // auth providers / beforeSessionCreation in the SAME transaction that
+    // inserts the authSessions row, so session._creationTime === pendingSurfaceAt
+    // identifies which surface a session belongs to (see lib/guards.ts).
+    pendingSurface: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
+    pendingSurfaceAt: v.optional(v.number()),
     payoutEvm: v.optional(v.string()), // EVM payout address (public only, no keys held)
     payoutSolana: v.optional(v.string()), // Solana payout address
     piWalletAddress: v.optional(v.string()), // Pi blockchain wallet address (public, no keys held)
@@ -157,6 +164,7 @@ export default defineSchema({
     taskId: v.id("tasks"),
     userId: v.id("users"),
     platform: v.optional(v.string()),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))), // set at claim; paid into on release
     state: v.string(),
     screenshotStorageId: v.optional(v.id("_storage")),
     additionalScreenshots: v.optional(v.array(v.id("_storage"))),
@@ -182,7 +190,7 @@ export default defineSchema({
     userId: v.id("users"),
     // Optional only so legacy rows (written before the two-economy split) keep
     // validating; every NEW write sets this. Backfill via backfillEconomy().
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
     delta: v.number(),
     reason: v.string(),
     refId: v.optional(v.string()),
@@ -226,7 +234,7 @@ export default defineSchema({
   // Pi-Browser economy ledger, never the Android economy (no cross-redemption).
   piWithdrawals: defineTable({
     userId: v.id("users"),
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
     pointsSpent: v.number(),                      // points deducted from user
     piAmount: v.number(),                          // Pi sent to wallet
     walletAddress: v.string(),                     // destination Pi address
@@ -340,7 +348,7 @@ export default defineSchema({
 
   redemptions: defineTable({
     userId: v.id("users"),
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
     catalogId: v.id("catalog"),
     paidWith: v.string(),
     amount: v.number(),
@@ -466,6 +474,22 @@ export default defineSchema({
     telegramUserId: v.string(),
     at: v.number(),
   }).index("by_telegramUserId", ["telegramUserId"]),
+
+  // One row per auth session: which app surface (economy) the session runs on.
+  // Bound lazily on the session's first mutation (lib/guards.ts).
+  // 6-digit codes for linking surfaces (Pi <-> Telegram) without a foreign
+  // login: generated on one surface by the target user, redeemed on the other.
+  linkCodes: defineTable({
+    code: v.string(),
+    userId: v.id("users"),
+    expiresAt: v.number(),
+  }).index("by_code", ["code"]),
+
+  sessionSurfaces: defineTable({
+    sessionId: v.id("authSessions"),
+    userId: v.id("users"),
+    surface: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram")),
+  }).index("by_session", ["sessionId"]),
 
   telegramNonces: defineTable({
     nonce: v.string(),

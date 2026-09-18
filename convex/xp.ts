@@ -49,6 +49,26 @@ export async function awardXP(
     return newXp;
 }
 
+// Level table (defaults merged with admin overrides), ascending.
+export async function levelsWithOverrides(ctx: QueryCtx | MutationCtx) {
+  const rows = await ctx.db.query("levels").collect();
+  const overrides = new Map(rows.map((r) => [r.level, r]));
+  return LEVEL_DEFAULTS.map((def) => {
+    const override = overrides.get(def.level);
+    return override ? { ...def, ...override } : def;
+  }).sort((a, b) => a.level - b.level);
+}
+
+// Highest level whose xpRequired <= xp.
+export function levelForXp(levels: { level: number; xpRequired: number }[], xp: number): number {
+  let current = levels[0]?.level ?? 1;
+  for (const l of levels) {
+    if (xp >= l.xpRequired) current = l.level;
+    else break;
+  }
+  return current;
+}
+
 async function calculateUserLevelProgress(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
   const user = await ctx.db.get(userId);
   if (!user) return null;
@@ -67,15 +87,8 @@ async function calculateUserLevelProgress(ctx: QueryCtx | MutationCtx, userId: I
     if (row.delta > 0) lifetimeEarned += row.delta;
   }
   const xp = Math.max(user.xp ?? 0, lifetimeEarned);
-  
-  // Fetch levels, allowing DB overrides
-  const rows = await ctx.db.query("levels").collect();
-  const overrides = new Map(rows.map(r => [r.level, r]));
-  
-  const levels = LEVEL_DEFAULTS.map((def) => {
-    const override = overrides.get(def.level);
-    return override ? { ...def, ...override } : def;
-  }).sort((a, b) => a.level - b.level);
+
+  const levels = await levelsWithOverrides(ctx);
 
   // Find the current level (the highest level where xp >= xpRequired)
   let currentLevel = levels[0];

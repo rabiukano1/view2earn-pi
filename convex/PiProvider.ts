@@ -45,6 +45,10 @@ export const PiProvider = ConvexCredentials({
     }
 
     if (existing && existing.user) {
+      await ctx.runMutation(internal.surfaces.markPending, {
+        userId: existing.user._id as Id<"users">,
+        surface: "pi-browser",
+      });
       // Refresh the wallet address on re-login if the Pioneer has one.
       if (walletAddress && existing.user.piWalletAddress !== walletAddress) {
         await ctx.runMutation(internal.piWallet.setPiWalletAddressInternal, {
@@ -66,6 +70,10 @@ export const PiProvider = ConvexCredentials({
       provider: "pi",
       account,
       profile,
+    });
+    await ctx.runMutation(internal.surfaces.markPending, {
+      userId: created.user._id as Id<"users">,
+      surface: "pi-browser",
     });
     return { userId: created.user._id as Id<"users"> };
   },

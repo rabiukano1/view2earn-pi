@@ -32,6 +32,17 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     inactiveDurationMs: 30 * 24 * 60 * 60 * 1000,
   },
   callbacks: {
+    // Runs in the same transaction that inserts the authSessions row. Pi and
+    // Telegram providers have already stamped their surface (pendingSurfaceAt
+    // === now); anything else (Password / OTP / wallet handoff) is the Android
+    // app. lib/guards.ts matches session._creationTime to pendingSurfaceAt.
+    async beforeSessionCreation(ctx, { userId }) {
+      const user = await ctx.db.get(userId);
+      if (!user) return;
+      if (user.pendingSurfaceAt !== Date.now()) {
+        await ctx.db.patch(userId, { pendingSurface: "android", pendingSurfaceAt: Date.now() });
+      }
+    },
     // Central user creation for every provider — fills our app fields so each
     // user row is complete (ecosystem, tier, fraudScore, …). Existing users
     // (sign-in, or linking a second method) are returned untouched.

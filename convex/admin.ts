@@ -199,7 +199,7 @@ export const adjustPoints = mutation({
     userId: v.id("users"),
     delta: v.number(),
     reason: v.optional(v.string()),
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"))),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
   },
   handler: async (ctx, { token, userId, delta, reason, economy }) => {
     requireAdmin(token);

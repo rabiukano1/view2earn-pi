@@ -38,6 +38,9 @@ export const REWARD_KEYS = {
   streakXp: "50",
   taskXp: "100",
   academyXp: "200",
+  // Cash-out gate (identity.ts): minimum level on EVERY surface before points
+  // can be withdrawn or redeemed. Promote Hub spending is exempt.
+  withdrawMinLevel: "9",
 } as const;
 
 export type RewardKey = keyof typeof REWARD_KEYS;

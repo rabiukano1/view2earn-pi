@@ -23,6 +23,13 @@ export function PiEcosystemGate({ children }: { children: ReactNode }) {
   // Not signed in yet — the /pi gate shows the Pi sign-in card.
   if (!isAuthenticated || !me) return <>{children}</>;
 
+  // This account was linked into another one (identity.redeemLinkCode):
+  // sign out so the next sign-in resolves to the target account.
+  if (me.accountStatus === "merged") {
+    void signOut();
+    return <div className="pi-centered"><div className="pi-spinner" /></div>;
+  }
+
   // Telegram Mini App sessions run the same UI on the Android/Sidra economy.
   if (tg) return <>{children}</>;
 
