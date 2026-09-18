@@ -6,7 +6,7 @@
 //   node scripts/testnet-a2u.js <uid1> <uid2> <uid3> <uid4> <uid5>
 //
 // UIDs come from users signing in at https://testnet.view2earn.org/
-const PiNetwork = require("pi-backend");
+const PiNetwork = require("pi-backend").default ?? require("pi-backend"); // CJS interop: package exports { default }
 
 const apiKey = process.env.PI_TESTNET_API_KEY;
 const seed = process.env.PI_TESTNET_WALLET_SEED;
@@ -19,7 +19,9 @@ if (!apiKey || !seed || uids.length === 0) {
 (async () => {
   const pi = new PiNetwork(apiKey, seed);
   // Pi allows one A2U in flight; cancel leftovers or createPayment fails.
-  for (const p of await pi.getIncompleteServerPayments().catch(() => [])) {
+  // SDK returns the raw API body: { incomplete_server_payments: [...] }
+  const incomplete = await pi.getIncompleteServerPayments().catch(() => null);
+  for (const p of incomplete?.incomplete_server_payments ?? []) {
     await pi.cancelPayment(p.identifier).catch(() => {});
   }
   for (const uid of uids) {

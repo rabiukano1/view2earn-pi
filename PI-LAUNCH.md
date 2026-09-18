@@ -9,13 +9,13 @@ app is the real product. The Testnet app exists only to unlock the Mainnet
 wallets"). You must complete BOTH — the Testnet one is small.
 
 Each Portal app has its OWN validation key, and Pi checks it at
-`https://<host>/validation-key.txt` (domain root). Two apps therefore need two
-hostnames — that is why Testnet domain verification failed on `pi.view2earn.org`.
+`https://<host>/validation-key.txt` (domain root) — so the two apps live on two
+hostnames.
 
 | App | Network | URL | Cloudflare Pages project | Source |
 |---|---|---|---|---|
 | View2earn | Mainnet | `https://pi.view2earn.org` | `view2earn-pi` | `apps/pi-app` |
-| View2earn Testnet | Testnet | `https://testnet.view2earn.org` | `view2earn-pi-testnet` | `apps/pi-testnet` |
+| View2earn Testnet | Testnet | `https://testnet.view2earn.org` | `view2earn-pi-testnet` | `apps/pi-testnet` (UID page + key) |
 
 ---
 
@@ -34,28 +34,22 @@ hostnames — that is why Testnet domain verification failed on `pi.view2earn.or
 
 ## B. Testnet app  (needed for the App Wallet)
 
-1. Deploy the Testnet site (one time):
-   ```
-   cd D:\user\v2e\View2Earn
-   npm install
-   npm run deploy:setup -w @view2earn/pi-testnet
-   npm run deploy -w @view2earn/pi-testnet
-   ```
-   Cloudflare dashboard → Workers & Pages → `view2earn-pi-testnet` →
-   Custom domains → `testnet.view2earn.org` → Activate.
-2. Pi Browser → `pi://develop.pinet.com` → the **Testnet** app (create one if
-   missing: App Network = Testnet, pair it with the Mainnet app):
-   - [ ] App URL = `https://testnet.view2earn.org`
-   - [ ] Copy its **validation key** → paste into
-         `apps/pi-testnet/public/validation-key.txt` → redeploy
-         (`npm run deploy -w @view2earn/pi-testnet`) → Portal "Verify domain"
+1. **Verify domain.** Portal → Testnet app → copy its validation key → paste
+   into `apps/pi-testnet/public/validation-key.txt` (one line, no spaces) →
+   `npm run deploy -w @view2earn/pi-testnet` → check
+   `curl https://testnet.view2earn.org/validation-key.txt` → Portal **Verify domain**.
+   Testnet app URL (production + development) = `https://testnet.view2earn.org`.
+2. Portal → Testnet app:
    - [ ] **Get API key** → save as `PI_TESTNET_API_KEY` (shell only, NOT Convex)
    - [ ] **App Wallet** → create the Testnet wallet in `wallet.pi`
          (switch wallet to Testnet; faucet gives 100 Test-Pi) → show secret key
          → save as `PI_TESTNET_WALLET_SEED` (shell only)
-3. Collect 5 UIDs: 5 Pioneers (you count as one) open
-   `https://testnet.view2earn.org` in Pi Browser → Sign in → send you the UID.
-   Each must have opened `wallet.pi` on Testnet once (auto-creates a wallet).
+3. Collect 5 UIDs (5 different Pi accounts; you count as one). Testers open
+   `https://testnet.view2earn.org` **in Pi Browser** (black/yellow Testnet
+   stripe shows) → Sign in → send you the UID. Desktop alternative: the Testnet
+   app's Sandbox URL + Pi Utilities → Authorize Sandbox.
+   Each account must have opened `wallet.pi` on Testnet once (auto-creates a wallet).
+   A UID is app-specific: a Mainnet-app UID will NOT work for Testnet A2U.
 4. Pay them (5 App-to-User Test-Pi payments):
    ```
    cd D:\user\v2e\View2Earn

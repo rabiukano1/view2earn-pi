@@ -70,7 +70,7 @@ export const processA2UPayout = internalAction({
         return;
       }
 
-      const PiNetwork = require("pi-backend");
+      const PiNetwork = require("pi-backend").default ?? require("pi-backend"); // CJS interop: package exports { default }
       const pi = new PiNetwork(apiKey, privateSeed);
 
       // ---- Resume vs. create (never duplicate a payment) ---------------------
@@ -79,8 +79,9 @@ export const processA2UPayout = internalAction({
         // Reconcile leftover incomplete server payments (from crashed runs).
         // They block all new A2U payments, so cancel any orphans first.
         try {
+          // SDK returns the raw API body: { incomplete_server_payments: [...] }
           const incomplete = await pi.getIncompleteServerPayments();
-          for (const orphan of incomplete) {
+          for (const orphan of incomplete?.incomplete_server_payments ?? []) {
             try {
               await pi.cancelPayment(orphan.identifier);
               console.log(`[PiWithdrawal] Cancelled orphaned incomplete payment ${orphan.identifier}`);
@@ -176,7 +177,7 @@ async function handlePayoutFailure(ctx: any, withdrawalId: any, reason: string) 
   const privateSeed = process.env.PI_WALLET_PRIVATE_SEED;
   if (apiKey && privateSeed && withdrawal.paymentId) {
     try {
-      const PiNetwork = require("pi-backend");
+      const PiNetwork = require("pi-backend").default ?? require("pi-backend"); // CJS interop: package exports { default }
       const pi = new PiNetwork(apiKey, privateSeed);
       try {
         await pi.cancelPayment(withdrawal.paymentId);

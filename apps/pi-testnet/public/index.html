@@ -15,13 +15,15 @@
 <body>
 <div class="card">
   <h2>View2Earn – Testnet</h2>
-  <p class="muted">Sign in with Pi so we can send you Test‑Pi. Then send a screenshot of your UID to the team.</p>
+  <p class="muted">Sign in with Pi so we can send you Test‑Pi. Then send your UID to the team.</p>
   <button id="btn">Sign in with Pi</button>
   <div id="out"></div>
 </div>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <script>
-  Pi.init({ version: "2.0" });
+  // Works both inside Pi Browser (Testnet app URL) and through the Testnet
+  // app's desktop Sandbox URL, where the SDK must run in sandbox mode.
+  Pi.init({ version: "2.0", sandbox: !/PiBrowser/i.test(navigator.userAgent) });
   document.getElementById("btn").onclick = async () => {
     const out = document.getElementById("out");
     try {
