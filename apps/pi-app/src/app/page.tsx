@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions, useConvexAuth } from "@convex-dev/auth/react";
+import { useAction } from "convex/react";
+import { api } from "@convex/api";
 import { PiSignIn } from "@/pi/components/PiSignIn";
 import { IS_TELEGRAM_APP, getTelegramInitData } from "@/pi/telegram";
 
@@ -11,11 +13,23 @@ export default function PiGate() {
   const router = useRouter();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { signIn } = useAuthActions();
+  const bindTelegram = useAction(api.surfaces.bindTelegramSession);
   const [tgError, setTgError] = useState("");
 
+  // Telegram: an already-signed-in session may still be bound to another
+  // surface (persisted before binding worked) — prove we're in Telegram and
+  // rebind it before showing balances, so the TG ledger is what's displayed.
   useEffect(() => {
-    if (!isLoading && isAuthenticated) router.replace("/home");
-  }, [isLoading, isAuthenticated, router]);
+    if (isLoading || !isAuthenticated) return;
+    const tgInit = IS_TELEGRAM_APP ? getTelegramInitData() : "";
+    if (tgInit) {
+      bindTelegram({ initData: tgInit })
+        .catch(() => {})
+        .finally(() => router.replace("/home"));
+    } else {
+      router.replace("/home");
+    }
+  }, [isLoading, isAuthenticated, router, bindTelegram]);
 
   // Telegram Mini App: sign in silently with the signed initData.
   const initData = IS_TELEGRAM_APP ? getTelegramInitData() : "";

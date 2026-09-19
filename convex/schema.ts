@@ -24,6 +24,9 @@ export default defineSchema({
 
   dailySpins: defineTable({
     userId: v.id("users"),
+    // One record per surface. Legacy rows (undefined) are adopted by the
+    // user's home economy on first use (spin.ts getSpinRecord).
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
     windowStart: v.optional(v.number()),
     spinsUsedInWindow: v.optional(v.number()),
     bonusSpins: v.optional(v.number()),
@@ -34,7 +37,8 @@ export default defineSchema({
     // account is topped up by `spinsPerWindow` (no daily reset).
     balance: v.optional(v.number()),
     lastChargeSlot: v.optional(v.number()),
-  }).index("by_user", ["userId"]),
+  }).index("by_user", ["userId"])
+    .index("by_user_economy", ["userId", "economy"]),
 
   // Pending spin results — spin() reserves a prize without crediting points;
   // claimSpin() credits only after the wheel animation finishes.
@@ -104,14 +108,16 @@ export default defineSchema({
     // auth providers / beforeSessionCreation in the SAME transaction that
     // inserts the authSessions row, so session._creationTime === pendingSurfaceAt
     // identifies which surface a session belongs to (see lib/guards.ts).
-    pendingSurface: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
+    pendingSurface: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet"))),
     pendingSurfaceAt: v.optional(v.number()),
     payoutEvm: v.optional(v.string()), // EVM payout address (public only, no keys held)
     payoutSolana: v.optional(v.string()), // Solana payout address
     piWalletAddress: v.optional(v.string()), // Pi blockchain wallet address (public, no keys held)
+    piUsername: v.optional(v.string()), // Pi Network username, set only from a Pi.authenticate() verified server-side
     referredBy: v.optional(v.id("users")), // set at signup if a referral code was applied
   }).index("by_ecosystem", ["ecosystem"])
     .index("by_externalUid", ["externalUid"])
+    .index("by_telegramUserId", ["telegramUserId"])
     .index("email", ["email"])
     .index("by_payoutEvm", ["payoutEvm"]),
 
@@ -190,7 +196,7 @@ export default defineSchema({
     userId: v.id("users"),
     // Optional only so legacy rows (written before the two-economy split) keep
     // validating; every NEW write sets this. Backfill via backfillEconomy().
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet"))),
     delta: v.number(),
     reason: v.string(),
     refId: v.optional(v.string()),
@@ -223,6 +229,10 @@ export default defineSchema({
     // stored balance) — the rate and points taken are locked here for audit.
     pointsDebited: v.optional(v.number()),
     pointsPerSidra: v.optional(v.number()),
+    // Withdrawal fee (admin-set %) taken from the payout: pay out `netAmount`.
+    feePercent: v.optional(v.number()),
+    feeAmount: v.optional(v.number()),
+    netAmount: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
@@ -488,7 +498,7 @@ export default defineSchema({
   sessionSurfaces: defineTable({
     sessionId: v.id("authSessions"),
     userId: v.id("users"),
-    surface: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram")),
+    surface: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet")),
   }).index("by_session", ["sessionId"]),
 
   telegramNonces: defineTable({
@@ -634,6 +644,7 @@ export default defineSchema({
     pageId: v.optional(v.string()),
     pointsReward: v.number(),
     listingFee: v.number(),
+    platformFee: v.optional(v.number()), // promote fee charged on top of the budget (not refunded)
     maxCompletions: v.number(),
     completionsSoFar: v.number(),
     status: v.string(),
@@ -693,6 +704,18 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_status_createdAt", ["status", "createdAt"]),
 
+  // One row per rewarded AD that actually paid out (AdMob / Pi Ads), written
+  // at the payout site so it can't be spoofed by a client. Admin reporting
+  // only — never surfaced to users.
+  adWatchLogs: defineTable({
+    userId: v.id("users"),
+    kind: v.union(v.literal("rewarded"), v.literal("spin_double"), v.literal("spin_bonus")),
+    provider: v.string(),   // ad unit / network id as reported by the client, or "pi-ads"
+    points: v.number(),     // points the ad earned (0 for a bonus spin)
+    economy: v.string(),
+    at: v.number(),
+  }).index("by_user", ["userId"]).index("by_at", ["at"]),
+
   videoWatchLogs: defineTable({
     userId: v.id("users"),
     videoId: v.id("videos"),
@@ -718,12 +741,13 @@ export default defineSchema({
     // Which screen this stream belongs to: football/IPTV, YouTube, or other
     // live streams. Auto-classified from the URL on create unless overridden.
     type: v.optional(
-      v.union(v.literal("football"), v.literal("youtube"), v.literal("other")),
+      v.union(v.literal("football"), v.literal("youtube"), v.literal("other"), v.literal("movies")),
     ),
     streamUrl: v.string(),
     backupStreamUrls: v.optional(v.array(v.string())),
     quality: v.optional(v.string()), // e.g. "1080p HD", "720p HD", "SD"
     currentMatch: v.optional(v.string()), // short subtitle shown under the name
+    // Legacy (no longer read or written): kept optional so old rows still validate.
     httpReferrer: v.optional(v.string()),
     userAgent: v.optional(v.string()),
     // "active" == visible/playable in the app; "paused" == hidden but kept.

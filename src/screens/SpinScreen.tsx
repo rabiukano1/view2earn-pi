@@ -559,7 +559,7 @@ export default function SpinScreen() {
 
                 <TouchableOpacity style={styles.directClaimBtn} onPress={handleDirectClaim} activeOpacity={0.85} disabled={claiming}>
                   {claiming ? <ActivityIndicator size="small" color="#C4B5FD" /> : <Icon name="check" iconStyle="solid" size={13} color="#C4B5FD" />}
-                  <Text style={styles.directClaimText}>{claiming ? 'Claiming…' : `Claim +${result} PTS (Skip Ad)`}</Text>
+                  <Text style={styles.directClaimText}>{claiming ? 'Claiming…' : `Claim +${result} PTS`}</Text>
                 </TouchableOpacity>
               </View>
             ) : (

@@ -21,6 +21,7 @@ import Icon from '../components/Icon';
 import LiveStreamPlayer from '../components/LiveStreamPlayer';
 import { colors, radius, spacing, shadow } from '../theme';
 import { IPTVChannel } from '../services/iptvService';
+import { showInterstitial } from '../services/interstitialService';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'LiveStreams'>;
 type Route = RouteProp<RootStackParamList, 'LiveStreams'>;
@@ -28,8 +29,10 @@ type Route = RouteProp<RootStackParamList, 'LiveStreams'>;
 const FALLBACK_LOGO_URI = 'https://i.imgur.com/V9KzY0G.png';
 
 const KIND_META = {
+  football: { title: '⚽ Live Football', empty: 'No football streams yet' },
   youtube: { title: '🎬 YouTube Videos', empty: 'No YouTube videos yet' },
   other: { title: '📺 Live Streams', empty: 'No live streams yet' },
+  movies: { title: '🎥 Movies', empty: 'No movies yet' },
 } as const;
 
 type SignalStatus = 'Connecting' | 'Excellent' | 'Good' | 'Weak' | 'Offline';
@@ -84,6 +87,11 @@ export default function LiveStreamsScreen() {
   }, [iptvDocs, kind]);
 
   const pick = (channel: IPTVChannel) => {
+    // Interstitial on channel pick — a natural transition point; the service
+    // caps frequency (30s gap / 10 per session) and checks consent.
+    // Never for YouTube: YouTube API policy III.E forbids interstitials
+    // before/after embedded playback.
+    if (kind !== 'youtube') showInterstitial().catch(() => {});
     setSelected(channel);
     setMeasuredBitrate(0);
     setSignalStatus('Connecting');

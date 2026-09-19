@@ -10,7 +10,8 @@
 // the existing per-adType cooldowns / daily ad limits). Upgrade path: Adsgram
 // "Reward URL" postback -> convex/http.ts when traffic justifies it.
 
-type AdController = { show: () => Promise<{ done: boolean }> };
+type ShowResult = { done: boolean; description?: string; error?: boolean; state?: string };
+type AdController = { show: () => Promise<ShowResult> };
 declare global {
   interface Window {
     Adsgram?: { init: (opts: { blockId: string; debug?: boolean }) => AdController };
@@ -41,16 +42,19 @@ function loadSdk(): Promise<NonNullable<Window["Adsgram"]>> {
 
 export const adsgramConfigured = () => REWARD_BLOCK.length > 0;
 
-// Resolves true only when the user watched to the end. Throws if not configured
-// or the SDK cannot load, so callers can fall back.
-export async function showAdsgramRewarded(): Promise<boolean> {
+// Resolves { done: true } only when the user watched to the end; otherwise
+// carries Adsgram's own description (no fill, closed early, not approved…).
+// Throws if not configured or the SDK cannot load, so callers can fall back.
+export async function showAdsgramRewarded(): Promise<{ done: boolean; reason: string }> {
   if (!REWARD_BLOCK) throw new Error("Adsgram not configured");
   const Adsgram = await loadSdk();
   try {
     const res = await Adsgram.init({ blockId: REWARD_BLOCK, debug: isDebugUser() }).show();
-    return res.done === true;
-  } catch {
-    return false; // closed early / no fill — never rewarded
+    return { done: res.done === true, reason: res.description ?? res.state ?? "AD_CLOSED" };
+  } catch (e) {
+    const r = e as ShowResult | Error;
+    const reason = (r as ShowResult)?.description ?? (r as Error)?.message ?? "AD_ERROR";
+    return { done: false, reason: `Adsgram: ${reason}` };
   }
 }
 

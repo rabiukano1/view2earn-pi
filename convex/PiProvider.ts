@@ -34,10 +34,16 @@ export const PiProvider = ConvexCredentials({
     // Flag the offending second account as DUPLICATE/FRAUD and reject the link.
     // The original verified account is never touched.
     const currentUserId = await getAuthUserId(ctx);
-    if (existing && existing.user && currentUserId && existing.user._id !== currentUserId) {
-      await ctx.runMutation(internal.fraud.flagDuplicatePiLink, {
+    const current: { accountStatus?: string; mergedInto?: string } | null = currentUserId
+      ? await ctx.runQuery(internal.piLink.getUserMergeState, { userId: currentUserId as Id<"users"> })
+      : null;
+    const isMergedIntoOwner =
+      !!existing?.user && current?.accountStatus === "merged" && current.mergedInto === existing.user._id;
+    if (existing && existing.user && currentUserId && existing.user._id !== currentUserId && !isMergedIntoOwner) {
+      await ctx.runMutation(internal.fraud.flagDuplicateLink, {
         userId: currentUserId as Id<"users">,
-        piUid: verified.uid,
+        identity: `pi:${verified.uid}`,
+        ownerUserId: existing.user._id as Id<"users">,
       });
       throw new Error(
         "This Pi account is already linked to another View2Earn account. Your account has been flagged for duplicate-identity review.",
@@ -49,6 +55,12 @@ export const PiProvider = ConvexCredentials({
         userId: existing.user._id as Id<"users">,
         surface: "pi-browser",
       });
+      if (verified.username && existing.user.piUsername !== verified.username) {
+        await ctx.runMutation(internal.piWallet.setPiUsernameInternal, {
+          userId: existing.user._id as Id<"users">,
+          piUsername: verified.username,
+        });
+      }
       // Refresh the wallet address on re-login if the Pioneer has one.
       if (walletAddress && existing.user.piWalletAddress !== walletAddress) {
         await ctx.runMutation(internal.piWallet.setPiWalletAddressInternal, {
@@ -62,6 +74,7 @@ export const PiProvider = ConvexCredentials({
     const profile: Record<string, string> = {
       name: verified.username,
       piUid: verified.uid,
+      piUsername: verified.username,
     };
     if (walletAddress) profile.piWalletAddress = walletAddress;
     if (credentials.country) profile.country = credentials.country as string;

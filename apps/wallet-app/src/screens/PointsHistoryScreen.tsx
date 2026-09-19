@@ -20,11 +20,31 @@ const REASON_META: Record<string, { label: string; icon: string }> = {
   REDEEM: { label: 'Redeemed reward', icon: '🎁' },
   MARKETPLACE_LISTING: { label: 'Marketplace listing', icon: '🏪' },
   MARKETPLACE_REFUND: { label: 'Listing refund', icon: '↩' },
+  SPIN_WHEEL: { label: 'Spin & Win', icon: '🎡' },
+  CLAIM_TO_WALLET: { label: 'Claimed to wallet', icon: '⬆' },
+  CLAIM_FROM_ANDROID: { label: 'Claimed from Android', icon: '⬇' },
+  CLAIM_FROM_TELEGRAM: { label: 'Claimed from Telegram', icon: '⬇' },
+  CLAIM_FROM_PI_BROWSER: { label: 'Claimed from Pi Browser', icon: '⬇' },
+  SIDRA_DEPOSIT: { label: 'SIDRA deposit', icon: '⬇' },
+  SIDRA_WITHDRAWAL: { label: 'SIDRA withdrawal', icon: '⬆' },
+  SWAP_POINTS_TO_PIPRO: { label: 'Swapped to PIPRO', icon: '⇄' },
+  SWAP_PIPRO_TO_POINTS: { label: 'Swapped from PIPRO', icon: '⇄' },
 };
 
-function reasonMeta(reason: string): { label: string; icon: string } {
-  if (reason.startsWith('AD_REWARD_')) return { label: 'Ad reward', icon: '📺' };
+export function reasonMeta(reason: string): { label: string; icon: string } {
+  if (reason.startsWith('AD_REWARD_')) return { label: 'Bonus reward', icon: '🎁' };
   return REASON_META[reason] ?? { label: reason, icon: '●' };
+}
+
+// Backend transaction notes are written for admins; scrub ad/2x wording
+// before showing them to users.
+export function cleanNote(note: string): string {
+  return note
+    .replace(/watched ad reward/i, 'Bonus reward')
+    .replace(/spin wheel 2x extra/i, 'Spin & Win bonus')
+    .replace(/spin wheel prize/i, 'Spin & Win')
+    .replace(/spin recovery/i, 'Spin & Win')
+    .replace(/\s*\(\+?([\d.,]+) PTS, [a-z-]+\)/i, ' (+$1 PTS)');
 }
 
 function formatTime(ms: number): string {

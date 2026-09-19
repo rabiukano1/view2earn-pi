@@ -1,76 +1,50 @@
 import { query } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
-import { deriveEconomy } from "./lib/guards";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { sessionEconomy, type Economy } from "./lib/guards";
+
+// One leaderboard per surface: the Android app ranks android balances, the
+// Telegram app telegram balances, the Pi app pi-browser balances. The surface
+// is the CALLER's session economy (server-side), so no client changes.
+async function callerEconomy(ctx: QueryCtx): Promise<Economy> {
+  const userId = await getAuthUserId(ctx);
+  const user = userId ? await ctx.db.get(userId) : null;
+  return user ? sessionEconomy(ctx, user) : "android";
+}
+
+async function rankedBalances(ctx: QueryCtx, economy: Economy) {
+  const users = await ctx.db.query("users").collect();
+  const rows = await Promise.all(
+    users.map(async (u) => {
+      const last = await ctx.db
+        .query("pointsLedger")
+        .withIndex("by_user_economy", (q) => q.eq("userId", u._id).eq("economy", economy))
+        .order("desc")
+        .first();
+      return { _id: u._id, username: u.username, ecosystem: u.ecosystem, balance: last?.balanceAfter ?? 0 };
+    }),
+  );
+  return rows.filter((u) => u.balance > 0).sort((a, b) => b.balance - a.balance);
+}
 
 export const topEarners = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
-    const take = limit ?? 20;
-    const users = await ctx.db.query("users").collect();
-
-    const withBalance = await Promise.all(
-      users.map(async (u) => {
-        // Each user's leaderboard position uses their OWN economy balance —
-        // the two economies are ranked independently.
-        const economy = deriveEconomy(u);
-        const last = await ctx.db
-          .query("pointsLedger")
-          .withIndex("by_user_economy", (q) =>
-            q.eq("userId", u._id).eq("economy", economy),
-          )
-          .order("desc")
-          .first();
-        return {
-          _id: u._id,
-          username: u.username,
-          ecosystem: u.ecosystem,
-          balance: last?.balanceAfter ?? 0,
-        };
-      }),
-    );
-
-    return withBalance
-      .filter((u) => u.balance > 0)
-      .sort((a, b) => b.balance - a.balance)
-      .slice(0, take);
+    const ranked = await rankedBalances(ctx, await callerEconomy(ctx));
+    return ranked.slice(0, limit ?? 20);
   },
 });
 
 export const myRank = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    const all = await ctx.db.query("users").collect();
-    let myBalance = 0;
-    let myEcosystem = "SIDRA";
-
-    const withBalance = await Promise.all(
-      all.map(async (u) => {
-        const economy = deriveEconomy(u);
-        const last = await ctx.db
-          .query("pointsLedger")
-          .withIndex("by_user_economy", (q) =>
-            q.eq("userId", u._id).eq("economy", economy),
-          )
-          .order("desc")
-          .first();
-        const bal = last?.balanceAfter ?? 0;
-        if (u._id === userId) {
-          myBalance = bal;
-          myEcosystem = u.ecosystem;
-        }
-        return { userId: u._id, balance: bal, ecosystem: u.ecosystem };
-      }),
-    );
-
-    const ranked = withBalance
-      .filter((u) => u.balance > 0 && u.ecosystem === myEcosystem)
-      .sort((a, b) => b.balance - a.balance);
-
-    const pos = ranked.findIndex((u) => u.userId === userId);
+    const ranked = await rankedBalances(ctx, await callerEconomy(ctx));
+    const pos = ranked.findIndex((u) => u._id === userId);
     return {
       rank: pos >= 0 ? pos + 1 : null,
       total: ranked.length,
-      balance: myBalance,
+      balance: pos >= 0 ? ranked[pos].balance : 0,
     };
   },
 });

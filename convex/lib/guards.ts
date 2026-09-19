@@ -80,7 +80,13 @@ export async function requireTier(
 //                  Never withdrawable.
 // ---------------------------------------------------------------------------
 
-export type Economy = "android" | "pi-browser" | "telegram";
+// "wallet" is not a surface: it is the pool of points a user has CLAIMED from
+// a surface after reaching the withdraw level there. The wallet app binds its
+// sessions to it, so every economy-aware spend path draws from the pool.
+export type Economy = "android" | "pi-browser" | "telegram" | "wallet";
+// An earning surface. Points are only ever EARNED on a surface; the pool is
+// fed by claims and real-money deposits alone.
+export type Surface = Exclude<Economy, "wallet">;
 
 // One user, three surfaces. A user's ledgers are keyed by the surface the
 // request comes from (Pi Browser / Telegram Mini App / Android app), not by
@@ -94,7 +100,7 @@ const PENDING_MATCH_MS = 1500;
 
 // Legacy / session-less resolution (cron, postbacks, admin): the user's "home"
 // economy from their identity anchor.
-export function deriveEconomy(user: Doc<"users">): Economy {
+export function deriveEconomy(user: Doc<"users">): Surface {
   if (user.externalUid?.startsWith("pi:")) return "pi-browser";
   if (user.externalUid?.startsWith("telegram:")) return "telegram";
   return "android";
@@ -134,6 +140,17 @@ export async function requireUserAndEconomy(
   const user = await requireUser(ctx, userId);
   if (user.accountStatus === "paused") throw new Error("ACCOUNT_PAUSED");
   return { user, economy: await sessionEconomy(ctx, user) };
+}
+
+// requireUserAndEconomy for actions that EARN or spend on a surface ledger
+// (spin, tasks, referrals…). The wallet app can only claim/spend the pool.
+export async function requireUserAndSurface(
+  ctx: QueryCtx | MutationCtx,
+  userId: string,
+): Promise<{ user: Doc<"users">; economy: Surface }> {
+  const r = await requireUserAndEconomy(ctx, userId);
+  if (r.economy === "wallet") throw new Error("This action isn't available in the wallet app");
+  return { user: r.user, economy: r.economy };
 }
 
 // requireUser + assert the derived economy equals the expected one. Every

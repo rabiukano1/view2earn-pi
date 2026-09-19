@@ -5,6 +5,7 @@ import { assertCanCashOut } from "./identity";
 import { isEvmAddress, isSolanaAddress } from "@view2earn/core";
 import { lastBalance, appendLedger } from "./lib/ledger";
 import { readPointsPerSidra } from "./sidra";
+import { getFeePercent, getNum } from "./rewardsConfig";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -73,11 +74,17 @@ export const getOrCreateWallet = query({
       .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .unique();
 
-    const androidLedger = await lastBalance(ctx, userId, "android");
-    const piLedger = await lastBalance(ctx, userId, "pi-browser");
-    const totalLedger = androidLedger + piLedger;
-    const totalWallet = (existing?.piBrowserPointsBalance ?? 0) + (existing?.pointsBalance ?? 0);
-    const pointsBalance = Math.max(totalLedger, totalWallet);
+    let pointsBalance: number;
+    if (economy === "wallet") {
+      // Wallet app: spendable points are what's been claimed into the pool.
+      pointsBalance = await lastBalance(ctx, userId, "wallet");
+    } else {
+      const androidLedger = await lastBalance(ctx, userId, "android");
+      const piLedger = await lastBalance(ctx, userId, "pi-browser");
+      const totalLedger = androidLedger + piLedger;
+      const totalWallet = (existing?.piBrowserPointsBalance ?? 0) + (existing?.pointsBalance ?? 0);
+      pointsBalance = Math.max(totalLedger, totalWallet);
+    }
 
     return {
       _id: existing?._id ?? null,
@@ -162,9 +169,12 @@ export const swapPointsToPipro = mutation({
     const newPipro = wallet.piproBalance + piproReceived;
 
     await ctx.db.patch(wallet._id, {
+      // Mirror only for surface ledgers; the wallet pool has no mirror field.
       ...(economy === "pi-browser"
         ? { piBrowserPointsBalance: newPoints }
-        : { pointsBalance: newPoints }),
+        : economy === "android"
+          ? { pointsBalance: newPoints }
+          : {}),
       piproBalance: newPipro,
     });
 
@@ -202,9 +212,12 @@ export const swapPiproToPoints = mutation({
     const newPipro = wallet.piproBalance - piproAmount;
 
     await ctx.db.patch(wallet._id, {
+      // Mirror only for surface ledgers; the wallet pool has no mirror field.
       ...(economy === "pi-browser"
         ? { piBrowserPointsBalance: newPoints }
-        : { pointsBalance: newPoints }),
+        : economy === "android"
+          ? { pointsBalance: newPoints }
+          : {}),
       piproBalance: newPipro,
     });
 
@@ -391,8 +404,11 @@ export const requestWithdrawal = mutation({
   },
   handler: async (ctx, { userId, asset, amount, destinationAddress }) => {
     const { economy } = await requireUserAndEconomy(ctx, userId);
-    await assertCanCashOut(ctx, userId); // 3-in-1 gate (identity.ts)
+    await assertCanCashOut(ctx, userId); // per-surface gate (identity.ts)
     if (amount <= 0) throw new Error("Amount must be greater than 0");
+    const minKey = asset === "SIDRA" ? "minWithdrawSidra" : asset === "PIPRO" ? "minWithdrawPipro" : "minWithdrawVinta";
+    const minAmount = await getNum(ctx, minKey);
+    if (minAmount > 0 && amount < minAmount) throw new Error(`Minimum withdrawal is ${minAmount} ${asset}`);
 
     const addr = destinationAddress.trim();
     if (!addr) throw new Error("Destination address is required");
@@ -434,15 +450,16 @@ export const requestWithdrawal = mutation({
       }
       // Ledger is the source of truth for points; this throws if it would go negative.
       await appendLedger(ctx, userId, economy, -pointsDebited, "SIDRA_WITHDRAWAL", addr);
-      pointsAfter =
-        economy === "pi-browser"
-          ? (wallet.piBrowserPointsBalance ?? 0) - pointsDebited
-          : wallet.pointsBalance - pointsDebited;
-      await ctx.db.patch(
-        wallet._id,
-        economy === "pi-browser" ? { piBrowserPointsBalance: pointsAfter } : { pointsBalance: pointsAfter },
-      );
+      pointsAfter = available - pointsDebited;
+      if (economy === "pi-browser") await ctx.db.patch(wallet._id, { piBrowserPointsBalance: pointsAfter });
+      else if (economy === "android") await ctx.db.patch(wallet._id, { pointsBalance: pointsAfter });
     }
+
+    // Fee comes out of the payout, so the user's balance is debited `amount`
+    // and the payout admin sends `netAmount`.
+    const feePercent = await getFeePercent(ctx, "withdrawFeeEnabled", "withdrawFeePercent");
+    const feeAmount = feePercent > 0 ? Math.round(amount * feePercent) / 100 : 0;
+    const netAmount = Math.round((amount - feeAmount) * 1e6) / 1e6;
 
     const withdrawalId = await ctx.db.insert("withdrawals", {
       userId,
@@ -451,6 +468,7 @@ export const requestWithdrawal = mutation({
       destinationAddress: addr,
       status: "pending",
       ...(asset === "SIDRA" ? { pointsDebited, pointsPerSidra } : {}),
+      ...(feeAmount > 0 ? { feePercent, feeAmount, netAmount } : {}),
       createdAt: Date.now(),
     });
 
@@ -462,12 +480,13 @@ export const requestWithdrawal = mutation({
       pointsBalanceAfter: pointsAfter,
       piproBalanceAfter: asset === "PIPRO" ? (wallet.piproBalance - amount) : wallet.piproBalance,
       note:
-        asset === "SIDRA"
+        (asset === "SIDRA"
           ? `Withdraw ${amount} SIDRA to ${addr.slice(0, 6)}…${addr.slice(-4)} (−${pointsDebited} PTS at 1 SIDRA = ${pointsPerSidra} PTS)`
-          : `Requested withdrawal of ${amount} ${asset} to ${addr.slice(0, 6)}…${addr.slice(-4)}`,
+          : `Requested withdrawal of ${amount} ${asset} to ${addr.slice(0, 6)}…${addr.slice(-4)}`) +
+        (feeAmount > 0 ? ` · fee ${feePercent}% = ${feeAmount} ${asset}, you receive ${netAmount}` : ""),
     });
 
-    return { withdrawalId, status: "pending", pointsDebited };
+    return { withdrawalId, status: "pending", pointsDebited, feeAmount, netAmount };
   },
 });
 

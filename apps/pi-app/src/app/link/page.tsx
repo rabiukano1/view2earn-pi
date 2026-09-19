@@ -26,7 +26,7 @@ function LinkCard() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const completeLink = useAction(api.piLink.completeLink);
-  const { signIn } = useAuthActions();
+  const { signIn, signOut } = useAuthActions();
 
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -54,6 +54,10 @@ function LinkCard() {
     setError("");
     try {
       const res = await signInWithPi();
+      // A leftover session from a plain Pi-Browser login belongs to a
+      // different (soon-merged) account; clear it so signIn below can't be
+      // mistaken for a second account claiming this Pi.
+      await signOut().catch(() => {});
       await completeLink({
         token,
         accessToken: res.accessToken,

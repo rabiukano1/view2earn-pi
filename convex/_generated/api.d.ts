@@ -62,6 +62,7 @@ import type * as referrals from "../referrals.js";
 import type * as reports from "../reports.js";
 import type * as rewards from "../rewards.js";
 import type * as rewardsConfig from "../rewardsConfig.js";
+import type * as selfcheck from "../selfcheck.js";
 import type * as sidra from "../sidra.js";
 import type * as sidraAuth from "../sidraAuth.js";
 import type * as spin from "../spin.js";
@@ -141,6 +142,7 @@ declare const fullApi: ApiFromModules<{
   reports: typeof reports;
   rewards: typeof rewards;
   rewardsConfig: typeof rewardsConfig;
+  selfcheck: typeof selfcheck;
   sidra: typeof sidra;
   sidraAuth: typeof sidraAuth;
   spin: typeof spin;

@@ -298,9 +298,10 @@ export async function showPiRewardedAd(
   if (isTelegram()) {
     if (!adsgramConfigured()) return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
     try {
-      return (await showAdsgramRewarded())
+      const ad = await showAdsgramRewarded();
+      return ad.done
         ? { supported: true, rewarded: true }
-        : { supported: true, rewarded: false, reason: "AD_CLOSED" };
+        : { supported: true, rewarded: false, reason: ad.reason };
     } catch {
       return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
     }

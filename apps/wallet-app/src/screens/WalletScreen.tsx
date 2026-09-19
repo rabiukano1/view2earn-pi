@@ -26,6 +26,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import Icon from '../components/Icon';
+import { cleanNote } from './PointsHistoryScreen';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -40,7 +41,7 @@ const SIDRA_LOGO = require('../assets/sidra_logo.png');
 type AssetKey = 'POINTS' | 'VINTA' | 'PIPRO';
 
 const ASSETS: Record<AssetKey, { label: string; code: string; color: string; icon?: string; sub: string }> = {
-  POINTS: { label: 'Points Balance', code: 'PTS', color: '#FBBF24', icon: 'coins', sub: 'Earned from tasks, quizzes & rewards' },
+  POINTS: { label: 'Points Balance', code: 'PTS', color: '#FBBF24', icon: 'coins', sub: 'Claimed from your platforms' },
   VINTA: { label: 'VINTA Token', code: 'VINTA', color: '#FBBF24', sub: 'Original platform currency' },
   PIPRO: { label: 'PIPRO Token', code: 'PIPRO', color: '#8B5CF6', sub: 'Solana blockchain powered' },
 };
@@ -597,7 +598,7 @@ export default function WalletScreen() {
                 <TouchableOpacity
                   key={key}
                   style={[styles.row, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: p.border }]}
-                  onPress={() => setActiveAsset(key)}
+                  onPress={() => stackNav.navigate('Asset', { asset: key })}
                   activeOpacity={0.7}>
                   {renderAssetLogo(key, 42)}
                   <View style={styles.rowBody}>
@@ -652,7 +653,7 @@ export default function WalletScreen() {
                       {tx.type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                     </Text>
                     {tx.note ? (
-                      <Text style={[styles.rowSub, { color: p.textMuted }]} numberOfLines={1}>{tx.note}</Text>
+                      <Text style={[styles.rowSub, { color: p.textMuted }]} numberOfLines={1}>{cleanNote(tx.note)}</Text>
                     ) : null}
                   </View>
                   <View style={styles.rowRight}>

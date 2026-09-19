@@ -10,7 +10,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { requireUser } from "./lib/guards";
-import { appendLedger, economyOfUser } from "./lib/ledger";
+import { appendLedger, lastBalance } from "./lib/ledger";
 
 // ─── Real Sidra Chain (EVM) deposits ─────────────────────────────────────────
 //
@@ -218,38 +218,15 @@ export const confirmSidraDeposit = internalMutation({
     });
     if (points <= 0) return 0;
 
-    const economy = await economyOfUser(ctx, deposit.userId);
-    await appendLedger(ctx, deposit.userId, economy, points, "SIDRA_DEPOSIT", `sidra-${deposit.txHash}`);
-
-    // Mirror onto the wallet doc + history, matching every other points credit.
-    let wallet = await ctx.db
-      .query("wallets")
-      .withIndex("by_user", (q) => q.eq("userId", deposit.userId))
-      .unique();
-    if (!wallet) {
-      const id = await ctx.db.insert("wallets", {
-        userId: deposit.userId,
-        pointsBalance: 0,
-        piproBalance: 0,
-        vintaBalance: 100,
-      });
-      wallet = (await ctx.db.get(id))!;
-    }
-    const newPoints =
-      economy === "pi-browser"
-        ? (wallet.piBrowserPointsBalance ?? 0) + points
-        : wallet.pointsBalance + points;
-    await ctx.db.patch(
-      wallet._id,
-      economy === "pi-browser" ? { piBrowserPointsBalance: newPoints } : { pointsBalance: newPoints },
-    );
+    // Real money in → straight to the wallet pool; a deposit is never level-gated.
+    await appendLedger(ctx, deposit.userId, "wallet", points, "SIDRA_DEPOSIT", `sidra-${deposit.txHash}`);
     await ctx.db.insert("walletTransactions", {
       userId: deposit.userId,
       type: "deposit_sidra",
       pointsDelta: points,
       piproDelta: 0,
-      pointsBalanceAfter: newPoints,
-      piproBalanceAfter: wallet.piproBalance,
+      pointsBalanceAfter: await lastBalance(ctx, deposit.userId, "wallet"),
+      piproBalanceAfter: 0,
       note: `Sidra deposit: ${amount} SIDRA → ${points} PTS at 1 SIDRA = ${rate} PTS (tx: ${deposit.txHash.slice(0, 12)}…)`,
     });
     return points;

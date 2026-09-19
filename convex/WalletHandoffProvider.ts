@@ -15,6 +15,7 @@ export const WalletHandoffProvider = ConvexCredentials({
       internal.walletAuth.consumeNonce,
       { nonce },
     );
+    await ctx.runMutation(internal.surfaces.markPending, { userId: consumed.userId, surface: "wallet" });
     return { userId: consumed.userId };
   },
 });

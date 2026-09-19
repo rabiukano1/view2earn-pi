@@ -13,15 +13,24 @@ const FRAUD_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000; // matches verifications.ts
 // the offending (second) account as DUPLICATE / FRAUD REVIEW and leave the
 // original verified account completely untouched (no freeze, no balance change,
 // no identity transfer).
-export const flagDuplicatePiLink = internalMutation({
-  args: { userId: v.id("users"), piUid: v.string() },
-  handler: async (ctx, { userId, piUid }) => {
-    await ctx.db.insert("fraudEvents", {
-      userId,
-      type: "DUPLICATE_PI_LINK",
-      detailsJson: JSON.stringify({ piUid, at: Date.now() }),
-    });
-    await recomputeUserScore(ctx, userId);
+// `identity` is "pi:<uid>" or "telegram:<id>"; `ownerUserId` is the account
+// that legitimately holds it. Only the requester is flagged.
+export async function recordDuplicateLink(
+  ctx: any,
+  args: { userId: any; identity: string; ownerUserId: any },
+): Promise<void> {
+  await ctx.db.insert("fraudEvents", {
+    userId: args.userId,
+    type: "DUPLICATE_LINK",
+    detailsJson: JSON.stringify({ identity: args.identity, ownerUserId: args.ownerUserId, at: Date.now() }),
+  });
+  await recomputeUserScore(ctx, args.userId);
+}
+
+export const flagDuplicateLink = internalMutation({
+  args: { userId: v.id("users"), identity: v.string(), ownerUserId: v.id("users") },
+  handler: async (ctx, args) => {
+    await recordDuplicateLink(ctx, args);
     return { flagged: true };
   },
 });

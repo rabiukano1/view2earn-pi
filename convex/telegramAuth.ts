@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, internalAction, internalMutation } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./lib/guards";
+import { recordDuplicateLink } from "./fraud";
 
 // "Sign in with Telegram" (deep-link bot flow). The client creates a nonce and
 // opens t.me/<bot>?start=<nonce>; the bot webhook (http.ts) marks it verified
@@ -109,22 +112,105 @@ export const linkComplete = mutation({
       throw new Error("Telegram link not completed");
     }
     await ctx.db.patch(row._id, { used: true });
-    // One Telegram account maps to one app account — never let a second user
-    // adopt an id that's already claimed.
-    const colliding = await ctx.db
-      .query("users")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("telegramUserId"), telegramUserId),
-          q.neq(q.field("_id"), userId),
-        ),
-      )
-      .first();
-    if (colliding) {
-      throw new Error("This Telegram account is already linked to another account");
-    }
-    await ctx.db.patch(userId, { telegramUserId });
+    await attachTelegram(ctx, userId, telegramUserId);
     return { telegramUserId };
+  },
+});
+
+// One user <-> one Telegram account, and logging into the Telegram Mini App
+// is enough to "own" a Telegram ID. When a user links a Telegram ID that the
+// Mini App already created a separate account for, that Telegram-only account
+// is MERGED into this one: its telegram-surface ledger, spins and task claims
+// move over, its auth account is re-pointed, and it is marked "merged". The
+// next Mini App sign-in then lands on this user.
+export async function attachTelegram(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  telegramUserId: string,
+): Promise<void> {
+  const user = await ctx.db.get(userId);
+  if (!user) throw new Error("Account not found");
+  if (user.telegramUserId && user.telegramUserId !== telegramUserId) {
+    throw new Error("This account already has a different Telegram linked");
+  }
+  const accountId = `telegram:${telegramUserId}`;
+  const acct = await ctx.db
+    .query("authAccounts")
+    .withIndex("providerAndAccountId", (q) => q.eq("provider", "telegram").eq("providerAccountId", accountId))
+    .first();
+  const owner = await ctx.db
+    .query("users")
+    .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", telegramUserId))
+    .first();
+  const other = [acct?.userId, owner?._id].find((id) => id && id !== userId) as Id<"users"> | undefined;
+
+  if (other) {
+    const o = await ctx.db.get(other);
+    if (!o) throw new Error("Account not found");
+    // A real, populated account on ANOTHER surface owns this Telegram: refuse.
+    // (Only a Telegram-first account — no Pi/Android login — can be absorbed.)
+    const otherAccounts = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", other))
+      .collect();
+    if (otherAccounts.some((a) => a.provider !== "telegram")) {
+      await recordDuplicateLink(ctx, { userId, identity: `telegram:${telegramUserId}`, ownerUserId: other });
+      throw new Error("This Telegram account is already linked to another View2Earn account");
+    }
+    await mergeTelegramOnlyAccount(ctx, other, userId);
+  }
+
+  if (!acct) {
+    await ctx.db.insert("authAccounts", { userId, provider: "telegram", providerAccountId: accountId });
+  } else if (acct.userId !== userId) {
+    await ctx.db.patch(acct._id, { userId });
+  }
+  await ctx.db.patch(userId, { telegramUserId });
+}
+
+// Move everything the Telegram-only account earned on the telegram surface to
+// the target, then retire it. The target has no telegram ledger yet (checked by
+// the caller), so the moved balanceAfter chain stays consistent.
+async function mergeTelegramOnlyAccount(ctx: MutationCtx, from: Id<"users">, to: Id<"users">) {
+  for (const r of await ctx.db
+    .query("pointsLedger")
+    .withIndex("by_user_economy", (q) => q.eq("userId", from).eq("economy", "telegram"))
+    .collect()) {
+    await ctx.db.patch(r._id, { userId: to });
+  }
+  for (const r of await ctx.db
+    .query("dailySpins")
+    .withIndex("by_user_economy", (q) => q.eq("userId", from).eq("economy", "telegram"))
+    .collect()) {
+    await ctx.db.patch(r._id, { userId: to });
+  }
+  for (const r of await ctx.db
+    .query("verifications")
+    .withIndex("by_user", (q) => q.eq("userId", from))
+    .collect()) {
+    if (r.economy === "telegram") await ctx.db.patch(r._id, { userId: to });
+  }
+  await ctx.db.patch(from, {
+    accountStatus: "merged",
+    mergedInto: to,
+    telegramUserId: undefined,
+    externalUid: `merged:${from}`,
+  });
+}
+
+// Mini App sign-in for a Telegram ID that has no auth account yet but WAS
+// linked from Android (telegramUserId on a user): adopt that user instead of
+// creating a duplicate. Returns null when nobody owns the ID.
+export const adoptLinkedUser = internalMutation({
+  args: { telegramUserId: v.string() },
+  handler: async (ctx, { telegramUserId }): Promise<Id<"users"> | null> => {
+    const owner = await ctx.db
+      .query("users")
+      .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", telegramUserId))
+      .first();
+    if (!owner || owner.accountStatus === "merged") return null;
+    await attachTelegram(ctx, owner._id, telegramUserId);
+    return owner._id;
   },
 });
 

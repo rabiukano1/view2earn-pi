@@ -5,7 +5,7 @@ import { useAction } from "convex/react";
 import { api } from "@convex/api";
 import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen, timeAgo } from "@/components/ui";
-import { Tv, Plus, Edit2, Trash2, Play, Pause, Wand2 } from "lucide-react";
+import { Tv, Plus, Edit2, Trash2, Play, Pause } from "lucide-react";
 import type { Id } from "@convex/dataModel";
 
 const CATEGORIES = ["Football", "Sports", "News", "Entertainment"];
@@ -13,6 +13,7 @@ const TYPES = [
   { value: "football", label: "Football / IPTV" },
   { value: "youtube", label: "YouTube" },
   { value: "other", label: "Other Live Stream" },
+  { value: "movies", label: "Movies" },
 ];
 
 type Form = {
@@ -42,11 +43,14 @@ const emptyForm: Form = {
   currentMatch: "",
 };
 
-// Normalize a YouTube handle/username/channel id/URL into a valid URL.
-// Accepts: "@NASA", "NASA", "UC...", "youtube.com/@NASA", full watch/short URLs.
+// Normalize a YouTube channel id / playlist / URL into a playable URL.
+// "UC…" channel id → that channel's uploads playlist (all its videos).
+// "PL…"/"UU…" playlist id → playlist URL. Full watch/live/playlist URLs pass through.
 function normalizeYoutubeInput(raw: string): string {
   const input = raw.trim();
   if (!input) return "";
+  if (/^UC[\w-]{22}$/.test(input)) return `https://www.youtube.com/playlist?list=UU${input.slice(2)}`;
+  if (/^(PL|UU)[\w-]+$/.test(input)) return `https://www.youtube.com/playlist?list=${input}`;
   if (/^(https?:\/\/)?(www\.)?(m\.)?(youtube\.com|youtu\.be)/i.test(input)) {
     return /^https?:\/\//i.test(input) ? input : `https://${input}`;
   }
@@ -60,38 +64,10 @@ export default function ChannelsPage() {
   const update = useAdminMutation(api.iptv.update);
   const setStatus = useAdminMutation(api.iptv.setStatus);
   const remove = useAdminMutation(api.iptv.remove);
+  const resolveHandle = useAction(api.iptv.resolveYoutubeHandle);
 
   const [editing, setEditing] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [resolveNote, setResolveNote] = useState<string | null>(null);
-  const resolveUrl = useAction(api.iptv.resolve);
-
-  const autoResolve = async () => {
-    if (!editing) return;
-    const isYoutube = editing.type === "youtube";
-    const raw = isYoutube
-      ? normalizeYoutubeInput(editing.youtubeHandle || editing.streamUrl)
-      : editing.streamUrl.trim();
-    if (!raw) {
-      setResolveNote(isYoutube ? "Enter a YouTube handle or URL first" : "Paste a URL first");
-      return;
-    }
-    setResolving(true);
-    setResolveNote(null);
-    try {
-      const res = await resolveUrl({ url: raw });
-      if (res.ok && res.m3u8Url) {
-        setEditing({ ...editing, streamUrl: res.m3u8Url });
-      }
-      setResolveNote(res.note);
-    } catch (e) {
-      setResolveNote(String(e));
-    } finally {
-      setResolving(false);
-    }
-  };
-
   const openNew = () => setEditing({ ...emptyForm });
   const openEdit = (c: any) => {
     const isYoutube = (c.type ?? "football") === "youtube";
@@ -103,9 +79,7 @@ export default function ChannelsPage() {
       category: c.category,
       type: isYoutube ? "youtube" : (c.type ?? "football"),
       streamUrl: c.streamUrl,
-      youtubeHandle: isYoutube
-        ? c.streamUrl.replace(/^https?:\/\/www\.youtube\.com\//i, "").replace(/^@?/, "@")
-        : "",
+      youtubeHandle: isYoutube ? c.streamUrl : "",
       backupStreamUrls: (c.backupStreamUrls ?? []).join("\n"),
       quality: c.quality ?? "720p HD",
       currentMatch: c.currentMatch ?? "",
@@ -115,7 +89,7 @@ export default function ChannelsPage() {
   const save = async () => {
     if (!editing) return;
     const isYoutube = editing.type === "youtube";
-    const streamUrl = isYoutube
+    let streamUrl = isYoutube
       ? normalizeYoutubeInput(editing.youtubeHandle || editing.streamUrl)
       : editing.streamUrl.trim();
     if (!editing.name.trim() || !streamUrl) {
@@ -124,6 +98,13 @@ export default function ChannelsPage() {
     }
     setBusy(true);
     try {
+      // @handle → channel ID → uploads playlist (all the channel's videos).
+      const handle = streamUrl.match(/youtube\.com\/@([^/?#]+)/i)?.[1];
+      if (handle) {
+        const channelId = await resolveHandle({ handle });
+        if (!channelId) throw new Error(`Could not find channel for @${handle} — paste its channel ID (UC…) instead.`);
+        streamUrl = `https://www.youtube.com/playlist?list=UU${channelId.slice(2)}`;
+      }
       const payload = {
         name: editing.name.trim(),
         logo: editing.logo.trim() || undefined,
@@ -288,8 +269,8 @@ export default function ChannelsPage() {
             </Field>
             {editing.type === "youtube" ? (
               <Field
-                label="YouTube handle, username or URL"
-                hint="Use @handle, a bare username, a channel ID, or a full video/live URL.">
+                label="YouTube handle, channel ID, playlist or video URL"
+                hint="ALL videos of a channel: @handle or channel ID (UC…). Or a playlist ID/URL, or a single video/live URL.">
                 <input
                   type="text"
                   value={editing.youtubeHandle}
@@ -298,29 +279,13 @@ export default function ChannelsPage() {
                 />
               </Field>
             ) : (
-              <Field label="Stream URL" hint="Any URL — .m3u8, a redirect link, or a page that embeds an HLS stream. Use Auto-detect to convert.">
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input
-                    type="text"
-                    value={editing.streamUrl}
-                    placeholder="https://…/master.m3u8"
-                    onChange={(e) => setEditing({ ...editing, streamUrl: e.target.value })}
-                    style={{ flex: 1 }}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={autoResolve}
-                    disabled={resolving}
-                    style={{ whiteSpace: "nowrap" }}>
-                    <Wand2 size={16} /> {resolving ? "Resolving…" : "Auto-detect"}
-                  </button>
-                </div>
-                {resolveNote && (
-                  <div className="field-hint" style={{ marginTop: 6, color: "var(--primary)" }}>
-                    {resolveNote}
-                  </div>
-                )}
+              <Field label="Stream URL" hint="Direct .m3u8 playlist, or an embed page you have rights to (e.g. https://archive.org/embed/<id>).">
+                <input
+                  type="text"
+                  value={editing.streamUrl}
+                  placeholder="https://…/master.m3u8"
+                  onChange={(e) => setEditing({ ...editing, streamUrl: e.target.value })}
+                />
               </Field>
             )}
             <Field label="Backup stream URLs (one per line)" hint="Auto-failover servers">

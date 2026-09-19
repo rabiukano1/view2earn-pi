@@ -392,7 +392,7 @@ export default function PiSpin() {
                   disabled={claiming}
                   style={{ width: "100%", marginTop: 12 }}
                 >
-                  {claiming ? "Claiming…" : `Claim +${result} PTS (Skip Ad)`}
+                  {claiming ? "Claiming…" : `Claim +${result} PTS`}
                 </button>
               </>
             )

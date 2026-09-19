@@ -39,9 +39,23 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     async beforeSessionCreation(ctx, { userId }) {
       const user = await ctx.db.get(userId);
       if (!user) return;
-      if (user.pendingSurfaceAt !== Date.now()) {
-        await ctx.db.patch(userId, { pendingSurface: "android", pendingSurfaceAt: Date.now() });
-      }
+      // The provider's markPending ran in an earlier transaction (inside the
+      // signIn action), so its timestamp can never equal THIS transaction's
+      // Date.now(). Treat any stamp from the last minute as belonging to this
+      // sign-in, and re-stamp it with the session's own clock so
+      // lib/guards.ts (±1.5 s match against session._creationTime) binds to
+      // the right surface. No recent stamp → Password/OTP → Android.
+      const STAMP_WINDOW_MS = 60_000;
+      const now = Date.now();
+      const recent =
+        user.pendingSurface !== undefined &&
+        user.pendingSurfaceAt !== undefined &&
+        now - user.pendingSurfaceAt >= 0 &&
+        now - user.pendingSurfaceAt <= STAMP_WINDOW_MS;
+      await ctx.db.patch(userId, {
+        pendingSurface: recent ? user.pendingSurface : "android",
+        pendingSurfaceAt: now,
+      });
     },
     // Central user creation for every provider — fills our app fields so each
     // user row is complete (ecosystem, tier, fraudScore, …). Existing users
@@ -54,6 +68,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       const telegramUserId = profile.telegramId as string | undefined;
       const piUid = profile.piUid as string | undefined;
       const piWalletAddress = profile.piWalletAddress as string | undefined;
+      const piUsername = profile.piUsername as string | undefined;
       const country = profile.country as string | undefined;
       return await ctx.db.insert("users", {
         email,
@@ -76,6 +91,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         country: country || "unknown",
         telegramUserId,
         piWalletAddress,
+        piUsername,
       });
     },
   },

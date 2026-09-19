@@ -73,6 +73,14 @@ export const setPiWalletAddressInternal = internalMutation({
   },
 });
 
+// Called only with a username that came back from a server-verified Pi token.
+export const setPiUsernameInternal = internalMutation({
+  args: { userId: v.id("users"), piUsername: v.string() },
+  handler: async (ctx, { userId, piUsername }) => {
+    await ctx.db.patch(userId, { piUsername });
+  },
+});
+
 // Live Pi balance for a wallet address, read from Pi's Horizon API.
 export const getPiBalance = action({  args: { walletAddress: v.string() },
   handler: async (_ctx, { walletAddress }) => {

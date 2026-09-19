@@ -28,7 +28,6 @@ import AchievementsScreen from '../screens/AchievementsScreen';
 import DonateScreen from '../screens/DonateScreen';
 import StatsScreen from '../screens/StatsScreen';
 import LevelScreen from '../screens/LevelScreen';
-import LiveTvScreen from '../screens/LiveTvScreen';
 import WatchHubScreen from '../screens/WatchHubScreen';
 import LiveStreamsScreen from '../screens/LiveStreamsScreen';
 
@@ -175,7 +174,6 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="Achievements" component={AchievementsScreen} />
           <Stack.Screen name="Stats" component={StatsScreen} />
           <Stack.Screen name="Donate" component={DonateScreen} />
-          <Stack.Screen name="LiveTV" component={LiveTvScreen} />
           <Stack.Screen name="WatchHub" component={WatchHubScreen} />
           <Stack.Screen name="LiveStreams" component={LiveStreamsScreen} />
         </>

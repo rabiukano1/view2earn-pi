@@ -15,6 +15,7 @@ import { api } from '../../../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import PageHeader from '../components/PageHeader';
+import { cleanNote } from './PointsHistoryScreen';
 import Icon from '../components/Icon';
 
 const PIPRO_LOGO = require('../assets/pipro_logo.png');
@@ -79,7 +80,7 @@ export default function WalletHistoryScreen() {
         <View style={styles.txContent}>
           <Text style={[styles.txLabel, dark && styles.textLight]}>{meta.label}</Text>
           {tx.note ? (
-            <Text style={styles.txNote} numberOfLines={2}>{tx.note}</Text>
+            <Text style={styles.txNote} numberOfLines={2}>{cleanNote(tx.note)}</Text>
           ) : null}
           <Text style={styles.txDate}>{formatDate(tx._creationTime)}</Text>
         </View>

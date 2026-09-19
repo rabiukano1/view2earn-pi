@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { sanitizeProfileUrl } from "@view2earn/core";
 import { appendLedger, lastBalance } from "./lib/ledger";
+import { getFeePercent } from "./rewardsConfig";
 
 export const listListings = query({
   args: {},
@@ -56,10 +57,15 @@ export const createListing = mutation({
     // but for now we just trust the caller since it goes to admin review anyway.
     
     const listingFee = args.pointsReward * args.maxCompletions;
+    const promotePct = await getFeePercent(ctx, "promoteFeeEnabled", "promoteFeePercent");
+    const platformFee = promotePct > 0 ? Math.ceil(listingFee * promotePct / 100) : 0;
+    const totalCharge = listingFee + platformFee;
 
     const balance = await lastBalance(ctx, args.userId, economy);
-    if (balance < listingFee)
-      throw new Error(`Insufficient points. Need ${listingFee}, have ${balance}`);
+    if (balance < totalCharge)
+      throw new Error(
+        `Insufficient points. Need ${totalCharge}${platformFee ? ` (${listingFee} budget + ${platformFee} promote fee)` : ""}, have ${balance}`,
+      );
 
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
@@ -84,13 +90,14 @@ export const createListing = mutation({
       targetUrl: cleanTargetUrl,
       pointsReward: args.pointsReward,
       listingFee,
+      ...(platformFee > 0 ? { platformFee } : {}),
       maxCompletions: args.maxCompletions,
       completionsSoFar: 0,
       status: "pending_approval",
       expiresAt,
     });
 
-    const balanceAfter = await appendLedger(
+    let balanceAfter = await appendLedger(
       ctx,
       args.userId,
       economy,
@@ -98,8 +105,11 @@ export const createListing = mutation({
       "MARKETPLACE_LISTING",
       listingId,
     );
+    if (platformFee > 0) {
+      balanceAfter = await appendLedger(ctx, args.userId, economy, -platformFee, "PROMOTE_FEE", listingId);
+    }
 
-    return { listingId, taskId, balanceAfter };
+    return { listingId, taskId, balanceAfter, platformFee };
   },
 });
 

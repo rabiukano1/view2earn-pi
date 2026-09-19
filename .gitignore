@@ -107,3 +107,4 @@ app-video/
 # tg-app build artefacts (built from apps/pi-app)
 apps/pi-app/.next-tg/
 apps/tg-app/out/
+.env.live

@@ -1,8 +1,10 @@
 import { v } from "convex/values";
-import { action, internalMutation, mutation } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireAuth } from "./lib/guards";
+import { appendLedger, lastBalance } from "./lib/ledger";
+import { recordDuplicateLink } from "./fraud";
 
 // Pi account linking (plan §7.1). The Android app and the Pi Browser run in
 // two DIFFERENT Convex auth sessions, so a Pi sign-in inside the Pi Browser
@@ -101,15 +103,39 @@ export const finishLink = internalMutation({
     const target = await ctx.db.get(row.userId);
     if (!target) throw new Error("Account not found");
 
-    // If this Pi UID was previously attached to an older View2Earn account,
-    // clear the old association so the user can seamlessly link to their current active account.
+    // This Pi UID may already own a separate account — typically the one
+    // created by simply signing in on pi.view2earn.org before linking. Fold it
+    // into the target: every ledger balance it holds is transferred as a
+    // single audited row per economy (keeps each balanceAfter chain intact),
+    // then the old row is marked merged. externalUid is required by the
+    // schema, so it is re-pointed to a "merged:" marker, never cleared.
     const existing = await ctx.db
       .query("users")
       .withIndex("by_externalUid", (q) => q.eq("externalUid", `pi:${piUid}`))
       .first();
     if (existing && existing._id !== row.userId) {
+      const ownerLogins = await ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", existing._id))
+        .collect();
+      if (ownerLogins.some((a) => a.provider !== "pi") || existing.telegramUserId) {
+        // A real account on another surface owns this Pi. The requester is
+        // the one trying to double-link — flag it, never touch the owner.
+        await recordDuplicateLink(ctx, { userId: row.userId, identity: `pi:${piUid}`, ownerUserId: existing._id });
+        throw new Error("This Pi account is already linked to another View2Earn account.");
+      }
+      for (const economy of ["pi-browser", "android", "telegram", "wallet"] as const) {
+        const bal = await lastBalance(ctx, existing._id, economy);
+        if (bal > 0) {
+          await appendLedger(ctx, existing._id, economy, -bal, "ACCOUNT_MERGE_OUT", String(row.userId));
+          await appendLedger(ctx, row.userId, economy, bal, "ACCOUNT_MERGE_IN", String(existing._id));
+        }
+      }
       await ctx.db.patch(existing._id, {
-        externalUid: undefined,
+        accountStatus: "merged",
+        mergedInto: row.userId,
+        externalUid: `merged:${existing._id}`,
+        telegramUserId: undefined,
       });
     }
 
@@ -117,7 +143,7 @@ export const finishLink = internalMutation({
       ecosystem: "PI",
       externalUid: `pi:${piUid}`,
       ...(walletAddress ? { piWalletAddress: walletAddress } : {}),
-      ...(piUsername ? { username: piUsername } : {}),
+      ...(piUsername ? { username: piUsername, piUsername } : {}),
     });
 
     const existingAuth = await ctx.db
@@ -140,5 +166,12 @@ export const finishLink = internalMutation({
     }
 
     await ctx.db.delete(row._id);
+  },
+});
+export const getUserMergeState = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const u = await ctx.db.get(userId);
+    return u ? { accountStatus: u.accountStatus, mergedInto: u.mergedInto } : null;
   },
 });

@@ -15,12 +15,15 @@ import RewardsScreen from '../screens/RewardsScreen';
 import WalletHistoryScreen from '../screens/WalletHistoryScreen';
 import PointsHistoryScreen from '../screens/PointsHistoryScreen';
 import PayoutSettingsScreen from '../screens/PayoutSettingsScreen';
+import AssetScreen from '../screens/AssetScreen';
+import PlatformsScreen from '../screens/PlatformsScreen';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const TAB_META: Record<keyof RootTabParamList, { icon: string; label: string }> = {
   Wallet: { icon: 'wallet', label: 'Wallet' },
+  Platforms: { icon: 'layer-group', label: 'Platforms' },
   Rewards: { icon: 'gift', label: 'Rewards' },
   History: { icon: 'clock-rotate-left', label: 'History' },
   Settings: { icon: 'gear', label: 'Settings' },
@@ -95,6 +98,7 @@ function MainTabs() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Wallet" component={WalletScreen} />
+      <Tab.Screen name="Platforms" component={PlatformsScreen} />
       <Tab.Screen name="Rewards" component={RewardsScreen} />
       <Tab.Screen name="History" component={WalletHistoryScreen} />
       <Tab.Screen name="Settings" component={PayoutSettingsScreen} />
@@ -127,6 +131,8 @@ export default function AppNavigator() {
       <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
       <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
       <Stack.Screen name="PayoutSettings" component={PayoutSettingsScreen} />
+      <Stack.Screen name="Asset" component={AssetScreen} />
+      <Stack.Screen name="Platforms" component={PlatformsScreen} />
     </Stack.Navigator>
   );
 }

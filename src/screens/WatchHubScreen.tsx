@@ -16,7 +16,7 @@ const SECTIONS = [
   {
     key: 'football' as const,
     title: 'Live Football',
-    subtitle: 'Football & sports IPTV streams',
+    subtitle: 'Licensed football & sports streams',
     icon: 'futbol',
     tint: '#10B981',
   },
@@ -34,6 +34,13 @@ const SECTIONS = [
     icon: 'tv',
     tint: '#3B82F6',
   },
+  {
+    key: 'movies' as const,
+    title: 'Movies',
+    subtitle: 'Full-length movies & shows',
+    icon: 'film',
+    tint: '#A855F7',
+  },
 ] as const;
 
 export default function WatchHubScreen() {
@@ -46,6 +53,7 @@ export default function WatchHubScreen() {
     football: docs?.filter((d) => d.type === 'football').length ?? 0,
     youtube: docs?.filter((d) => d.type === 'youtube').length ?? 0,
     other: docs?.filter((d) => d.type === 'other').length ?? 0,
+    movies: docs?.filter((d) => d.type === 'movies').length ?? 0,
   };
 
   return (
@@ -59,11 +67,7 @@ export default function WatchHubScreen() {
             key={s.key}
             style={[styles.card, dark && styles.cardDark]}
             activeOpacity={0.88}
-            onPress={() =>
-              s.key === 'football'
-                ? navigation.navigate('LiveTV')
-                : navigation.navigate('LiveStreams', { kind: s.key })
-            }>
+            onPress={() => navigation.navigate('LiveStreams', { kind: s.key })}>
             <View style={[styles.iconWrap, { backgroundColor: s.tint + '22' }]}>
               <Icon name={s.icon} iconStyle={s.key === 'youtube' ? 'brand' : 'solid'} size={24} color={s.tint} />
             </View>

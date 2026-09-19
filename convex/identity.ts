@@ -2,22 +2,24 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { requireUser, requireUserAndEconomy, type Economy } from "./lib/guards";
-import { lastBalance } from "./lib/ledger";
+import { requireUser, requireUserAndEconomy, requireUserAndSurface, type Economy, type Surface } from "./lib/guards";
+import { appendLedger, lastBalance } from "./lib/ledger";
 import { getNum } from "./rewardsConfig";
 import { levelsWithOverrides, levelForXp } from "./xp";
 
 // 3-in-1 identity: one View2Earn user, three surfaces (Pi Browser, Telegram,
-// Android), each with its own ledger + level. Cashing out (withdraw / redeem
-// points) requires all three surfaces linked AND level >= withdrawMinLevel on
-// each. Spending points on Promote Hub is always allowed.
-export const SURFACES: Economy[] = ["pi-browser", "telegram", "android"];
+// Android), each with its own ledger + level. Each surface is gated on its
+// own: once a surface is linked and at level >= withdrawMinLevel, its points
+// can be cashed out there or CLAIMED into the wallet pool (economy "wallet"),
+// which the wallet app spends from. Other surfaces are unaffected either way.
+// Spending points on Promote Hub is always allowed.
+export const SURFACES: Surface[] = ["pi-browser", "telegram", "android"];
 const ANDROID_PROVIDERS = new Set(["password", "resend-otp"]);
 
 export async function linkedSurfaces(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
-): Promise<Record<Economy, boolean>> {
+): Promise<Record<Surface, boolean>> {
   const user = await ctx.db.get(userId);
   const accounts = await ctx.db
     .query("authAccounts")
@@ -38,9 +40,10 @@ async function surfaceLevels(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
     .query("pointsLedger")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .collect();
-  const earned: Record<Economy, number> = { "pi-browser": 0, telegram: 0, android: 0 };
+  const earned: Record<Surface, number> = { "pi-browser": 0, telegram: 0, android: 0 };
   for (const r of rows) {
-    if (r.delta > 0) earned[(r.economy ?? "android") as Economy] += r.delta;
+    const e = (r.economy ?? "android") as Economy;
+    if (r.delta > 0 && e !== "wallet") earned[e] += r.delta;
   }
   return {
     "pi-browser": levelForXp(levels, earned["pi-browser"]),
@@ -52,36 +55,46 @@ async function surfaceLevels(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
 export async function cashOutStatus(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
   const minLevel = await getNum(ctx, "withdrawMinLevel");
   const [linked, levels] = await Promise.all([linkedSurfaces(ctx, userId), surfaceLevels(ctx, userId)]);
-  const reasons: string[] = [];
+  const eligible = {} as Record<Surface, boolean>;
+  const reasons = {} as Record<Surface, string | null>;
+  const minLevels = {} as Record<Surface, number>;
   for (const s of SURFACES) {
-    if (!linked[s]) reasons.push(`Link your ${label(s)} account`);
-    else if (levels[s] < minLevel) reasons.push(`Reach level ${minLevel} on ${label(s)} (now ${levels[s]})`);
+    const need = await getNum(ctx, "withdrawMinLevel", s); // per-app override, else global
+    minLevels[s] = need;
+    reasons[s] = !linked[s]
+      ? `Link your ${label(s)} account`
+      : levels[s] < need
+        ? `Reach level ${need} on ${label(s)} (now ${levels[s]})`
+        : null;
+    eligible[s] = reasons[s] === null;
   }
-  return { ok: reasons.length === 0, reasons, minLevel, linked, levels };
+  return { minLevel, minLevels, linked, levels, eligible, reasons };
 }
 
-// Call from every withdraw/redeem mutation. Throws a user-readable error.
+// Call from every withdraw/redeem mutation. The calling surface must be linked
+// and at the withdraw level; the wallet pool is exempt because every point in
+// it already passed that check when it was claimed.
 export async function assertCanCashOut(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
+  const { economy } = await requireUserAndEconomy(ctx, userId);
+  if (economy === "wallet") return;
   const status = await cashOutStatus(ctx, userId);
-  if (!status.ok) {
+  const why = status.reasons[economy];
+  if (why) {
     throw new Error(
-      `Withdrawals unlock once all three View2Earn apps are linked and at level ${status.minLevel}: ` +
-        status.reasons.join("; ") +
-        ". You can still spend points in Promote Hub.",
+      `Cash-out on ${label(economy)} unlocks at level ${status.minLevel}: ${why}. You can still spend points in Promote Hub.`,
     );
   }
 }
 
 function label(s: Economy) {
-  return s === "pi-browser" ? "Pi Browser" : s === "telegram" ? "Telegram" : "Android";
+  return s === "pi-browser" ? "Pi Browser" : s === "telegram" ? "Telegram" : s === "wallet" ? "Wallet" : "Android";
 }
 
-// Unified wallet: every surface's balance + level, what is linked, and whether
-// the caller may cash out. `current` is the surface of the calling session.
+// Unified wallet: every surface's balance + level + claim eligibility, the
+// claimed pool, and the surface of the calling session.
 export const overview = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
     const { economy } = await requireUserAndEconomy(ctx, userId);
     const status = await cashOutStatus(ctx, userId);
     const balances = {
@@ -89,7 +102,36 @@ export const overview = query({
       telegram: await lastBalance(ctx, userId, "telegram"),
       android: await lastBalance(ctx, userId, "android"),
     };
-    return { current: economy, balances, ...status };
+    const wallet = await lastBalance(ctx, userId, "wallet");
+    const user = await ctx.db.get(userId);
+    return { current: economy, balances, wallet, piUsername: user?.piUsername ?? null, ...status };
+  },
+});
+
+// Move points from a surface ledger into the wallet pool. Only allowed once
+// THAT surface is linked and at the withdraw level; other surfaces don't
+// matter. The pool is where the wallet app's swaps/withdrawals draw from.
+export const claimToWallet = mutation({
+  args: {
+    userId: v.id("users"),
+    surface: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram")),
+    amount: v.number(),
+  },
+  handler: async (ctx, { userId, surface, amount }) => {
+    await requireUser(ctx, userId);
+    if (!Number.isInteger(amount) || amount <= 0) throw new Error("Enter a whole number of points");
+    const status = await cashOutStatus(ctx, userId);
+    const why = status.reasons[surface];
+    if (why) throw new Error(`Can't claim from ${label(surface)} yet: ${why}`);
+    const available = await lastBalance(ctx, userId, surface);
+    if (available < amount) throw new Error(`Only ${available} PTS available on ${label(surface)}`);
+    const cap = await getNum(ctx, "claimMaxPoints");
+    if (cap > 0 && amount > cap) throw new Error(`You can claim at most ${cap.toLocaleString()} PTS at a time`);
+    // appendLedger refuses to drive the surface negative, so the debit can't
+    // succeed without the credit in the same transaction.
+    await appendLedger(ctx, userId, surface, -amount, "CLAIM_TO_WALLET", surface);
+    const walletAfter = await appendLedger(ctx, userId, "wallet", amount, `CLAIM_FROM_${surface.toUpperCase().replace("-", "_")}`, surface);
+    return { walletAfter, surfaceAfter: available - amount };
   },
 });
 
@@ -119,7 +161,7 @@ export const createLinkCode = mutation({
 export const redeemLinkCode = mutation({
   args: { userId: v.id("users"), code: v.string() },
   handler: async (ctx, { userId, code }) => {
-    const { user: from, economy } = await requireUserAndEconomy(ctx, userId);
+    const { user: from, economy } = await requireUserAndSurface(ctx, userId);
     const row = await ctx.db
       .query("linkCodes")
       .withIndex("by_code", (q) => q.eq("code", code.trim()))

@@ -96,7 +96,19 @@ hostnames.
   view2earn.org — if reviewers object, switch to `app.view2earn.org`
 - Developer KYC complete
 
-## F. Convex env (dev deployment `valuable-ostrich-597` = live users)
+## F. Convex deployments (READ THIS BEFORE DEPLOYING)
+
+| Deployment | URL | Role |
+|---|---|---|
+| `dev:valuable-ostrich-597` | https://valuable-ostrich-597.convex.cloud | **LIVE — all apps and users** (config in `.env.live`) |
+| `local:…` | http://127.0.0.1:3210 | local test backend (default selection in `.env.local`) |
+| `prod:adventurous-malamute-842` | https://adventurous-malamute-842.convex.cloud | unused — `npx convex deploy` targets THIS; answer **n** |
+
+- Test locally:   `npx convex dev --once`  then  `npx convex run selfcheck:identity`
+- Ship to live:   `npx convex dev --once --env-file .env.live`
+- Never leave `npx convex dev` (without --once) running against `.env.live`: it auto-pushes every saved file to live users.
+
+### Convex env vars on the live deployment
 
 | Var | Value |
 |---|---|

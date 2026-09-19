@@ -37,6 +37,15 @@ export const TelegramProvider = ConvexCredentials({
       return { userId: existing.user._id as Id<"users"> };
     }
 
+    // Linked from Android earlier (telegramUserId set, no auth account yet)?
+    const adopted: Id<"users"> | null = await ctx.runMutation(internal.telegramAuth.adoptLinkedUser, {
+      telegramUserId: consumed.telegramUserId,
+    });
+    if (adopted) {
+      await ctx.runMutation(internal.surfaces.markPending, { userId: adopted, surface });
+      return { userId: adopted };
+    }
+
     const country = credentials.country as string | undefined;
     const profile: Record<string, string> = { name: consumed.telegramName, telegramId: consumed.telegramUserId };
     if (country) profile.country = country;

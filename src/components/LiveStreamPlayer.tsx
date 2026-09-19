@@ -27,11 +27,23 @@ export function extractYoutubeId(url: string): string | null {
   }
 }
 
+// Playlist ID for "whole channel" rows: any youtube URL with ?list=, or a
+// /channel/UC… URL (a channel's uploads playlist is its ID with UC → UU).
+export function extractYoutubeList(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!/youtube\.com$/i.test(u.hostname.replace(/^(www|m)\./i, ''))) return null;
+    const list = u.searchParams.get('list');
+    if (list) return list;
+    const m = u.pathname.match(/\/channel\/UC([\w-]{22})/);
+    return m ? `UU${m[1]}` : null;
+  } catch {
+    return null;
+  }
+}
+
 // HLS.js player for .m3u8 streams — posts real health metrics back to RN.
-// referrer/userAgent are forwarded via xhrSetup so CORS-checked CDNs (uzayterligi, Sakatv) don't 403.
-function buildHlsHtml(streamUrl: string, httpReferrer?: string, userAgent?: string): string {
-  const ref = httpReferrer ? httpReferrer.replace(/"/g, '&quot;') : '';
-  const ua = userAgent ? userAgent.replace(/"/g, '&quot;') : '';
+function buildHlsHtml(streamUrl: string): string {
   return `
     <!DOCTYPE html>
     <html>
@@ -67,12 +79,6 @@ function buildHlsHtml(streamUrl: string, httpReferrer?: string, userAgent?: stri
               enableWorker: true,
               lowLatencyMode: true,
               backBufferLength: 90,
-              xhrSetup: function(xhr, url) {
-                if ("${ref}") xhr.setRequestHeader('Referer', "${ref}");
-                if ("${ua}") xhr.setRequestHeader('User-Agent', "${ua}");
-                // allow http -> https mixed content via proxy
-                xhr.withCredentials = false;
-              }
             });
             let recoveredOnce = false;
             hls.loadSource(streamUrl);
@@ -105,9 +111,8 @@ function buildHlsHtml(streamUrl: string, httpReferrer?: string, userAgent?: stri
   `;
 }
 
-// Generic web / Yacine TV iframe player — for non-HLS pages (yacine-tv.com, koora, etc).
-// These sites render their own HLS player inside the page; we just embed them full-screen.
-function buildWebHtml(pageUrl: string, referrer?: string): string {
+// Generic iframe embed for non-HLS pages (e.g. https://archive.org/embed/<id>).
+function buildWebHtml(pageUrl: string): string {
   const safeUrl = pageUrl.replace(/"/g, '&quot;');
   return `
     <!DOCTYPE html>
@@ -135,7 +140,6 @@ function buildWebHtml(pageUrl: string, referrer?: string): string {
               }
             } catch(e) {}
           }
-          // Yacine pages take a moment to start — report playing after load
           window.addEventListener('load', function(){ setTimeout(function(){ post('signal', { state: 'playing' }); }, 2000); });
           window.addEventListener('error', function(){ post('fatal', { error: 'webview' }); });
         </script>
@@ -144,8 +148,12 @@ function buildWebHtml(pageUrl: string, referrer?: string): string {
   `;
 }
 
-// YouTube iframe player — plays watch URLs + livestreams inside the WebView.
-function buildYoutubeHtml(videoId: string): string {
+// YouTube iframe player — plays a single video/livestream, or a whole
+// playlist / channel uploads when `list` is given.
+function buildYoutubeHtml(videoId: string | null, list: string | null): string {
+  const playerVars = list
+    ? `{ listType: 'playlist', list: '${list}', autoplay: 1, playsinline: 1, controls: 1 }`
+    : `{ autoplay: 1, playsinline: 1, controls: 1 }`;
   return `
     <!DOCTYPE html>
     <html>
@@ -170,8 +178,8 @@ function buildYoutubeHtml(videoId: string): string {
           }
           function onReady() {
             new YT.Player('player', {
-              videoId: '${videoId}',
-              playerVars: { autoplay: 1, playsinline: 1, controls: 1 },
+              ${videoId ? `videoId: '${videoId}',` : ''}
+              playerVars: ${playerVars},
               events: {
                 onReady: function (e) { post('ready', {}); e.target.playVideo(); },
                 onStateChange: function (e) {
@@ -192,8 +200,6 @@ function buildYoutubeHtml(videoId: string): string {
 
 interface Props {
   streamUrl: string;
-  httpReferrer?: string;
-  userAgent?: string;
   /** Called with stream health updates (buffering / bitrate). */
   onSignal?: (signal: StreamSignal) => void;
   /** Called when the stream fatally errors (trigger auto-failover). */
@@ -204,25 +210,16 @@ function isHlsUrl(url: string): boolean {
   return /\.m3u8?(\?|#|$)/i.test(url);
 }
 
-function isYacineOrWebUrl(url: string): boolean {
-  return /yacine|yacin|koora|alkass|bein/i.test(url) && !isHlsUrl(url);
-}
-
-export default function LiveStreamPlayer({ streamUrl, httpReferrer, userAgent, onSignal, onFatal }: Props) {
+export default function LiveStreamPlayer({ streamUrl, onSignal, onFatal }: Props) {
   const webViewRef = useRef<WebView>(null);
   const youtubeId = useMemo(() => extractYoutubeId(streamUrl), [streamUrl]);
+  const youtubeList = useMemo(() => extractYoutubeList(streamUrl), [streamUrl]);
 
   const html = useMemo(() => {
-    if (youtubeId) return buildYoutubeHtml(youtubeId);
-    if (isHlsUrl(streamUrl)) return buildHlsHtml(streamUrl, httpReferrer, userAgent);
-    // Yacine TV and other web players: embed as iframe (they handle their own HLS internally)
-    if (isYacineOrWebUrl(streamUrl) || !isHlsUrl(streamUrl)) {
-      // If it's a plain https URL without .m3u8, treat as web embed
-      if (/^https?:\/\//i.test(streamUrl) && !isHlsUrl(streamUrl)) return buildWebHtml(streamUrl, httpReferrer);
-      return buildHlsHtml(streamUrl, httpReferrer, userAgent);
-    }
-    return buildHlsHtml(streamUrl, httpReferrer, userAgent);
-  }, [youtubeId, streamUrl, httpReferrer, userAgent]);
+    if (youtubeId || youtubeList) return buildYoutubeHtml(youtubeId, youtubeList);
+    if (isHlsUrl(streamUrl)) return buildHlsHtml(streamUrl);
+    return buildWebHtml(streamUrl);
+  }, [youtubeId, youtubeList, streamUrl]);
 
   const onMessage = (event: any) => {
     let msg: any;
@@ -259,7 +256,6 @@ export default function LiveStreamPlayer({ streamUrl, httpReferrer, userAgent, o
         mixedContentMode="always"
         allowFileAccess={true}
         allowUniversalAccessFromFileURLs={true}
-        userAgent={userAgent}
         onMessage={onMessage}
       />
     </View>

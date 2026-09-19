@@ -265,8 +265,10 @@ export default function PiWallet() {
           <section className="pi-card pi-card-glass">
             <div className="pi-card-head">
               <h2>All your balances</h2>
-              <span className={`pi-badge ${overview.ok ? "pi-badge-live" : "pi-badge-accent"}`}>
-                {overview.ok ? "Withdrawals unlocked" : `Unlock at level ${overview.minLevel} ×3`}
+              <span className={`pi-badge ${overview.current !== "wallet" && overview.eligible[overview.current] ? "pi-badge-live" : "pi-badge-accent"}`}>
+                {overview.current !== "wallet" && overview.eligible[overview.current]
+                  ? "Withdrawals unlocked here"
+                  : `Unlock here at level ${overview.minLevel}`}
               </span>
             </div>
             <div className="pi-limits-grid">
@@ -286,9 +288,9 @@ export default function PiWallet() {
                 </div>
               ))}
             </div>
-            {!overview.ok && (
+            {overview.current !== "wallet" && overview.reasons[overview.current] && (
               <p className="pi-muted" style={{ fontSize: 12, marginTop: 10 }}>
-                {overview.reasons.join(" · ")} — <Link href="/linked-accounts" className="pi-link-text">Link accounts →</Link>
+                {overview.reasons[overview.current]} — <Link href="/linked-accounts" className="pi-link-text">Link accounts →</Link>
               </p>
             )}
           </section>

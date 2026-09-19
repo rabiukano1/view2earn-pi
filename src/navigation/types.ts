@@ -29,9 +29,8 @@ export type RootStackParamList = {
   Achievements: undefined;
   Stats: undefined;
   Donate: undefined;
-  LiveTV: { channelId?: string } | undefined;
   WatchHub: undefined;
-  LiveStreams: { kind: 'youtube' | 'other' } | undefined;
+  LiveStreams: { kind: 'football' | 'youtube' | 'other' | 'movies' } | undefined;
   WalletAuth: { nonce: string };
 };
 

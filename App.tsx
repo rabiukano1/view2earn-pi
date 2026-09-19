@@ -127,7 +127,6 @@ const linking: LinkingOptions<RootStackParamList> = {
       Achievements: 'achievements',
       Stats: 'stats',
       Donate: 'donate',
-      LiveTV: 'live-tv',
       WalletAuth: 'wallet-auth/:nonce',
     },
   },

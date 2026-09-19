@@ -105,13 +105,15 @@ export default function LinkedAccountsPage() {
 
         <div className="pi-card pi-card-glass">
           <p className="pi-card-title-sm" style={{ marginBottom: 6 }}>
-            {overview.ok ? "✅ Withdrawals unlocked" : `🔒 Withdrawals unlock at level ${overview.minLevel} on all three`}
+            {overview.current !== "wallet" && overview.eligible[overview.current]
+              ? "✅ Withdrawals unlocked here"
+              : `🔒 Each app unlocks withdrawals on its own at level ${overview.minLevel}`}
           </p>
-          {!overview.ok && (
-            <ul className="pi-steps-list">
-              {overview.reasons.map((r) => <li key={r} className="pi-step-item"><span>{r}</span></li>)}
-            </ul>
-          )}
+          <ul className="pi-steps-list">
+            {(Object.entries(overview.reasons) as [string, string | null][])
+              .filter(([, r]) => r)
+              .map(([k, r]) => <li key={k} className="pi-step-item"><span>{r}</span></li>)}
+          </ul>
           <p className="pi-muted" style={{ fontSize: 12, marginTop: 8 }}>You can always spend points in Promote Hub.</p>
         </div>
 

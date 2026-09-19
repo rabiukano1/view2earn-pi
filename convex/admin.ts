@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { recomputeUserScore } from "./fraud";
 import { fraudTier } from "@view2earn/core";
 import { REWARD_KEYS } from "./rewardsConfig";
@@ -547,6 +548,163 @@ export const updateRedemptionStatus = mutation({
 
 // ---------- Fraud ----------
 
+// Fraud accounts: users with at least one fraud event, newest signal first.
+export const listFraudAccounts = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const events = await ctx.db.query("fraudEvents").order("desc").take(500);
+    const byUser = new Map<string, { count: number; lastType: string; lastAt: number }>();
+    for (const e of events) {
+      const cur = byUser.get(e.userId);
+      if (cur) cur.count++;
+      else byUser.set(e.userId, { count: 1, lastType: e.type, lastAt: e._creationTime });
+    }
+    const rows = [];
+    for (const [userId, agg] of byUser) {
+      const u = await ctx.db.get(userId as Id<"users">);
+      if (!u) continue;
+      rows.push({
+        userId: u._id,
+        username: u.username,
+        email: u.email ?? null,
+        accountStatus: u.accountStatus ?? "active",
+        fraudScore: u.fraudScore,
+        fraudTier: fraudTier(u.fraudScore),
+        ...agg,
+      });
+    }
+    return rows.sort((a, b) => b.lastAt - a.lastAt);
+  },
+});
+
+// Everything an admin needs on one flagged account: the account, every fraud
+// event, and — for each identity it tried to link — the account that owns it
+// plus every other account that tried the same identity.
+export const getFraudAccount = query({
+  args: { token: v.string(), userId: v.id("users") },
+  handler: async (ctx, { token, userId }) => {
+    requireAdmin(token);
+    const user = await ctx.db.get(userId);
+    if (!user) return null;
+
+    const summarize = async (id: Id<"users">) => {
+      const u = await ctx.db.get(id);
+      if (!u) return null;
+      const logins = await ctx.db
+        .query("authAccounts")
+        .withIndex("userIdAndProvider", (q) => q.eq("userId", id))
+        .collect();
+      return {
+        userId: u._id,
+        username: u.username,
+        email: u.email ?? null,
+        country: u.country,
+        accountStatus: u.accountStatus ?? "active",
+        fraudScore: u.fraudScore,
+        fraudTier: fraudTier(u.fraudScore),
+        externalUid: u.externalUid,
+        telegramUserId: u.telegramUserId ?? null,
+        piUsername: u.piUsername ?? null,
+        signupIp: u.signupIp,
+        deviceFingerprint: u.deviceFingerprint,
+        createdAt: u._creationTime,
+        logins: logins.map((a) => a.provider),
+      };
+    };
+
+    const events = await ctx.db
+      .query("fraudEvents")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .collect();
+
+    const identities = new Set<string>();
+    for (const e of events) {
+      try {
+        const d = JSON.parse(e.detailsJson) as { identity?: string };
+        if (d.identity) identities.add(d.identity);
+      } catch {}
+    }
+
+    const allEvents = identities.size ? await ctx.db.query("fraudEvents").order("desc").take(2000) : [];
+    const linkedWith = [];
+    for (const identity of identities) {
+      const [kind, id] = identity.split(":");
+      const owner =
+        kind === "pi"
+          ? await ctx.db.query("users").withIndex("by_externalUid", (q) => q.eq("externalUid", identity)).first()
+          : await ctx.db.query("users").withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", id)).first();
+      const attemptIds = new Set<string>();
+      for (const e of allEvents) {
+        if (e.userId === userId) continue;
+        try {
+          const d = JSON.parse(e.detailsJson) as { identity?: string };
+          if (d.identity === identity) attemptIds.add(e.userId);
+        } catch {}
+      }
+      const attempts = [];
+      for (const id2 of attemptIds) {
+        const sum = await summarize(id2 as Id<"users">);
+        if (sum) attempts.push(sum);
+      }
+      linkedWith.push({
+        identity,
+        owner: owner ? await summarize(owner._id) : null,
+        otherAttempts: attempts,
+      });
+    }
+
+    return { account: await summarize(userId), events, linkedWith };
+  },
+});
+
+// ─── Ad watches (admin only — never exposed to users) ────────────────────────
+
+/** Every rewarded-ad payout, newest first. Capped at 2000. */
+export const listAdWatches = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const logs = await ctx.db.query("adWatchLogs").withIndex("by_at").order("desc").take(2000);
+    const names = new Map<string, string>();
+    const out = [];
+    for (const l of logs) {
+      if (!names.has(l.userId)) names.set(l.userId, (await ctx.db.get(l.userId))?.username ?? "unknown");
+      out.push({ ...l, username: names.get(l.userId)! });
+    }
+    return out;
+  },
+});
+
+/** Leaderboard: top ad watchers, plus totals by kind. */
+export const adWatchLeaderboard = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const logs = await ctx.db.query("adWatchLogs").collect();
+    const byUser = new Map<string, { watches: number; rewarded: number; spinDouble: number; spinBonus: number; points: number }>();
+    const byKind = { rewarded: 0, spin_double: 0, spin_bonus: 0 };
+    let totalPoints = 0;
+    for (const l of logs) {
+      const u = byUser.get(l.userId) ?? { watches: 0, rewarded: 0, spinDouble: 0, spinBonus: 0, points: 0 };
+      u.watches++; u.points += l.points;
+      if (l.kind === "rewarded") u.rewarded++;
+      else if (l.kind === "spin_double") u.spinDouble++;
+      else u.spinBonus++;
+      byUser.set(l.userId, u);
+      byKind[l.kind]++;
+      totalPoints += l.points;
+    }
+    const topUsers = [];
+    for (const [id, agg] of [...byUser].sort((a, b) => b[1].watches - a[1].watches || b[1].points - a[1].points)) {
+      const u = await ctx.db.get(id as Id<"users">);
+      topUsers.push({ userId: id, username: u?.username ?? "unknown", ...agg });
+    }
+    return { total: logs.length, totalPoints, byKind, topUsers };
+  },
+});
+
 export const listFraudEvents = query({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
@@ -727,6 +885,11 @@ export const getRewardSettings = query({
         value: setting?.value ?? REWARD_KEYS[key as keyof typeof REWARD_KEYS],
         defaultValue: REWARD_KEYS[key as keyof typeof REWARD_KEYS],
       };
+      // Per-app overrides (rewardsConfig.getSetting): "" = use the global value.
+      for (const eco of ["android", "pi-browser", "telegram"]) {
+        const scoped = all.find((s) => s.key === `${key}@${eco}`);
+        result[`${key}@${eco}`] = { value: scoped?.value ?? "", defaultValue: "" };
+      }
     }
     return result;
   },

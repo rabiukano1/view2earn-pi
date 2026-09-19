@@ -1,6 +1,6 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
-import { deriveEconomy, type Economy } from "./guards";
+import { deriveEconomy, type Economy, type Surface } from "./guards";
 
 // Shared economy-aware ledger helpers. Every earning/spending path writes and
 // reads through these so the Android and Pi-Browser ledgers stay strictly
@@ -12,7 +12,7 @@ import { deriveEconomy, type Economy } from "./guards";
 export async function economyOfUser(
   ctx: QueryCtx | MutationCtx,
   userId: Id<"users">,
-): Promise<Economy> {
+): Promise<Surface> {
   const user = await ctx.db.get(userId);
   if (!user) throw new Error("User not found");
   return deriveEconomy(user);

@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireUser, requireUserAndEconomy } from "./lib/guards";
+import { requireUser, requireUserAndSurface } from "./lib/guards";
 import { applySpinDouble } from "./spin";
 import { consumeRewardedAd } from "./piAds";
 
@@ -97,7 +97,7 @@ export const rewardForAd = mutation({
     piAdId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { economy } = await requireUserAndEconomy(ctx, args.userId);
+    const { economy } = await requireUserAndSurface(ctx, args.userId);
     // Pi Ad Network: verify adId against the Platform API (+ replay-protect)
     // before crediting anything. Native AdMob callers don't send piAdId.
     if (args.piAdId) await consumeRewardedAd(ctx, args.userId, args.piAdId);
@@ -191,6 +191,14 @@ export const rewardForAd = mutation({
     // a flat ad reward on top of a separate spin/double payout and create a
     // duplicate credit like the +50 issue.
     const finalReward = rewardPoints ?? 0;
+    await ctx.db.insert("adWatchLogs", {
+      userId: args.userId,
+      kind: "rewarded",
+      provider: args.piAdId ? "pi-ads" : (args.provider ?? "admob"),
+      points: finalReward,
+      economy,
+      at: Date.now(),
+    });
 
     const last = await ctx.db
       .query("pointsLedger")

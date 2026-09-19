@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { requireUser, requireUserAndEconomy } from "./lib/guards";
-import type { Economy } from "./lib/guards";
+import { deriveEconomy, requireUser, requireUserAndSurface } from "./lib/guards";
+import type { Surface } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
 import { appendLedger, economyOfUser, lastBalance } from "./lib/ledger";
 import { consumeRewardedAd } from "./piAds";
@@ -80,7 +80,7 @@ function resolveBalance(
 async function creditSpinPoints(
   ctx: MutationCtx,
   userId: Id<"users">,
-  economy: Economy,
+  economy: Surface,
   pts: number,
   reason: string,
   refId: string,
@@ -119,20 +119,38 @@ async function creditSpinPoints(
   return balanceAfter;
 }
 
+// Spin record for (user, surface). A legacy row without `economy` belongs to
+// the user's home economy and is adopted (stamped) the first time that surface
+// touches it, so accumulated bonus spins are not lost.
+async function getSpinRecord(ctx: QueryCtx | MutationCtx, userId: Id<"users">, economy: Surface) {
+  const scoped = await ctx.db
+    .query("dailySpins")
+    .withIndex("by_user_economy", (q) => q.eq("userId", userId).eq("economy", economy))
+    .unique();
+  if (scoped) return scoped;
+  const user = await ctx.db.get(userId);
+  if (!user || deriveEconomy(user) !== economy) return null;
+  const legacy = await ctx.db
+    .query("dailySpins")
+    .withIndex("by_user_economy", (q) => q.eq("userId", userId).eq("economy", undefined))
+    .unique();
+  if (legacy && "scheduler" in ctx) {
+    await (ctx as MutationCtx).db.patch(legacy._id, { economy });
+  }
+  return legacy;
+}
+
 export const getSpinStatus = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndSurface(ctx, userId);
     const now = Date.now();
-    const spinsPerWindow = await getNum(ctx, "spinsPerWindow");
-    const windowHours = await getNum(ctx, "spinWindowHours") || 3;
+    const spinsPerWindow = await getNum(ctx, "spinsPerWindow", economy);
+    const windowHours = await getNum(ctx, "spinWindowHours", economy) || 3;
     const windowMs = windowHours * HOUR_MS;
     const dayStart = nigerianDayStart(now);
 
-    const spinRecord = await ctx.db
-      .query("dailySpins")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
+    const spinRecord = await getSpinRecord(ctx, userId, economy);
 
     const { granted, used, bonus, remaining } = resolveBalance(
       spinRecord,
@@ -143,7 +161,7 @@ export const getSpinStatus = query({
 
     const adBonusEarned =
       spinRecord?.windowStart === dayStart ? (spinRecord.adBonusEarned ?? 0) : 0;
-    const adBonusLimit = await getNum(ctx, "adBonusSpinsPerWindow");
+    const adBonusLimit = await getNum(ctx, "adBonusSpinsPerWindow", economy);
 
     const nextSlotAt = dayStart + slotsSinceMidnight(now, dayStart, windowMs) * windowMs;
     const nextRefillMs = Math.max(0, nextSlotAt - now);
@@ -170,17 +188,14 @@ export const getSpinStatus = query({
 export const spin = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    const { economy } = await requireUserAndEconomy(ctx, userId);
+    const { economy } = await requireUserAndSurface(ctx, userId);
     const now = Date.now();
-    const spinsPerWindow = await getNum(ctx, "spinsPerWindow");
-    const windowHours = await getNum(ctx, "spinWindowHours") || 3;
+    const spinsPerWindow = await getNum(ctx, "spinsPerWindow", economy);
+    const windowHours = await getNum(ctx, "spinWindowHours", economy) || 3;
     const windowMs = windowHours * HOUR_MS;
     const dayStart = nigerianDayStart(now);
 
-    const spinRecord = await ctx.db
-      .query("dailySpins")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
+    const spinRecord = await getSpinRecord(ctx, userId, economy);
 
     const { granted, used, bonus, remaining } = resolveBalance(
       spinRecord,
@@ -224,6 +239,7 @@ export const spin = mutation({
     } else {
       await ctx.db.insert("dailySpins", {
         userId,
+        economy,
         windowStart: dayStart,
         spinsUsedInWindow: newSpinsUsed,
         bonusSpins: newBonusSpins + bonusSpinsToAdd,
@@ -283,14 +299,26 @@ export const claimSpin = mutation({
     adId: v.optional(v.string()),
   },
   handler: async (ctx, { userId, spinId, doubled, adId }) => {
-    const { economy } = await requireUserAndEconomy(ctx, userId);
+    const { economy } = await requireUserAndSurface(ctx, userId);
     // Pi Ad Network 2x: verify the rewarded adId before paying the double.
     if (doubled && adId) await consumeRewardedAd(ctx, userId, adId);
     const pending = await ctx.db.get(spinId);
     if (!pending || pending.userId !== userId) throw new Error("Spin not found");
-    if (pending.claimed) throw new Error("Already claimed");
     const pts = pending.pts;
     const isDoubled = doubled === true && pts > 0;
+
+    // Idempotent: spin() already finalizes bonus-spin / no-bonus rows, and a
+    // double-tap can resend a claim. Report the settled state, never re-credit.
+    if (pending.claimed) {
+      return {
+        pts,
+        prizeIndex: pending.prizeIndex,
+        credited: pts > 0 ? (isDoubled ? pts * 2 : pts) : 0,
+        doubled: isDoubled,
+        bonusSpins: pts < 0 ? Math.abs(pts) : 0,
+        balanceAfter: await lastBalance(ctx, userId, economy),
+      };
+    }
 
     // pts <= 0 rows (bonus spins / no-bonus) are fully handled by spin()
     // itself now — this just finalizes the row for an older client that
@@ -331,6 +359,7 @@ export const claimSpin = mutation({
         );
       }
       await ctx.db.patch(spinId, { baseCredited: true, claimed: true });
+      await ctx.db.insert("adWatchLogs", { userId, kind: "spin_double", provider: "admob", points: extra, economy, at: Date.now() });
       credited = pts * 2;
     } else if (!alreadyBased) {
       await creditSpinPoints(
@@ -374,7 +403,7 @@ const SPIN_CLOSEOUT_AFTER_MS = 15 * 60 * 1000;
 export async function applySpinDouble(
   ctx: MutationCtx,
   userId: Id<"users">,
-  economy: Economy,
+  economy: Surface,
 ): Promise<number> {
   const now = Date.now();
   const pendings = await ctx.db
@@ -402,6 +431,7 @@ export async function applySpinDouble(
     `Spin Wheel 2x Extra (+${extra} PTS, ${economy})`,
   );
   await ctx.db.patch(target._id, { baseCredited: true, claimed: true });
+  await ctx.db.insert("adWatchLogs", { userId, kind: "spin_double", provider: "admob", points: extra, economy, at: Date.now() });
   return extra;
 }
 
@@ -411,7 +441,7 @@ export async function applySpinDouble(
 async function recoverUserPendings(
   ctx: MutationCtx,
   userId: Id<"users">,
-  economy: Economy,
+  economy: Surface,
   onlyOlderThanMs: number | null,
 ): Promise<number> {
   const pendings = await ctx.db
@@ -455,7 +485,7 @@ async function recoverUserPendings(
 export const syncUnclaimedSpins = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    const { economy } = await requireUserAndEconomy(ctx, userId);
+    const { economy } = await requireUserAndSurface(ctx, userId);
     const recovered = await recoverUserPendings(ctx, userId, economy, null);
     const balanceAfter = await lastBalance(ctx, userId, economy);
     return { recovered, balanceAfter };
@@ -518,17 +548,14 @@ export const recoverStalePendingSpins = internalMutation({
 export const earnBonusSpin = mutation({
   args: { userId: v.id("users"), amount: v.optional(v.number()) },
   handler: async (ctx, { userId, amount }) => {
-    await requireUser(ctx, userId);
+    const { economy } = await requireUserAndSurface(ctx, userId);
     const now = Date.now();
     const dayStart = nigerianDayStart(now);
-    const windowHours = await getNum(ctx, "spinWindowHours") || 3;
+    const windowHours = await getNum(ctx, "spinWindowHours", economy) || 3;
     const addCount = Math.max(1, amount ?? 1);
-    const adBonusLimit = await getNum(ctx, "adBonusSpinsPerWindow");
+    const adBonusLimit = await getNum(ctx, "adBonusSpinsPerWindow", economy);
 
-    const spinRecord = await ctx.db
-      .query("dailySpins")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
+    const spinRecord = await getSpinRecord(ctx, userId, economy);
 
     const sameDay = spinRecord?.windowStart === dayStart;
     const earnedInWindow = sameDay ? (spinRecord?.adBonusEarned ?? 0) : 0;
@@ -540,6 +567,8 @@ export const earnBonusSpin = mutation({
       );
     }
 
+    await ctx.db.insert("adWatchLogs", { userId, kind: "spin_bonus", provider: "admob", points: 0, economy, at: now });
+
     if (spinRecord) {
       const currentBonus = spinRecord.bonusSpins ?? 0;
       await ctx.db.patch(spinRecord._id, {
@@ -550,6 +579,7 @@ export const earnBonusSpin = mutation({
     } else {
       await ctx.db.insert("dailySpins", {
         userId,
+        economy,
         windowStart: dayStart,
         spinsUsedInWindow: 0,
         bonusSpins: addCount,

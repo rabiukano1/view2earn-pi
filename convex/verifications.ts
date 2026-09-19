@@ -8,7 +8,7 @@ import {
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { enforceRateLimit } from "./lib/ratelimit";
-import { requireUser, requireAuth, requireUserAndEconomy } from "./lib/guards";
+import { requireUser, requireAuth, requireUserAndSurface } from "./lib/guards";
 import { isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
 import { targetUrlsOf } from "./tasks";
@@ -118,7 +118,7 @@ export const claim = mutation({
   args: { taskId: v.id("tasks"), userId: v.id("users"), clientIp: v.optional(v.string()) },
   handler: async (ctx, args) => {
     // The claim remembers the surface it was made on; release() pays into it.
-    const { economy } = await requireUserAndEconomy(ctx, args.userId);
+    const { economy } = await requireUserAndSurface(ctx, args.userId);
     await enforceRateLimit(ctx, args.userId, "claim");
 
     // IP Reputation & VPN Detection (Fraud Layer 3)
