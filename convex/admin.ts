@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { recomputeUserScore } from "./fraud";
@@ -163,7 +163,9 @@ export const listUsers = query({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     requireAdmin(token);
-    return await ctx.db.query("users").order("desc").take(100);
+    // ponytail: full scan (Convex caps a query at 16k docs / 8 MB); switch to
+    // paginate() + server-side search when the user table nears that.
+    return await ctx.db.query("users").order("desc").collect();
   },
 });
 
@@ -306,13 +308,14 @@ export const listVerifications = query({
   args: { token: v.string(), state: v.optional(v.string()) },
   handler: async (ctx, { token, state }) => {
     requireAdmin(token);
+    // A state filter is a work queue → show everything in it; "All" stays capped.
     const rows = state
       ? await ctx.db
           .query("verifications")
           .withIndex("by_state", (q) => q.eq("state", state))
           .order("desc")
-          .take(100)
-      : await ctx.db.query("verifications").order("desc").take(100);
+          .collect()
+      : await ctx.db.query("verifications").order("desc").take(300);
 
     return await Promise.all(
       rows.map(async (row) => {
@@ -334,6 +337,7 @@ export const listVerifications = query({
           username: user?.username ?? "unknown",
           fraudScore: user?.fraudScore ?? 0,
           fraudTier: fraudTier(user?.fraudScore ?? 0),
+          platform: task?.platform ?? "OTHER",
           taskLabel: task ? `${task.type} · ${task.platform}` : "deleted task",
           taskName: task?.name || targetNameFromUrl(task?.targetUrl ?? "") || task?.targetUrl || "",
           points: task?.points ?? 0,
@@ -345,25 +349,54 @@ export const listVerifications = query({
   },
 });
 
+async function approveOne(ctx: MutationCtx, verificationId: Id<"verifications">) {
+  const verification = await ctx.db.get(verificationId);
+  if (!verification) {
+    throw new Error("Verification not found");
+  }
+  if (
+    verification.state !== "ADMIN_REVIEW" &&
+    verification.state !== "PROOF_SUBMITTED"
+  ) {
+    throw new Error(`Cannot approve from state ${verification.state}`);
+  }
+  const holdUntil = Date.now() + HOLD_MS;
+  await ctx.db.patch(verificationId, { state: "PENDING_HOLD", holdUntil });
+  await ctx.scheduler.runAt(holdUntil, internal.verifications.release, {
+    verificationId,
+  });
+}
+
 export const approveVerification = mutation({
   args: { token: v.string(), verificationId: v.id("verifications") },
   handler: async (ctx, { token, verificationId }) => {
     requireAdmin(token);
-    const verification = await ctx.db.get(verificationId);
-    if (!verification) {
-      throw new Error("Verification not found");
+    await approveOne(ctx, verificationId);
+  },
+});
+
+// Approve / reject a whole batch (e.g. every pending proof for one platform).
+// Rows that are no longer actionable are skipped, not fatal.
+export const bulkVerifications = mutation({
+  args: {
+    token: v.string(),
+    verificationIds: v.array(v.id("verifications")),
+    action: v.union(v.literal("approve"), v.literal("reject")),
+  },
+  handler: async (ctx, { token, verificationIds, action }) => {
+    requireAdmin(token);
+    let done = 0;
+    let skipped = 0;
+    for (const id of verificationIds) {
+      try {
+        if (action === "approve") await approveOne(ctx, id);
+        else await rejectOne(ctx, id);
+        done += 1;
+      } catch {
+        skipped += 1;
+      }
     }
-    if (
-      verification.state !== "ADMIN_REVIEW" &&
-      verification.state !== "PROOF_SUBMITTED"
-    ) {
-      throw new Error(`Cannot approve from state ${verification.state}`);
-    }
-    const holdUntil = Date.now() + HOLD_MS;
-    await ctx.db.patch(verificationId, { state: "PENDING_HOLD", holdUntil });
-    await ctx.scheduler.runAt(holdUntil, internal.verifications.release, {
-      verificationId,
-    });
+    return { done, skipped };
   },
 });
 
@@ -371,6 +404,12 @@ export const rejectVerification = mutation({
   args: { token: v.string(), verificationId: v.id("verifications") },
   handler: async (ctx, { token, verificationId }) => {
     requireAdmin(token);
+    await rejectOne(ctx, verificationId);
+  },
+});
+
+async function rejectOne(ctx: MutationCtx, verificationId: Id<"verifications">) {
+  {
     const verification = await ctx.db.get(verificationId);
     if (!verification) {
       throw new Error("Verification not found");
@@ -398,8 +437,8 @@ export const rejectVerification = mutation({
 
     await ctx.db.patch(verificationId, { state: "REJECTED", screenshotStorageId: undefined, additionalScreenshots: undefined });
     await recomputeUserScore(ctx, verification.userId);
-  },
-});
+  }
+}
 
 // ---------- Providers ----------
 

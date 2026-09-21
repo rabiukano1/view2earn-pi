@@ -106,8 +106,167 @@ const handleVasWebhook = httpAction(async (ctx, request) => {
   }
 });
 
+type TelegramChannelPost = {
+  message_id: number;
+  date: number;
+  chat: { id: number };
+  caption?: string;
+  author_signature?: string;
+  voice?: { file_id: string; file_unique_id: string; duration?: number; mime_type?: string };
+  audio?: { file_id: string; file_unique_id: string; duration?: number; mime_type?: string; title?: string; performer?: string };
+};
+
+type NoteType = "episode" | "update" | "announcement";
+const TYPE_LABEL: Record<NoteType, string> = { episode: "🎧 Episode", update: "📢 Update", announcement: "📣 Announcement" };
+
+// Caption convention: first free line = title; optional "Mentor: Name" and
+// "Type: episode|update|announcement" lines anywhere.
+function parseCaption(post: TelegramChannelPost) {
+  const caption = post.caption ?? "";
+  const lines = caption.split("\n").map((l) => l.trim()).filter(Boolean);
+  const mentorLine = lines.find((l) => /^mentor\s*[:\-]/i.test(l));
+  const typeLine = lines.find((l) => /^type\s*[:\-]/i.test(l));
+  const typeRaw = typeLine?.replace(/^type\s*[:\-]\s*/i, "").toLowerCase();
+  const type = (["episode", "update", "announcement"] as const).find((t) => typeRaw?.startsWith(t));
+  return {
+    caption,
+    title: lines.find((l) => l !== mentorLine && l !== typeLine) ?? "",
+    mentor: mentorLine?.replace(/^mentor\s*[:\-]\s*/i, "").trim() || undefined,
+    type,
+  };
+}
+
+async function tg(method: string, body: Record<string, unknown>) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => {});
+}
+
+// Posts (or edits) the bot's reply under a voice note: asks for type, then
+// mentor, then shows the final summary. Callback data: "t:<msgId>:<type>" /
+// "m:<msgId>:<mentorId>" (Telegram caps callback_data at 64 bytes).
+async function askNext(
+  ctx: { runQuery: any },
+  chatId: string,
+  noteMessageId: number,
+  botMessageId: number | undefined,
+  type: NoteType | undefined,
+  mentor: string | undefined,
+) {
+  let text: string;
+  let keyboard: { text: string; callback_data: string }[][] = [];
+  if (!type) {
+    text = "What type of voice note is this?";
+    keyboard = [(Object.keys(TYPE_LABEL) as NoteType[]).map((t) => ({ text: TYPE_LABEL[t], callback_data: `t:${noteMessageId}:${t}` }))];
+  } else if (!mentor) {
+    const mentors: { _id: string; name: string }[] = await ctx.runQuery(internal.voiceNotes.listMentorsInternal, {});
+    text = mentors.length
+      ? `${TYPE_LABEL[type]} — who is the mentor?`
+      : `${TYPE_LABEL[type]} — no mentors yet. Edit the caption and add a line "Mentor: Name".`;
+    for (let i = 0; i < mentors.length; i += 2) {
+      keyboard.push(mentors.slice(i, i + 2).map((m) => ({ text: m.name, callback_data: `m:${noteMessageId}:${m._id}` })));
+    }
+  } else {
+    text = `✅ ${TYPE_LABEL[type]} · ${mentor}`;
+  }
+  const body = { chat_id: chatId, text, reply_markup: { inline_keyboard: keyboard } };
+  if (botMessageId) await tg("editMessageText", { ...body, message_id: botMessageId });
+  else await tg("sendMessage", { ...body, reply_to_message_id: noteMessageId });
+}
+
+// Admin DM wizard: only Telegram user IDs in TELEGRAM_BOT_ADMINS (comma-
+// separated) may use it. bot.ts decides the replies; this sends them.
+async function runBot(
+  ctx: { runMutation: any },
+  userId: string,
+  chatId: string,
+  messageId: number,
+  input: {
+    text?: string;
+    data?: string;
+    voice?: { fileId: string; fileUniqueId: string; duration: number; mimeType: string };
+    photoFileId?: string;
+  },
+  editMessageId?: number,
+) {
+  const admins = (process.env.TELEGRAM_BOT_ADMINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!admins.includes(userId)) {
+    if (input.text) {
+      await tg("sendMessage", {
+        chat_id: chatId,
+        text: `This bot posts mentor voice notes to View2Earn. Your Telegram ID is ${userId} — the owner must add it to TELEGRAM_BOT_ADMINS to use it.`,
+      });
+    }
+    return;
+  }
+  const replies: { text: string; keyboard?: unknown[][]; edit?: boolean; voice?: { fileId: string; caption: string } }[] =
+    await ctx.runMutation(internal.bot.handle, { userId, chatId, messageId, ...input });
+  const channel = process.env.TELEGRAM_VOICE_CHANNEL_ID;
+  for (const r of replies) {
+    const body = { chat_id: chatId, text: r.text, reply_markup: { inline_keyboard: r.keyboard ?? [] } };
+    if (r.edit && editMessageId) await tg("editMessageText", { ...body, message_id: editMessageId });
+    else await tg("sendMessage", body);
+    // Archive copy in the private channel (its webhook echo is deduped by file id).
+    if (r.voice && channel) await tg("sendVoice", { chat_id: channel, voice: r.voice.fileId, caption: r.voice.caption });
+  }
+}
+
+// Streams a voice note straight from Telegram (nothing stored in Convex).
+// Range headers are passed through so <audio> can seek. ?dl=1 forces download.
+async function streamTelegramFile(request: Request, fileId: string, mimeType: string, extra: Record<string, string> = {}) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return new Response("bot not configured", { status: 500 });
+  const info = (await (
+    await fetch(`https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`)
+  ).json()) as { ok: boolean; result?: { file_path?: string } };
+  const path = info.result?.file_path;
+  if (!info.ok || !path) return new Response("file unavailable", { status: 502 });
+
+  const range = request.headers.get("range");
+  const upstream = await fetch(`https://api.telegram.org/file/bot${token}/${path}`, {
+    headers: range ? { range } : {},
+  });
+  if (!upstream.ok && upstream.status !== 206) return new Response("upstream error", { status: 502 });
+
+  const headers = new Headers({ "Content-Type": mimeType, "Cache-Control": "private, max-age=3600", ...extra });
+  for (const h of ["content-length", "content-range", "accept-ranges"]) {
+    const val = upstream.headers.get(h);
+    if (val) headers.set(h, val);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers });
+}
+
+const handleVoiceFile = httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
+  if (!id) return new Response("missing id", { status: 400 });
+  const note = await ctx.runQuery(internal.voiceNotes.getForStream, { id: id as any });
+  if (!note) return new Response("not found", { status: 404 });
+  const extra: Record<string, string> = {};
+  if (url.searchParams.get("dl")) {
+    const ext = note.mimeType.includes("mpeg") ? "mp3" : /mp4|m4a/.test(note.mimeType) ? "m4a" : "ogg";
+    const name = note.title.replace(/[^\w\d .-]+/g, "_").slice(0, 80) || "voice-note";
+    extra["Content-Disposition"] = `attachment; filename="${name}.${ext}"`;
+  }
+  return streamTelegramFile(request, note.fileId, note.mimeType, extra);
+});
+
+// Mentor profile photo (Telegram photo sent to the bot), by mentor id.
+const handleMentorPhoto = httpAction(async (ctx, request) => {
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return new Response("missing id", { status: 400 });
+  const fileId = await ctx.runQuery(internal.voiceNotes.getMentorPhoto, { id: id as any });
+  if (!fileId) return new Response("not found", { status: 404 });
+  return streamTelegramFile(request, fileId, "image/jpeg", { "Cache-Control": "public, max-age=86400" });
+});
+
 // Telegram bot webhook: on "/start <nonce>", mark the login nonce verified with
-// the sender's Telegram id, then confirm in-chat. Register the webhook once:
+// the sender's Telegram id, then confirm in-chat. Also ingests voice notes from
+// the private mentors channel (TELEGRAM_VOICE_CHANNEL_ID). Register once:
 //   https://api.telegram.org/bot<TOKEN>/setWebhook?url=<convex-site>/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 const handleTelegramWebhook = httpAction(async (ctx, request) => {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -116,11 +275,107 @@ const handleTelegramWebhook = httpAction(async (ctx, request) => {
   }
   try {
     const update = (await request.json()) as {
-      message?: { text?: string; from?: { id?: number; first_name?: string } };
+      message?: TelegramChannelPost & {
+        text?: string;
+        from?: { id?: number; first_name?: string };
+        chat: { id: number; type?: string };
+        photo?: { file_id: string }[];
+      };
+      channel_post?: TelegramChannelPost;
+      edited_channel_post?: TelegramChannelPost;
+      callback_query?: {
+        id: string;
+        data?: string;
+        from?: { id?: number };
+        message?: { message_id: number; chat: { id: number; type?: string } };
+      };
     };
-    const text = update.message?.text ?? "";
-    const from = update.message?.from;
+
+    const voiceChat = process.env.TELEGRAM_VOICE_CHANNEL_ID;
+
+    // Voice / audio posted in the private mentors channel → index its metadata,
+    // then ask the poster (inline buttons) for anything the caption didn't say.
+    const post = update.channel_post;
+    const media = post?.voice ?? post?.audio;
+    if (post && media && String(post.chat.id) !== voiceChat) {
+      console.log(`[voice] ignored channel_post from chat ${post.chat.id} (set TELEGRAM_VOICE_CHANNEL_ID)`);
+    }
+    if (post && media && String(post.chat.id) === voiceChat) {
+      const meta = parseCaption(post);
+      const chatId = String(post.chat.id);
+      const inserted = await ctx.runMutation(internal.voiceNotes.insert, {
+        chatId,
+        messageId: post.message_id,
+        fileId: media.file_id,
+        fileUniqueId: media.file_unique_id,
+        duration: media.duration ?? 0,
+        mimeType: media.mime_type ?? "audio/ogg",
+        title: meta.title || post.audio?.title || `Voice note ${new Date(post.date * 1000).toLocaleDateString("en-GB")}`,
+        mentor: meta.mentor || post.author_signature || post.audio?.performer || undefined,
+        type: meta.type,
+        caption: meta.caption || undefined,
+        date: post.date,
+      });
+      if (inserted === "inserted") await askNext(ctx, chatId, post.message_id, undefined, meta.type, meta.mentor || post.author_signature);
+      return new Response("ok", { status: 200 });
+    }
+
+    // Caption edited in the channel → re-parse title / mentor / type.
+    const edited = update.edited_channel_post;
+    if (edited && (edited.voice || edited.audio) && String(edited.chat.id) === voiceChat) {
+      const meta = parseCaption(edited);
+      await ctx.runMutation(internal.voiceNotes.classify, {
+        chatId: String(edited.chat.id),
+        messageId: edited.message_id,
+        title: meta.title || undefined,
+        mentor: meta.mentor || undefined,
+        type: meta.type,
+        caption: meta.caption || undefined,
+      });
+      return new Response("ok", { status: 200 });
+    }
+
+    // Button tap on the bot's question under a voice note.
+    const cb = update.callback_query;
+    // Button tap inside the admin DM wizard.
+    if (cb?.data && cb.message?.chat.type === "private" && cb.from?.id) {
+      await tg("answerCallbackQuery", { callback_query_id: cb.id });
+      await runBot(ctx, String(cb.from.id), String(cb.message.chat.id), cb.message.message_id, { data: cb.data }, cb.message.message_id);
+      return new Response("ok", { status: 200 });
+    }
+    if (cb?.data && cb.message && String(cb.message.chat.id) === voiceChat) {
+      const [kind, msgId, value] = cb.data.split(":");
+      const chatId = String(cb.message.chat.id);
+      const messageId = Number(msgId);
+      const isType = kind === "t" && (["episode", "update", "announcement"] as const).some((t) => t === value);
+      const next = await ctx.runMutation(internal.voiceNotes.classify, {
+        chatId,
+        messageId,
+        type: isType ? (value as "episode" | "update" | "announcement") : undefined,
+        mentorId: kind === "m" ? (value as any) : undefined,
+      });
+      await tg("answerCallbackQuery", { callback_query_id: cb.id });
+      if (next) await askNext(ctx, chatId, messageId, cb.message.message_id, next.type, next.mentor);
+      return new Response("ok", { status: 200 });
+    }
+
+    const msg = update.message;
+    const text = msg?.text ?? "";
+    const from = msg?.from;
     const match = text.match(/^\/start\s+(\S+)/);
+    // Anything else in a private chat → admin wizard (bot.ts).
+    if (!match && msg && from?.id && msg.chat.type === "private") {
+      const m = msg.voice ?? msg.audio;
+      const photo = msg.photo?.[msg.photo.length - 1]; // largest size is last
+      await runBot(ctx, String(from.id), String(msg.chat.id), msg.message_id, {
+        text: text || msg.caption || undefined,
+        voice: m
+          ? { fileId: m.file_id, fileUniqueId: m.file_unique_id, duration: m.duration ?? 0, mimeType: m.mime_type ?? "audio/ogg" }
+          : undefined,
+        photoFileId: photo?.file_id,
+      });
+      return new Response("ok", { status: 200 });
+    }
     if (match && from?.id) {
       const ok = await ctx.runMutation(internal.telegramAuth.markVerified, {
         nonce: match[1],
@@ -342,6 +597,8 @@ auth.addHttpRoutes(router); // Convex Auth sign-in/OAuth callback routes
 router.route({ path: "/survey/postback", method: "POST", handler: handleSurveyPostback });
 router.route({ path: "/vas/webhook", method: "POST", handler: handleVasWebhook });
 router.route({ path: "/telegram/webhook", method: "POST", handler: handleTelegramWebhook });
+router.route({ path: "/voice/file", method: "GET", handler: handleVoiceFile });
+router.route({ path: "/mentor/photo", method: "GET", handler: handleMentorPhoto });
 router.route({ path: "/survey/cpx", method: "GET", handler: handleCpxPostback });
 
 // Adsgram Reward URL (partner.adsgram.ai -> block -> Reward URL):

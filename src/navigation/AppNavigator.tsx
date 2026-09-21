@@ -29,6 +29,8 @@ import DonateScreen from '../screens/DonateScreen';
 import StatsScreen from '../screens/StatsScreen';
 import LevelScreen from '../screens/LevelScreen';
 import WatchHubScreen from '../screens/WatchHubScreen';
+import VoiceNotesScreen from '../screens/VoiceNotesScreen';
+import MentorVoiceScreen from '../screens/MentorVoiceScreen';
 import LiveStreamsScreen from '../screens/LiveStreamsScreen';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -175,6 +177,8 @@ export default function AppNavigator({ onShowSplash }: AppNavigatorProps = {}) {
           <Stack.Screen name="Stats" component={StatsScreen} />
           <Stack.Screen name="Donate" component={DonateScreen} />
           <Stack.Screen name="WatchHub" component={WatchHubScreen} />
+          <Stack.Screen name="VoiceNotes" component={VoiceNotesScreen} />
+          <Stack.Screen name="MentorVoice" component={MentorVoiceScreen} />
           <Stack.Screen name="LiveStreams" component={LiveStreamsScreen} />
         </>
       ) : (

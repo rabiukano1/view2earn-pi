@@ -797,6 +797,52 @@ export default defineSchema({
   // creates a token tied to its own user, passes it to the Pi Browser via the
   // /link URL, and the Pi web app exchanges it + a verified Pi identity to
   // promote that user row to the Pi economy (ecosystem "PI").
+  // Mentor voice notes — metadata only. Audio stays in the private Telegram
+  // channel; http.ts /voice/file proxies it by telegramFileId on demand.
+  voiceNotes: defineTable({
+    title: v.string(),
+    mentor: v.optional(v.string()), // channel post author_signature / audio performer
+    caption: v.optional(v.string()),
+    searchText: v.string(), // title + mentor + caption, for the search index
+    // Set by the bot's inline buttons (or a "Type: …" caption line). Unset = unclassified.
+    type: v.optional(v.union(v.literal("episode"), v.literal("update"), v.literal("announcement"))),
+    series: v.optional(v.string()), // episode series name, e.g. "Pi Basics"
+    episodeNumber: v.optional(v.number()),
+    note: v.optional(v.string()), // short description shown under the title
+    duration: v.number(), // seconds
+    mimeType: v.string(),
+    telegramFileId: v.string(),
+    telegramChatId: v.string(),
+    telegramMessageId: v.number(),
+    fileUniqueId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_file", ["fileUniqueId"])
+    .index("by_created", ["createdAt"])
+    .index("by_message", ["telegramChatId", "telegramMessageId"])
+    .searchIndex("search_text", { searchField: "searchText", filterFields: ["mentor", "type"] }),
+
+  // Known mentors — auto-registered from captions/signatures; used for the
+  // bot's "Who's the mentor?" buttons and the app's mentor filter.
+  mentors: defineTable({
+    name: v.string(),
+    role: v.optional(v.string()), // e.g. "Pi Network Ambassador"
+    bio: v.optional(v.string()),
+    photoFileId: v.optional(v.string()), // Telegram file_id, proxied by /mentor/photo
+    photoUrl: v.optional(v.string()), // set from the admin panel; wins over photoFileId
+    telegram: v.optional(v.string()), // @handle without the @
+    types: v.optional(v.array(v.string())), // which note types this mentor publishes
+    createdAt: v.number(),
+  }).index("by_name", ["name"]),
+
+  // Per-admin state of the Telegram DM wizard (convex/bot.ts).
+  botSessions: defineTable({
+    telegramUserId: v.string(),
+    state: v.string(),
+    draft: v.any(),
+    updatedAt: v.number(),
+  }).index("by_user", ["telegramUserId"]),
+
   piLinkTokens: defineTable({
     userId: v.id("users"),
     token: v.string(),

@@ -48,6 +48,7 @@ export default function WatchHubScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const docs = useQuery(api.iptv.list);
+  const voiceCount = useQuery(api.voiceNotes.list)?.length ?? 0;
 
   const counts = {
     football: docs?.filter((d) => d.type === 'football').length ?? 0,
@@ -81,6 +82,22 @@ export default function WatchHubScreen() {
             <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
           </TouchableOpacity>
         ))}
+        <TouchableOpacity
+          style={[styles.card, dark && styles.cardDark]}
+          activeOpacity={0.88}
+          onPress={() => navigation.navigate('VoiceNotes')}>
+          <View style={[styles.iconWrap, { backgroundColor: '#F59E0B22' }]}>
+            <Icon name="microphone" iconStyle="solid" size={24} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.title, dark && styles.textLight]}>Mentors</Text>
+            <Text style={styles.subtitle}>Voice notes, episodes & announcements</Text>
+          </View>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{voiceCount}</Text>
+          </View>
+          <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );

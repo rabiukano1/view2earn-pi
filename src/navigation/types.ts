@@ -30,6 +30,8 @@ export type RootStackParamList = {
   Stats: undefined;
   Donate: undefined;
   WatchHub: undefined;
+  VoiceNotes: undefined;
+  MentorVoice: { mentor: string };
   LiveStreams: { kind: 'football' | 'youtube' | 'other' | 'movies' } | undefined;
   WalletAuth: { nonce: string };
 };
