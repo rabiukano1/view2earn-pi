@@ -1,0 +1,21 @@
+{
+  "name": "@view2earn/media-editor",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "android": "react-native run-android",
+    "start": "react-native start"
+  },
+  "dependencies": {
+    "expo": "57.0.20",
+    "expo-file-system": "~57.0.6",
+    "expo-sharing": "~57.0.18",
+    "kroog-ffmpeg-kit-react-native": "^6.0.11",
+    "react": "^19.2.7",
+    "react-native": "0.86.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "typescript": "^5.8.3"
+  }
+}

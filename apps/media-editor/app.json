@@ -1,0 +1,13 @@
+{
+  "name": "MediaEditor",
+  "displayName": "Media Editor",
+  "expo": {
+    "name": "Media Editor",
+    "slug": "view2earn-media-editor",
+    "owner": "rabiukano",
+    "version": "1.0.0",
+    "android": {
+      "package": "com.view2earn.mediaeditor"
+    }
+  }
+}
