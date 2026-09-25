@@ -15,6 +15,7 @@ const FEATURE_KEYS = [
   { key: "feature:promote", label: "Promote Hub", app: "Mobile App", place: "Home Screen (Top Action)" },
   { key: "feature:academy", label: "Academy (Learn)", app: "Mobile App", place: "Home Screen" },
   { key: "feature:donate", label: "Donate Pi", app: "Mobile App", place: "Wallet Tab / Balances" },
+  { key: "feature:videoUpload", label: "Video Uploads", app: "Mobile App", place: "Community Videos (upload button)" },
 ];
 
 export default function FeaturesPage() {

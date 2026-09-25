@@ -85,6 +85,19 @@ export default function WatchHubScreen() {
         <TouchableOpacity
           style={[styles.card, dark && styles.cardDark]}
           activeOpacity={0.88}
+          onPress={() => navigation.navigate('CommunityVideos')}>
+          <View style={[styles.iconWrap, { backgroundColor: '#EC489922' }]}>
+            <Icon name="video" iconStyle="solid" size={24} color="#EC4899" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.title, dark && styles.textLight]}>Community Videos</Text>
+            <Text style={styles.subtitle}>Watch and share short clips</Text>
+          </View>
+          <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.card, dark && styles.cardDark]}
+          activeOpacity={0.88}
           onPress={() => navigation.navigate('VoiceNotes')}>
           <View style={[styles.iconWrap, { backgroundColor: '#F59E0B22' }]}>
             <Icon name="microphone" iconStyle="solid" size={24} color="#F59E0B" />

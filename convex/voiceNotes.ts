@@ -262,6 +262,93 @@ export const getForStream = internalQuery({
   },
 });
 
+// ---- Admin panel: edit notes and group them into series ----
+
+export const listNotesAdmin = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    return await ctx.db.query("voiceNotes").withIndex("by_created").order("desc").take(500);
+  },
+});
+
+/** All distinct series names, for the "move to group" picker. */
+export const seriesList = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const rows = await ctx.db.query("voiceNotes").collect();
+    return [...new Set(rows.map((r) => r.series).filter((s): s is string => !!s))].sort();
+  },
+});
+
+export const updateNote = mutation({
+  args: {
+    token: v.string(),
+    id: v.id("voiceNotes"),
+    title: v.optional(v.string()),
+    mentor: v.optional(v.string()),
+    type: v.optional(noteType),
+    series: v.optional(v.string()),
+    episodeNumber: v.optional(v.number()),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { token, id, ...a }) => {
+    requireAdmin(token);
+    const row = await ctx.db.get(id);
+    if (!row) throw new Error("Voice note not found");
+    if (a.title !== undefined && !a.title.trim()) throw new Error("Title cannot be empty");
+    // An empty string clears an optional field; undefined leaves it untouched.
+    const clear = (val: string | undefined, current: string | undefined) =>
+      val === undefined ? current : val.trim() || undefined;
+    const next = {
+      title: a.title?.trim() ?? row.title,
+      mentor: clear(a.mentor, row.mentor),
+      type: a.type ?? row.type,
+      series: clear(a.series, row.series),
+      episodeNumber: a.episodeNumber ?? row.episodeNumber,
+      note: clear(a.note, row.note),
+    };
+    await registerMentor(ctx, next.mentor);
+    await ctx.db.patch(id, { ...next, searchText: searchTextOf({ ...next, caption: row.caption }) });
+  },
+});
+
+/**
+ * Move many notes into a group at once: set their series (and optionally
+ * mentor/type). With `renumber`, episodes are numbered oldest → newest.
+ */
+export const bulkUpdateNotes = mutation({
+  args: {
+    token: v.string(),
+    ids: v.array(v.id("voiceNotes")),
+    series: v.optional(v.string()),
+    mentor: v.optional(v.string()),
+    type: v.optional(noteType),
+    renumber: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { token, ids, series, mentor, type, renumber }) => {
+    requireAdmin(token);
+    const rows = (await Promise.all(ids.map((id) => ctx.db.get(id)))).filter((r) => r !== null);
+    rows.sort((a, b) => a!.createdAt - b!.createdAt); // oldest first = Episode 1
+    await registerMentor(ctx, mentor);
+    let n = 0;
+    for (const row of rows) {
+      n += 1;
+      const next = {
+        title: row!.title,
+        mentor: mentor?.trim() || row!.mentor,
+        type: type ?? row!.type,
+        series: series === undefined ? row!.series : series.trim() || undefined,
+        episodeNumber: renumber ? n : row!.episodeNumber,
+        note: row!.note,
+      };
+      await ctx.db.patch(row!._id, { ...next, searchText: searchTextOf({ ...next, caption: row!.caption }) });
+    }
+    return { done: rows.length };
+  },
+});
+
 // Admin: `npx convex run voiceNotes:remove '{"token":"<ADMIN_PASSWORD>","id":"<id>"}'`
 export const remove = mutation({
   args: { token: v.string(), id: v.id("voiceNotes") },

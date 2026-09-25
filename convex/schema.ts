@@ -691,7 +691,9 @@ export default defineSchema({
     userId: v.id("users"),
     title: v.string(),
     description: v.optional(v.string()),
-    provider: v.union(v.literal("YOUTUBE"), v.literal("CONVEX"), v.literal("R2")),
+    // TELEGRAM = bytes live in the private Telegram channel, streamed back by
+    // http.ts /video/file; externalId holds the Telegram file_id.
+    provider: v.union(v.literal("YOUTUBE"), v.literal("CONVEX"), v.literal("R2"), v.literal("TELEGRAM")),
     externalId: v.string(),
     videoUrl: v.string(),
     thumbnailUrl: v.optional(v.string()),

@@ -27,6 +27,7 @@ const ICONS = {
   levels: "M23 6l-9.5 9.5-5-5L1 18 M16 6h7v7",
   channels: "M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M8 21h8 M12 17v4",
   mentors: "M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z M19 10v2a7 7 0 0 1-14 0v-2 M12 19v4 M8 23h8",
+  videos: "M23 7l-7 5 7 5V7z M14 5H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z",
 };
 
 const links = [
@@ -41,6 +42,8 @@ const links = [
   { href: "/levels", label: "Levels", icon: ICONS.levels },
   { href: "/channels", label: "Channels", icon: ICONS.channels },
   { href: "/mentors", label: "Mentors", icon: ICONS.mentors },
+  { href: "/videos", label: "User videos", icon: ICONS.videos },
+  { href: "/voice-notes", label: "Voice notes", icon: ICONS.mentors },
   { href: "/exchange", label: "Exchange", icon: ICONS.exchange },
   { href: "/redemptions", label: "Redemptions", icon: ICONS.redemptions },
   { href: "/inquiries", label: "Inquiries", icon: ICONS.exchange },

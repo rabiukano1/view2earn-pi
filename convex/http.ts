@@ -255,6 +255,24 @@ const handleVoiceFile = httpAction(async (ctx, request) => {
   return streamTelegramFile(request, note.fileId, note.mimeType, extra);
 });
 
+// User-uploaded video, streamed from the private Telegram channel. ?thumb=1
+// returns the poster image instead. Only ACTIVE (admin-approved) rows resolve.
+const handleVideoFile = httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
+  if (!id) return new Response("missing id", { status: 400 });
+  // Admin panel passes the shared admin secret so it can review pending uploads.
+  const allowPending = url.searchParams.get("token") === (process.env.ADMIN_PASSWORD ?? "admin");
+  const row = await ctx.runQuery(internal.videos.getForStream, { id: id as any, allowPending });
+  if (!row) return new Response("not found", { status: 404 });
+  const wantThumb = !!url.searchParams.get("thumb");
+  if (wantThumb) {
+    if (!row.thumbFileId) return new Response("no thumbnail", { status: 404 });
+    return streamTelegramFile(request, row.thumbFileId, "image/jpeg", { "Cache-Control": "public, max-age=86400" });
+  }
+  return streamTelegramFile(request, row.fileId, "video/mp4");
+});
+
 // Mentor profile photo (Telegram photo sent to the bot), by mentor id.
 const handleMentorPhoto = httpAction(async (ctx, request) => {
   const id = new URL(request.url).searchParams.get("id");
@@ -599,6 +617,7 @@ router.route({ path: "/vas/webhook", method: "POST", handler: handleVasWebhook }
 router.route({ path: "/telegram/webhook", method: "POST", handler: handleTelegramWebhook });
 router.route({ path: "/voice/file", method: "GET", handler: handleVoiceFile });
 router.route({ path: "/mentor/photo", method: "GET", handler: handleMentorPhoto });
+router.route({ path: "/video/file", method: "GET", handler: handleVideoFile });
 router.route({ path: "/survey/cpx", method: "GET", handler: handleCpxPostback });
 
 // Adsgram Reward URL (partner.adsgram.ai -> block -> Reward URL):
