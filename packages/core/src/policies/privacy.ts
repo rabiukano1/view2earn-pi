@@ -381,12 +381,32 @@ export const PRIVACY_POLICY: PolicyDoc = {
       t: "p",
       x: "The Service may contain links to websites, applications, or services operated by third parties. View2Earn is not responsible for the content, availability, privacy practices, or security of external websites or services. Accessing third-party services is at your own discretion and risk.",
     },
-    { t: "s", x: "12.5 Blockchain Networks" },
+    // Required by Google's EU User Consent Policy / AdMob program policies:
+    // Google must be named as an ad technology provider, with a link to its
+    // ad-technology notice. Do not soften this to "advertising partners".
+    { t: "s", x: "12.5 Advertising — Google AdMob" },
+    {
+      t: "p",
+      x: "View2Earn displays advertising supplied by Google through Google AdMob and the Google Mobile Ads SDK. To serve, measure, and limit the frequency of ads, and to detect invalid traffic and fraud, Google may collect and process information such as your device advertising identifier, IP address, device type and operating system, app version, general location derived from your IP address, and information about your interaction with ads (for example impressions, clicks, and completed rewarded views).",
+    },
+    {
+      t: "p",
+      x: "Google's use of this information is governed by Google's own Privacy Policy (https://policies.google.com/privacy) and its advertising technologies notice (https://policies.google.com/technologies/ads). You can review the list of ad technology providers and manage your choices at any time.",
+    },
+    {
+      t: "p",
+      x: "Where required by law, we ask for your consent before personalized advertising is used, using Google's certified User Messaging Platform (UMP) consent form. You may withdraw or change your consent at any time from the privacy or settings section of the app, and you may limit ad personalization through your device settings (Android: Settings → Google → Ads; iOS: Settings → Privacy & Security → Tracking). If you do not consent to personalized advertising, we and Google may still serve non-personalized ads, which use limited data such as general location and app content rather than your interests.",
+    },
+    {
+      t: "p",
+      x: "Rewarded advertising in View2Earn is always optional and user-initiated: you choose to watch an ad in exchange for reward points. We do not pay for clicks on ads, and we never require you to click an advertisement.",
+    },
+    { t: "s", x: "12.6 Blockchain Networks" },
     {
       t: "p",
       x: "View2Earn may support features that interact with independent blockchain ecosystems, including Pi Network and Sidra Chain. These blockchain networks operate independently of View2Earn and maintain their own governance, technical infrastructure, privacy practices, and terms of use. View2Earn does not control the operation, availability, security, or policies of any blockchain network and is not responsible for actions or decisions taken by their operators.",
     },
-    { t: "s", x: "12.6 Future Integrations" },
+    { t: "s", x: "12.7 Future Integrations" },
     {
       t: "p",
       x: "As the Service evolves, View2Earn may integrate with additional trusted third-party providers to improve functionality, enhance security, introduce new features, or expand available services. Any new integrations involving the processing of personal information will be implemented in accordance with this Privacy Policy and applicable data protection laws.",

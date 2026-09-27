@@ -1,11 +1,11 @@
 import { v } from "convex/values";
-import { query, mutation, type MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { query, mutation, action, type MutationCtx } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { recomputeUserScore } from "./fraud";
 import { fraudTier } from "@view2earn/core";
 import { REWARD_KEYS } from "./rewardsConfig";
-import { economyOfUser, appendLedger } from "./lib/ledger";
+import { economyOfUser, appendLedger, POINTS_ISSUED_KEY, POINTS_SPENT_KEY } from "./lib/ledger";
 
 // Every admin function requires the shared admin secret (ADMIN_PASSWORD) as a
 // `token` arg, checked by requireAdmin below. The Next.js panel gate is UI-only,
@@ -108,15 +108,19 @@ export const getAnalytics = query({
   handler: async (ctx, { token }) => {
     requireAdmin(token);
 
-    const ledger = await ctx.db.query("pointsLedger").collect();
-    let issued = 0;
-    let spent = 0;
-    for (const e of ledger) {
-      if (e.delta >= 0) issued += e.delta;
-      else spent += -e.delta;
-    }
+    // All-time point totals come from running counters (lib/ledger.ts), not a
+    // replay of pointsLedger — that scan exceeded Convex's 32k-doc query limit.
+    const settings = await ctx.db.query("platformSettings").collect();
+    const totalOf = (key: string) => Number(settings.find((s) => s.key === key)?.value ?? 0) || 0;
+    const issued = totalOf(POINTS_ISSUED_KEY);
+    const spent = totalOf(POINTS_SPENT_KEY);
 
-    const users = await ctx.db.query("users").collect();
+    // Newest first and capped: with redemptions + fraudEvents also reading 5000
+    // each, this keeps the whole query well inside Convex's 32k-document limit.
+    // The 7-day chart below stays exact (newest users are always included).
+    // ponytail: tier counts cover the newest 15k users; make them counters
+    // maintained in recomputeUserScore if the table grows past that.
+    const users = await ctx.db.query("users").order("desc").take(15000);
     const tiers = { normal: 0, watch: 0, restricted: 0, banned: 0 };
     for (const u of users) tiers[fraudTier(u.fraudScore)]++;
 
@@ -134,13 +138,16 @@ export const getAnalytics = query({
       };
     });
 
-    const redemptions = await ctx.db.query("redemptions").collect();
+    // Bounded like fraudEvents: this only feeds a status breakdown chart.
+    // ponytail: most recent 5000; move to a counter if you need all-time exact.
+    const redemptions = await ctx.db.query("redemptions").order("desc").take(5000);
     const redemptionsByStatus: Record<string, number> = {};
     for (const r of redemptions) {
       redemptionsByStatus[r.status] = (redemptionsByStatus[r.status] ?? 0) + 1;
     }
 
-    const fraudEvents = await ctx.db.query("fraudEvents").collect();
+    // Bounded: fraudEvents grows without limit and is only charted by type.
+    const fraudEvents = await ctx.db.query("fraudEvents").order("desc").take(5000);
     const fraudByType: Record<string, number> = {};
     for (const f of fraudEvents) {
       fraudByType[f.type] = (fraudByType[f.type] ?? 0) + 1;
@@ -154,6 +161,75 @@ export const getAnalytics = query({
       fraudByType,
       fraudEventsTotal: fraudEvents.length,
     };
+  },
+});
+
+/**
+ * One-time seed of the point totals from the existing ledger. Pages through
+ * pointsLedger a chunk at a time so no single execution hits the 32k-document
+ * limit, then overwrites both counters.
+ * Run once: npx convex run admin:backfillPointsTotals '{"token":"<ADMIN_PASSWORD>"}'
+ */
+export const backfillPointsTotals = mutation({
+  args: { token: v.string(), cursor: v.optional(v.string()), issued: v.optional(v.number()), spent: v.optional(v.number()) },
+  handler: async (ctx, { token, cursor, issued = 0, spent = 0 }): Promise<{
+    done: boolean;
+    issued: number;
+    spent: number;
+    cursor: string | null;
+  }> => {
+    requireAdmin(token);
+    const page = await ctx.db
+      .query("pointsLedger")
+      .paginate({ cursor: cursor ?? null, numItems: 5000 });
+
+    let nextIssued = issued;
+    let nextSpent = spent;
+    for (const e of page.page) {
+      if (e.delta >= 0) nextIssued += e.delta;
+      else nextSpent += -e.delta;
+    }
+
+    if (page.isDone) {
+      for (const [key, value] of [
+        [POINTS_ISSUED_KEY, nextIssued],
+        [POINTS_SPENT_KEY, nextSpent],
+      ] as const) {
+        const row = await ctx.db
+          .query("platformSettings")
+          .filter((q) => q.eq(q.field("key"), key))
+          .first();
+        if (row) await ctx.db.patch(row._id, { value: String(value), updatedAt: Date.now() });
+        else await ctx.db.insert("platformSettings", { key, value: String(value), updatedAt: Date.now() });
+      }
+    }
+    return { done: page.isDone, issued: nextIssued, spent: nextSpent, cursor: page.continueCursor };
+  },
+});
+
+/**
+ * Runs backfillPointsTotals to completion so the caller does not have to pass
+ * the cursor back by hand. Each page is its own mutation, so no single
+ * execution hits the document limit.
+ * npx convex run admin:backfillPointsTotalsAll '{"token":"<ADMIN_PASSWORD>"}'
+ */
+export const backfillPointsTotalsAll = action({
+  args: { token: v.string() },
+  handler: async (ctx, { token }): Promise<{ pages: number; issued: number; spent: number }> => {
+    let cursor: string | null = null;
+    let issued = 0;
+    let spent = 0;
+    for (let pages = 1; pages <= 500; pages++) {
+      const r: { done: boolean; issued: number; spent: number; cursor: string | null } = await ctx.runMutation(
+        api.admin.backfillPointsTotals,
+        { token, cursor: cursor ?? undefined, issued, spent },
+      );
+      issued = r.issued;
+      spent = r.spent;
+      cursor = r.cursor;
+      if (r.done) return { pages, issued, spent };
+    }
+    throw new Error("Ledger is larger than 500 pages — raise the page cap and rerun");
   },
 });
 

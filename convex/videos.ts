@@ -1,5 +1,5 @@
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireAdmin } from "./admin";
@@ -7,110 +7,47 @@ import { requireAdmin } from "./admin";
 // Telegram bots can only DOWNLOAD files up to 20 MB (getFile), and playback
 // goes back through the bot — so that ceiling, not the 50 MB send limit, is
 // what an upload has to fit in.
-// ponytail: swap the Telegram push in `submitUpload` for an R2 PUT when longer
+// ponytail: swap the Telegram push in `createFromUpload` for an R2 PUT when longer
 // videos are needed; nothing else in this file changes.
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 // 1. Generate direct Convex upload URL for zero-cost file uploads
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
     return await ctx.storage.generateUploadUrl();
   },
 });
 
-// 2. Register/Create a video entry in the database
-export const createVideo = mutation({
+// Admin upload: the panel PUTs the file to the URL above, then calls this.
+// Convex storage is only a staging buffer — the bytes are pushed into the
+// private Telegram channel and the staged blob is deleted, so nothing stays in
+// Convex. Published straight to ACTIVE: the admin is the publisher, so there is
+// no separate review step (and the app has no user-upload path at all).
+export const createFromUpload = action({
   args: {
-    title: v.string(),
-    description: v.optional(v.string()),
-    provider: v.union(v.literal("YOUTUBE"), v.literal("CONVEX"), v.literal("R2")),
-    storageId: v.optional(v.id("_storage")),
-    youtubeId: v.optional(v.string()),
-    customUrl: v.optional(v.string()),
-    durationSeconds: v.number(),
-    rewardPoints: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_externalUid", (q) => q.eq("externalUid", identity.subject))
-      .first();
-
-    if (!user) throw new Error("User record not found");
-
-    let videoUrl = args.customUrl || "";
-    let externalId = args.youtubeId || "";
-
-    if (args.provider === "CONVEX" && args.storageId) {
-      const url = await ctx.storage.getUrl(args.storageId);
-      if (!url) throw new Error("Failed to resolve storage URL");
-      videoUrl = url;
-      externalId = args.storageId;
-    }
-
-    // ponytail: default rewardPoints is set to 10 points per video view; calibrate based on economy metrics in production.
-    const rewardPoints = args.rewardPoints ?? 10;
-
-    const videoId = await ctx.db.insert("videos", {
-      userId: user._id,
-      title: args.title,
-      description: args.description,
-      provider: args.provider,
-      externalId,
-      videoUrl,
-      durationSeconds: args.durationSeconds,
-      viewsCount: 0,
-      rewardPoints,
-      status: "ACTIVE",
-      createdAt: Date.now(),
-    });
-
-    return videoId;
-  },
-});
-
-// 2b. App upload: the client PUTs the file to the URL from `generateUploadUrl`,
-// then calls this. Convex storage is only a staging buffer — the bytes are
-// pushed into the private Telegram channel and the staged blob is deleted, so
-// nothing stays in Convex. The row lands as PROCESSING = awaiting admin review.
-export const submitUpload = action({
-  args: {
+    token: v.string(),
     storageId: v.id("_storage"),
     title: v.string(),
     description: v.optional(v.string()),
     durationSeconds: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<{ videoId: Id<"videos"> }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
+    requireAdmin(args.token);
     const title = args.title.trim();
-    if (!title) throw new Error("Give your video a title");
-
-    // Admin kill switch (Admin → Features). Checked here, before anything is
-    // uploaded, so turning it off stops new videos immediately.
-    const flags = await ctx.runQuery(api.features.getFlags, {});
-    if (flags["feature:videoUpload"] === false) {
-      throw new Error("Video uploads are turned off right now. Please try again later.");
-    }
+    if (!title) throw new Error("Title is required");
 
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const channel = process.env.TELEGRAM_VIDEO_CHANNEL_ID ?? process.env.TELEGRAM_VOICE_CHANNEL_ID;
-    if (!token || !channel) throw new Error("Video uploads are not configured yet");
+    if (!token || !channel) throw new Error("TELEGRAM_VIDEO_CHANNEL_ID is not set");
 
     const blob = await ctx.storage.get(args.storageId);
     if (!blob) throw new Error("Upload not found — please try again");
-
-    // Authoritative size check (the client checks too, for a nicer message).
     if (blob.size > MAX_UPLOAD_BYTES) {
       await ctx.storage.delete(args.storageId);
       throw new Error(
-        `That video is ${(blob.size / 1024 / 1024).toFixed(1)} MB. Maximum is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB — please trim it or record at a lower quality.`,
+        `That video is ${(blob.size / 1024 / 1024).toFixed(1)} MB. Maximum is ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`,
       );
     }
 
@@ -129,7 +66,6 @@ export const submitUpload = action({
         video?: { file_id: string; duration?: number; thumbnail?: { file_id: string }; thumb?: { file_id: string } };
       };
     };
-    // Free the staging blob either way — it has served its purpose.
     await ctx.storage.delete(args.storageId);
     const video = payload.result?.video;
     if (!payload.ok || !video) {
@@ -137,7 +73,6 @@ export const submitUpload = action({
     }
 
     return await ctx.runMutation(internal.videos.insertUpload, {
-      externalUid: identity.subject,
       title,
       description: args.description,
       fileId: video.file_id,
@@ -149,7 +84,6 @@ export const submitUpload = action({
 
 export const insertUpload = internalMutation({
   args: {
-    externalUid: v.string(),
     title: v.string(),
     description: v.optional(v.string()),
     fileId: v.string(),
@@ -157,14 +91,13 @@ export const insertUpload = internalMutation({
     durationSeconds: v.number(),
   },
   handler: async (ctx, a): Promise<{ videoId: Id<"videos"> }> => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_externalUid", (q) => q.eq("externalUid", a.externalUid))
-      .first();
-    if (!user) throw new Error("User record not found");
+    // Admin-published videos are not owned by an app user. `userId` is required
+    // by the schema, so attribute them to the oldest account (the owner's).
+    const owner = await ctx.db.query("users").order("asc").first();
+    if (!owner) throw new Error("No user records exist yet");
 
     const videoId = await ctx.db.insert("videos", {
-      userId: user._id,
+      userId: owner._id,
       title: a.title,
       description: a.description,
       provider: "TELEGRAM",
@@ -175,29 +108,10 @@ export const insertUpload = internalMutation({
       durationSeconds: a.durationSeconds,
       viewsCount: 0,
       rewardPoints: 10,
-      status: "PROCESSING", // awaiting admin approval
+      status: "ACTIVE",
       createdAt: Date.now(),
     });
     return { videoId };
-  },
-});
-
-/** The signed-in user's own uploads, so they can see review status. */
-export const myVideos = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_externalUid", (q) => q.eq("externalUid", identity.subject))
-      .first();
-    if (!user) return [];
-    return await ctx.db
-      .query("videos")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .order("desc")
-      .take(50);
   },
 });
 

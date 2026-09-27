@@ -90,8 +90,8 @@ export default function WatchHubScreen() {
             <Icon name="video" iconStyle="solid" size={24} color="#EC4899" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, dark && styles.textLight]}>Community Videos</Text>
-            <Text style={styles.subtitle}>Watch and share short clips</Text>
+            <Text style={[styles.title, dark && styles.textLight]}>Videos</Text>
+            <Text style={styles.subtitle}>Short videos from View2Earn</Text>
           </View>
           <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
         </TouchableOpacity>

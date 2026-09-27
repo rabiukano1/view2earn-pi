@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { api } from "@convex/api";
-import { PW_KEY, useAdminMutation, useAdminQuery } from "../useAdmin";
-import { Modal, PageHeader, EmptyRow, RiskBadge, confirmThen, timeAgo } from "@/components/ui";
-import { Video, Trash2 } from "lucide-react";
+import { PW_KEY, useAdminAction, useAdminMutation, useAdminQuery } from "../useAdmin";
+import { Modal, Field, PageHeader, EmptyRow, RiskBadge, confirmThen, timeAgo } from "@/components/ui";
+import { Video, Trash2, Play, Plus } from "lucide-react";
+import type { Id } from "@convex/dataModel";
 
 const FILTERS = [
   { value: "PROCESSING", label: "Awaiting review" },
@@ -27,8 +28,11 @@ export default function VideosPage() {
   const rows = useAdminQuery(api.videos.listForReview, filter ? { status: filter } : {});
   const setStatus = useAdminMutation(api.videos.setVideoStatus);
   const remove = useAdminMutation(api.videos.removeVideo);
+  const generateUploadUrl = useAdminMutation(api.videos.generateUploadUrl);
+  const createFromUpload = useAdminAction(api.videos.createFromUpload);
   const [preview, setPreview] = useState<{ id: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState<null | { file: File | null; title: string; description: string }>(null);
 
   const pending = (rows ?? []).filter((r) => r.status === "PROCESSING").map((r) => r._id as string);
 
@@ -52,14 +56,54 @@ export default function VideosPage() {
       }
     });
 
+  const create = async () => {
+    if (!creating) return;
+    if (!creating.file) {
+      alert("Pick a video file first");
+      return;
+    }
+    if (!creating.title.trim()) {
+      alert("Title is required");
+      return;
+    }
+    if (creating.file.size > 20 * 1024 * 1024) {
+      alert(`That video is ${(creating.file.size / 1024 / 1024).toFixed(1)} MB. Maximum is 20 MB.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = await generateUploadUrl();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": creating.file.type || "video/mp4" },
+        body: creating.file,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+      await createFromUpload({
+        storageId,
+        title: creating.title,
+        description: creating.description || undefined,
+      });
+      setCreating(null);
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
-        title="User videos"
-        sub="Review uploads before they appear in the app. Files are stored in the private Telegram channel."
+        title="Videos"
+        sub="Videos shown in the app Videos screen. Files are stored in the private Telegram channel, up to 20 MB each."
         icon={<Video size={24} color="var(--primary)" />}
         action={
           <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary" onClick={() => setCreating({ file: null, title: "", description: "" })}>
+              <Plus size={16} /> Upload video
+            </button>
             {pending.length > 0 && (
               <>
                 <button className="btn btn-ok btn-sm" disabled={busy} onClick={() => bulk("ACTIVE")}>
@@ -85,7 +129,7 @@ export default function VideosPage() {
             <tr>
               <th>Video</th>
               <th>Title</th>
-              <th>Uploader</th>
+              <th>Published by</th>
               <th>Risk</th>
               <th>Length</th>
               <th>Views</th>
@@ -125,6 +169,12 @@ export default function VideosPage() {
                 <td style={{ fontSize: 12, color: "var(--text-3)" }}>{timeAgo(r.createdAt)}</td>
                 <td>
                   <div className="row-actions">
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      title="Play / review"
+                      onClick={() => setPreview({ id: r._id, title: r.title })}>
+                      <Play size={16} />
+                    </button>
                     {r.status !== "ACTIVE" && (
                       <button className="btn btn-ok btn-sm" onClick={() => act(() => setStatus({ videoIds: [r._id], status: "ACTIVE" }))}>
                         Approve
@@ -148,6 +198,41 @@ export default function VideosPage() {
           </tbody>
         </table>
       </div>
+
+      <Modal title="Upload video" open={creating !== null} onClose={() => setCreating(null)}>
+        {creating && (
+          <>
+            <Field label="Video file" hint="mp4 — up to 20 MB (Telegram playback limit).">
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(e) => setCreating({ ...creating, file: e.target.files?.[0] ?? null })}
+              />
+            </Field>
+            <Field label="Title">
+              <input
+                type="text"
+                value={creating.title}
+                placeholder="e.g. How to join View2Earn"
+                onChange={(e) => setCreating({ ...creating, title: e.target.value })}
+              />
+            </Field>
+            <Field label="Description" hint="Optional, shown under the title.">
+              <textarea
+                rows={2}
+                value={creating.description}
+                onChange={(e) => setCreating({ ...creating, description: e.target.value })}
+              />
+            </Field>
+            <div className="modal-actions" style={{ marginTop: 24 }}>
+              <button className="btn btn-ghost" onClick={() => setCreating(null)} disabled={busy}>Cancel</button>
+              <button className="btn btn-primary" onClick={create} disabled={busy}>
+                {busy ? "Uploading…" : "Publish to app"}
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
 
       <Modal title={preview?.title ?? "Video"} open={preview !== null} onClose={() => setPreview(null)}>
         {preview && (

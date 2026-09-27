@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
+import { action, query, mutation, internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireAdmin } from "./admin";
 
 // Mentor voice notes — metadata only. The audio itself stays in the private
@@ -259,6 +260,113 @@ export const getForStream = internalQuery({
   handler: async (ctx, { id }) => {
     const row = await ctx.db.get(id);
     return row ? { fileId: row.telegramFileId, mimeType: row.mimeType, title: row.title } : null;
+  },
+});
+
+// ---- Admin panel: create a voice note by uploading an audio file ----
+
+// Telegram bots can only DOWNLOAD files up to 20 MB (getFile), and playback goes
+// back through the bot, so that is the ceiling for an upload.
+export const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
+
+export const generateUploadUrl = mutation({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Admin upload: the panel PUTs the audio to the URL above, then calls this.
+ * Convex storage is only a staging buffer — the bytes are pushed into the
+ * private Telegram channel and the staged blob is deleted, so no audio is
+ * stored in Convex (same rule as the bot-posted notes).
+ */
+export const createFromUpload = action({
+  args: {
+    token: v.string(),
+    storageId: v.id("_storage"),
+    title: v.string(),
+    mentor: v.optional(v.string()),
+    type: v.optional(noteType),
+    series: v.optional(v.string()),
+    episodeNumber: v.optional(v.number()),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, a): Promise<{ ok: true }> => {
+    requireAdmin(a.token);
+    const title = a.title.trim();
+    if (!title) throw new Error("Title is required");
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const channel = process.env.TELEGRAM_VOICE_CHANNEL_ID;
+    if (!botToken || !channel) throw new Error("TELEGRAM_VOICE_CHANNEL_ID is not set");
+
+    const blob = await ctx.storage.get(a.storageId);
+    if (!blob) throw new Error("Upload not found — please try again");
+    if (blob.size > MAX_AUDIO_BYTES) {
+      await ctx.storage.delete(a.storageId);
+      throw new Error(
+        `That file is ${(blob.size / 1024 / 1024).toFixed(1)} MB. Maximum is ${MAX_AUDIO_BYTES / 1024 / 1024} MB.`,
+      );
+    }
+
+    // sendAudio (not sendVoice) so ordinary mp3/m4a files are accepted as-is.
+    const caption = [title, a.mentor ? `Mentor: ${a.mentor}` : "", a.type ? `Type: ${a.type}` : "", a.note ?? ""]
+      .filter(Boolean)
+      .join("\n");
+    const form = new FormData();
+    form.append("chat_id", channel);
+    form.append("caption", caption.slice(0, 1000));
+    form.append("audio", blob, "voice-note.mp3");
+    if (a.mentor) form.append("performer", a.mentor);
+    form.append("title", title);
+
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendAudio`, { method: "POST", body: form });
+    const payload = (await res.json()) as {
+      ok: boolean;
+      description?: string;
+      result?: {
+        message_id: number;
+        audio?: { file_id: string; file_unique_id: string; duration?: number; mime_type?: string };
+        voice?: { file_id: string; file_unique_id: string; duration?: number; mime_type?: string };
+      };
+    };
+    await ctx.storage.delete(a.storageId);
+    const media = payload.result?.audio ?? payload.result?.voice;
+    if (!payload.ok || !media) {
+      throw new Error(`Upload failed: ${payload.description ?? "Telegram rejected the file"}`);
+    }
+
+    await ctx.runMutation(internal.voiceNotes.insert, {
+      chatId: channel,
+      messageId: payload.result!.message_id,
+      fileId: media.file_id,
+      fileUniqueId: media.file_unique_id,
+      duration: media.duration ?? 0,
+      mimeType: media.mime_type ?? "audio/mpeg",
+      title,
+      mentor: a.mentor,
+      type: a.type,
+      series: a.series,
+      episodeNumber: a.episodeNumber,
+      note: a.note,
+      caption,
+      date: Math.floor(Date.now() / 1000),
+    });
+    return { ok: true };
+  },
+});
+
+/** Next free episode number in a series, so the form can pre-fill it. */
+export const nextEpisodeNumber = query({
+  args: { token: v.string(), series: v.string(), mentor: v.optional(v.string()) },
+  handler: async (ctx, { token, series, mentor }) => {
+    requireAdmin(token);
+    const rows = await ctx.db.query("voiceNotes").collect();
+    const used = rows.filter((r) => r.series === series && (!mentor || r.mentor === mentor));
+    return used.reduce((m, r) => Math.max(m, r.episodeNumber ?? 0), 0) + 1;
   },
 });
 

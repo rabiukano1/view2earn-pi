@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { api } from "@convex/api";
-import { useAdminMutation, useAdminQuery } from "../useAdmin";
+import { useAdminAction, useAdminMutation, useAdminQuery } from "../useAdmin";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen, timeAgo } from "@/components/ui";
-import { AudioLines, Edit2, Trash2, FolderInput } from "lucide-react";
+import { AudioLines, Edit2, Trash2, FolderInput, Plus, Play, Download, X } from "lucide-react";
 import type { Id } from "@convex/dataModel";
 
 const TYPES = [
@@ -12,6 +12,10 @@ const TYPES = [
   { value: "update", label: "Update" },
   { value: "announcement", label: "Announcement" },
 ];
+
+// Convex HTTP actions live on the .site domain of the same deployment.
+const SITE_URL = (process.env.NEXT_PUBLIC_CONVEX_URL ?? "").replace(".convex.cloud", ".convex.site");
+const audioUrl = (id: string, dl = false) => `${SITE_URL}/voice/file?id=${id}${dl ? "&dl=1" : ""}`;
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
@@ -32,6 +36,8 @@ export default function VoiceNotesAdminPage() {
   const updateNote = useAdminMutation(api.voiceNotes.updateNote);
   const bulkUpdate = useAdminMutation(api.voiceNotes.bulkUpdateNotes);
   const remove = useAdminMutation(api.voiceNotes.remove);
+  const generateUploadUrl = useAdminMutation(api.voiceNotes.generateUploadUrl);
+  const createFromUpload = useAdminAction(api.voiceNotes.createFromUpload);
 
   const [editing, setEditing] = useState<EditForm | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -39,6 +45,16 @@ export default function VoiceNotesAdminPage() {
   const [group, setGroup] = useState({ series: "", mentor: "", type: "", renumber: true });
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState("");
+  const [playing, setPlaying] = useState<{ id: string; title: string } | null>(null);
+  const [creating, setCreating] = useState<null | {
+    file: File | null;
+    title: string;
+    mentor: string;
+    type: string;
+    series: string;
+    episodeNumber: string;
+    note: string;
+  }>(null);
 
   const rows = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -115,6 +131,49 @@ export default function VoiceNotesAdminPage() {
     }
   };
 
+  const create = async () => {
+    if (!creating) return;
+    if (!creating.file) {
+      alert("Pick an audio file first");
+      return;
+    }
+    if (!creating.title.trim()) {
+      alert("Title is required");
+      return;
+    }
+    if (creating.file.size > 20 * 1024 * 1024) {
+      alert(`That file is ${(creating.file.size / 1024 / 1024).toFixed(1)} MB. Maximum is 20 MB.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = await generateUploadUrl();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": creating.file.type || "audio/mpeg" },
+        body: creating.file,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+      await createFromUpload({
+        storageId,
+        title: creating.title,
+        mentor: creating.mentor || undefined,
+        type: (creating.type || undefined) as any,
+        series: creating.series || undefined,
+        episodeNumber: creating.episodeNumber ? Number(creating.episodeNumber) : undefined,
+        note: creating.note || undefined,
+      });
+      setCreating(null);
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const emptyCreate = { file: null, title: "", mentor: "", type: "update", series: "", episodeNumber: "", note: "" };
+
   return (
     <div>
       <PageHeader
@@ -130,8 +189,11 @@ export default function VoiceNotesAdminPage() {
               onChange={(e) => setFilter(e.target.value)}
               style={{ padding: "8px 12px", borderRadius: 8 }}
             />
-            <button className="btn btn-primary" disabled={selected.size === 0} onClick={() => setGrouping(true)}>
+            <button className="btn btn-ghost" disabled={selected.size === 0} onClick={() => setGrouping(true)}>
               <FolderInput size={16} /> Move {selected.size || ""} to group
+            </button>
+            <button className="btn btn-primary" onClick={() => setCreating({ ...emptyCreate })}>
+              <Plus size={16} /> New voice note
             </button>
           </div>
         }
@@ -192,6 +254,12 @@ export default function VoiceNotesAdminPage() {
                 <td style={{ fontSize: 12, color: "var(--text-3)" }}>{timeAgo(n.createdAt)}</td>
                 <td>
                   <div className="row-actions">
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      title="Play / review"
+                      onClick={() => setPlaying({ id: n._id, title: n.title })}>
+                      <Play size={16} />
+                    </button>
                     <button className="btn btn-ghost btn-sm" title="Edit" onClick={() => openEdit(n)}>
                       <Edit2 size={16} />
                     </button>
@@ -209,10 +277,120 @@ export default function VoiceNotesAdminPage() {
         </table>
       </div>
 
+      {/* Quick-review player, pinned to the bottom */}
+      {playing && (
+        <div
+          style={{
+            position: "fixed",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 60,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+            padding: "12px 16px",
+            background: "var(--surface)",
+            borderTop: "1px solid var(--border)",
+            boxShadow: "0 -8px 30px rgba(0,0,0,0.18)",
+          }}>
+          <strong style={{ fontSize: 13, flexShrink: 0, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {playing.title}
+          </strong>
+          <audio src={audioUrl(playing.id)} controls autoPlay style={{ flex: 1, minWidth: 220 }} />
+          <a className="btn btn-ghost btn-sm" href={audioUrl(playing.id, true)} title="Download">
+            <Download size={16} />
+          </a>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPlaying(null)} title="Close">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Create a new voice note by uploading audio */}
+      <Modal title="New voice note" open={creating !== null} onClose={() => setCreating(null)}>
+        {creating && (
+          <>
+            <Field label="Audio file" hint="mp3, m4a or ogg — up to 20 MB (Telegram's playback limit).">
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={(e) => setCreating({ ...creating, file: e.target.files?.[0] ?? null })}
+              />
+            </Field>
+            <Field label="Title">
+              <input
+                type="text"
+                value={creating.title}
+                placeholder="e.g. How to verify your Pi wallet"
+                onChange={(e) => setCreating({ ...creating, title: e.target.value })}
+              />
+            </Field>
+            <div className="form-grid">
+              <Field label="Mentor">
+                <select value={creating.mentor} onChange={(e) => setCreating({ ...creating, mentor: e.target.value })}>
+                  <option value="">— none —</option>
+                  {mentors.map((m) => (
+                    <option key={m._id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Type">
+                {/* Update / Announcement / Episode */}
+                <select value={creating.type} onChange={(e) => setCreating({ ...creating, type: e.target.value })}>
+                  {TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            {creating.type === "episode" && (
+              <div className="form-grid">
+                <Field label="Series / group">
+                  <input
+                    type="text"
+                    list="series-options-new"
+                    value={creating.series}
+                    placeholder="e.g. Pi Basics"
+                    onChange={(e) => setCreating({ ...creating, series: e.target.value })}
+                  />
+                  <datalist id="series-options-new">
+                    {seriesList.map((sv) => (
+                      <option key={sv} value={sv} />
+                    ))}
+                  </datalist>
+                </Field>
+                <Field label="Episode number">
+                  <input
+                    type="number"
+                    min={1}
+                    value={creating.episodeNumber}
+                    onChange={(e) => setCreating({ ...creating, episodeNumber: e.target.value })}
+                  />
+                </Field>
+              </div>
+            )}
+            <Field label="Short note" hint="Shown under the title in the app.">
+              <textarea rows={2} value={creating.note} onChange={(e) => setCreating({ ...creating, note: e.target.value })} />
+            </Field>
+            <div className="modal-actions" style={{ marginTop: 24 }}>
+              <button className="btn btn-ghost" onClick={() => setCreating(null)} disabled={busy}>Cancel</button>
+              <button className="btn btn-primary" onClick={create} disabled={busy}>
+                {busy ? "Uploading…" : "Publish to app"}
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
       {/* Rename / edit one note */}
       <Modal title="Edit voice note" open={editing !== null} onClose={() => setEditing(null)}>
         {editing && (
           <>
+            <Field label="Listen" hint="Play it here to check what it is before renaming.">
+              <audio src={audioUrl(editing.id)} controls preload="none" style={{ width: "100%" }} />
+            </Field>
             <Field label="Title">
               <input type="text" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
             </Field>

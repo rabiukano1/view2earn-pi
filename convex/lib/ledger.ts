@@ -57,5 +57,28 @@ export async function appendLedger(
     refId,
     balanceAfter,
   });
+  await bumpPointsTotal(ctx, delta);
   return balanceAfter;
+}
+
+/**
+ * Running all-time totals for the admin dashboard. Replaying the whole ledger
+ * on every dashboard load blew Convex's 32k-documents-per-query limit once the
+ * ledger grew, so the totals are accumulated here instead (one extra small
+ * read/write per ledger append) and read back in O(1).
+ * Seed them for existing rows with `admin:backfillPointsTotals`.
+ */
+export const POINTS_ISSUED_KEY = "pointsIssuedTotal";
+export const POINTS_SPENT_KEY = "pointsSpentTotal";
+
+export async function bumpPointsTotal(ctx: MutationCtx, delta: number) {
+  const key = delta >= 0 ? POINTS_ISSUED_KEY : POINTS_SPENT_KEY;
+  const amount = Math.abs(delta);
+  const row = await ctx.db
+    .query("platformSettings")
+    .filter((q) => q.eq(q.field("key"), key))
+    .first();
+  const next = (row ? Number(row.value) || 0 : 0) + amount;
+  if (row) await ctx.db.patch(row._id, { value: String(next), updatedAt: Date.now() });
+  else await ctx.db.insert("platformSettings", { key, value: String(next), updatedAt: Date.now() });
 }

@@ -14,8 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import WebView from 'react-native-webview';
-import { launchImageLibrary } from 'react-native-image-picker';
-import { useAction, useMutation, useQuery } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { CONVEX_SITE_URL } from '../config';
@@ -24,9 +23,6 @@ import Icon from '../components/Icon';
 import { colors, radius, spacing, shadow } from '../theme';
 
 const WebViewPlayer = WebView as any;
-
-// Telegram bots can only serve files up to 20 MB, so that is the upload ceiling.
-const MAX_BYTES = 20 * 1024 * 1024;
 
 type Video = {
   _id: Id<'videos'>;
@@ -53,64 +49,11 @@ export default function CommunityVideosScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const [playing, setPlaying] = useState<Video | null>(null);
-  const [draft, setDraft] = useState<{ uri: string; size: number; duration: number; title: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // Admin kill switch (Admin → Features). The server enforces it too.
-  const flags = useQuery(api.features.getFlags);
-  const uploadsOn = flags?.['feature:videoUpload'] !== false;
 
   const feed = useQuery(api.videos.getActiveVideos, {}) as Video[] | undefined;
-  const mine = useQuery(api.videos.myVideos) as Video[] | undefined;
-  const generateUploadUrl = useMutation(api.videos.generateUploadUrl);
-  const submitUpload = useAction(api.videos.submitUpload);
-
-  const pending = mine?.filter((v) => v.status !== 'ACTIVE') ?? [];
-
-  const pick = async () => {
-    try {
-      const picked = await launchImageLibrary({ mediaType: 'video', selectionLimit: 1 });
-      const asset = picked.assets?.[0];
-      if (!asset?.uri) return;
-      if ((asset.fileSize ?? 0) > MAX_BYTES) {
-        Alert.alert(
-          'Video too large',
-          `That video is ${((asset.fileSize ?? 0) / 1024 / 1024).toFixed(1)} MB. Please pick one under 20 MB (about a minute of video).`,
-        );
-        return;
-      }
-      setDraft({ uri: asset.uri, size: asset.fileSize ?? 0, duration: Math.round(asset.duration ?? 0), title: '' });
-    } catch {
-      Alert.alert('Gallery', 'Could not open your gallery.');
-    }
-  };
-
-  const upload = async () => {
-    if (!draft || busy) return;
-    if (!draft.title.trim()) {
-      Alert.alert('Title needed', 'Give your video a short title first.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const uploadUrl = await generateUploadUrl();
-      const blob = await (await fetch(draft.uri)).blob();
-      const res = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': 'video/mp4' }, body: blob });
-      if (!res.ok) throw new Error('Upload failed');
-      const { storageId } = (await res.json()) as { storageId: Id<'_storage'> };
-      await submitUpload({ storageId, title: draft.title.trim(), durationSeconds: draft.duration });
-      setDraft(null);
-      Alert.alert('Sent for review', 'Your video was uploaded. It appears in the feed once an admin approves it.');
-    } catch (e) {
-      Alert.alert('Upload failed', String(e instanceof Error ? e.message : e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
-      <PageHeader title="Community Videos" subtitle="Watch and share short clips" back />
+      <PageHeader title="Videos" subtitle="Short videos from View2Earn" back />
 
       {!feed ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={colors.primary} />
@@ -120,18 +63,8 @@ export default function CommunityVideosScreen() {
           keyExtractor={(v) => v._id}
           numColumns={2}
           columnWrapperStyle={{ gap: spacing.sm }}
-          contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 90, gap: spacing.sm }}
-          ListHeaderComponent={
-            pending.length > 0 ? (
-              <View style={[styles.pendingBox, dark && styles.pendingBoxDark]}>
-                <Icon name="clock" iconStyle="solid" size={13} color="#F59E0B" />
-                <Text style={styles.pendingText}>
-                  {pending.length} of your video{pending.length === 1 ? '' : 's'} awaiting review
-                </Text>
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={<Text style={styles.empty}>No videos yet — be the first to share one.</Text>}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 20, gap: spacing.sm }}
+          ListEmptyComponent={<Text style={styles.empty}>No videos yet.</Text>}
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => setPlaying(item)}>
               <View style={styles.thumbWrap}>
@@ -159,42 +92,6 @@ export default function CommunityVideosScreen() {
           )}
         />
       )}
-
-      {uploadsOn ? (
-        <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + spacing.lg }]} onPress={pick} activeOpacity={0.85}>
-          <Icon name="plus" iconStyle="solid" size={16} color="#fff" />
-          <Text style={styles.fabText}>Upload video</Text>
-        </TouchableOpacity>
-      ) : null}
-
-      {/* Title + confirm before uploading */}
-      <Modal visible={draft !== null} transparent animationType="slide" onRequestClose={() => setDraft(null)}>
-        <View style={styles.backdrop}>
-          <View style={[styles.sheet, dark && styles.sheetDark, { paddingBottom: insets.bottom + spacing.lg }]}>
-            <Text style={[styles.sheetTitle, dark && styles.textLight]}>Upload video</Text>
-            <TextInput
-              style={[styles.input, dark && styles.inputDark]}
-              placeholder="Title (e.g. My Pi mining setup)"
-              placeholderTextColor={colors.textMuted}
-              value={draft?.title ?? ''}
-              onChangeText={(t) => setDraft((d) => (d ? { ...d, title: t } : d))}
-              maxLength={80}
-            />
-            <Text style={styles.sheetMeta}>
-              {draft ? `${(draft.size / 1024 / 1024).toFixed(1)} MB` : ''}
-              {draft && draft.duration ? ` · ${fmt(draft.duration)}` : ''} · reviewed before it goes live
-            </Text>
-            <View style={styles.sheetActions}>
-              <TouchableOpacity style={styles.btnGhost} onPress={() => setDraft(null)} disabled={busy}>
-                <Text style={styles.btnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.btnPrimary} onPress={upload} disabled={busy} activeOpacity={0.85}>
-                <Text style={styles.btnPrimaryText}>{busy ? 'Uploading…' : 'Upload'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Player */}
       <Modal visible={playing !== null} transparent animationType="fade" onRequestClose={() => setPlaying(null)}>
@@ -260,58 +157,6 @@ const styles = StyleSheet.create({
   meta: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   textLight: { color: colors.textDark },
   empty: { textAlign: 'center', color: colors.textMuted, marginTop: 40 },
-  pendingBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderRadius: radius.lg,
-    backgroundColor: '#FEF3C7',
-  },
-  pendingBoxDark: { backgroundColor: '#78350F' },
-  pendingText: { fontSize: 12, fontWeight: '600', color: '#92400E' },
-
-  fab: {
-    position: 'absolute',
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 999,
-    backgroundColor: colors.primary,
-    ...shadow,
-  },
-  fabText: { color: '#fff', fontWeight: '800', fontSize: 14 },
-
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
-  },
-  sheetDark: { backgroundColor: colors.surfaceDark },
-  sheetTitle: { fontSize: 17, fontWeight: '800', color: colors.text, marginBottom: spacing.md },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: colors.text,
-  },
-  inputDark: { borderColor: colors.borderDark, color: colors.textDark },
-  sheetMeta: { fontSize: 12, color: colors.textMuted, marginTop: spacing.sm },
-  sheetActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.lg },
-  btnGhost: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: radius.lg },
-  btnGhostText: { color: colors.textMuted, fontWeight: '700' },
-  btnPrimary: { paddingHorizontal: 22, paddingVertical: 12, borderRadius: radius.lg, backgroundColor: colors.primary },
-  btnPrimaryText: { color: '#fff', fontWeight: '800' },
-
   playerBackdrop: { flex: 1, backgroundColor: '#000' },
   playerHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg, paddingTop: spacing.xl },
   playerTitle: { flex: 1, color: '#fff', fontWeight: '700' },
