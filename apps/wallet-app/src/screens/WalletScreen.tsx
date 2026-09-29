@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -15,9 +16,9 @@ import {
   useColorScheme,
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import { openTaskLink } from '../services/TaskLinkService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
+import { openUrl } from '../lib/openUrl';
 import { api } from '../../../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, getPalette, radius, shadow } from '../theme';
@@ -55,6 +56,26 @@ function sidraLogo(size: number) {
 // Shared chrome for the four bottom sheets. Kept at module level so its
 // identity is stable across renders — defining it inside the screen would
 // remount every TextInput (and drop the keyboard) on each keystroke.
+// Sidra Chain (EVM) — chain id from eth_chainId on node.sidrachain.com.
+const SIDRA_CHAIN_ID = 97453;
+const SIDRA_RPC = 'https://node.sidrachain.com';
+
+// "1.5" → "1500000000000000000" wei, by string padding (exact; no floats).
+export function sidraToWei(amount: string): string | null {
+  const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(amount.trim());
+  if (!m) return null;
+  const wei = (m[1] + (m[2] ?? '').padEnd(18, '0')).replace(/^0+/, '');
+  return wei || null;
+}
+
+// Nigerian networks for data & airtime (keys match vas.ts).
+const VAS_NETWORKS = [
+  { key: 'MTN', label: 'MTN', color: '#FFCC00', ink: '#1F1F1F' },
+  { key: 'AIRTEL', label: 'Airtel', color: '#E40000', ink: '#FFFFFF' },
+  { key: 'GLO', label: 'Glo', color: '#50B848', ink: '#FFFFFF' },
+  { key: '9MOBILE', label: '9mobile', color: '#006E53', ink: '#FFFFFF' },
+];
+
 function Sheet({
   visible,
   onClose,
@@ -189,13 +210,17 @@ export default function WalletScreen() {
   const [swapAmount, setSwapAmount] = useState('');
   const [swapLoading, setSwapLoading] = useState(false);
 
-  const [depositAsset, setDepositAsset] = useState<'PIPRO' | 'SIDRA'>('PIPRO');
+  const [depositAsset, setDepositAsset] = useState<'PIPRO' | 'SIDRA' | 'BANK'>('PIPRO');
+  const startAnchorDeposit = useAction(api.anchor.startDeposit);
+  const anchorRate = useQuery(api.anchorDb.depositRate);
+  const [anchorLoading, setAnchorLoading] = useState(false);
   const [depositMethod, setDepositMethod] = useState<'payNow' | 'manual'>('payNow');
   const [depositTxSig, setDepositTxSig] = useState('');
   const [depositFromAddr, setDepositFromAddr] = useState('');
   const [depositLoading, setDepositLoading] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [sidraTxHash, setSidraTxHash] = useState('');
+  const [sidraAmount, setSidraAmount] = useState('');
   const [sidraLoading, setSidraLoading] = useState(false);
 
   // Withdrawal States
@@ -230,6 +255,44 @@ export default function WalletScreen() {
 
   const withdrawSidraAmount = parseFloat(withdrawAmount) || 0;
   const withdrawSidraPointsCost = Math.ceil(withdrawSidraAmount * pointsPerSidra);
+
+  // Stellar anchor (SEP-24): the anchor's page does KYC + payment, then sends
+  // the tokens to the platform account with this user's memo; a cron credits it.
+  const handleAnchorDeposit = async () => {
+    if (!userId) return;
+    setAnchorLoading(true);
+    try {
+      const { url } = await startAnchorDeposit({ userId });
+      setDepositModal(false);
+      await openUrl(url);
+    } catch (e: any) {
+      Alert.alert('Error', e.message?.replace('[CONVEX] ', '') ?? String(e));
+    } finally {
+      setAnchorLoading(false);
+    }
+  };
+
+  // Open the user's EVM wallet (SafePal, MetaMask, Bitget, OKX, Trust…) with the
+  // payment pre-filled, via an EIP-681 link; Android shows a wallet chooser.
+  // Crediting needs no hash: the scanner matches the registered sender address.
+  const handleSidraPayNow = async () => {
+    if (!platformSidraAddr) return;
+    const wei = sidraToWei(sidraAmount);
+    if (!wei) {
+      Alert.alert('Error', 'Enter a valid SIDRA amount');
+      return;
+    }
+    const target = `${platformSidraAddr}@${SIDRA_CHAIN_ID}?value=${wei}`;
+    try {
+      await Linking.openURL(`ethereum:${target}`);
+    } catch {
+      try {
+        await Linking.openURL(`https://metamask.app.link/send/${target}`);
+      } catch {
+        Alert.alert('No wallet found', 'Install SafePal, MetaMask, Bitget Wallet, OKX Wallet or Trust Wallet, or copy the address and send manually.');
+      }
+    }
+  };
 
   const handleSidraDeposit = async () => {
     if (!userId || !sidraTxHash.trim()) {
@@ -322,35 +385,47 @@ export default function WalletScreen() {
     }
   };
 
-  // Data & Airtime Modal States
+  // Data & Airtime: network → phone → plan (or airtime amount) → buy (vas.ts).
   const [vasModal, setVasModal] = useState(false);
-  const [vasPaymentMethod, setVasPaymentMethod] = useState<'PIPRO' | 'POINTS'>('PIPRO');
-  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('');
+  const [vasKind, setVasKind] = useState<'DATA' | 'AIRTIME'>('DATA');
+  const [vasNetwork, setVasNetwork] = useState<string>('MTN');
+  const [vasPlanId, setVasPlanId] = useState('');
+  const [vasAirtime, setVasAirtime] = useState('');
   const [vasPhone, setVasPhone] = useState('');
   const [vasLoading, setVasLoading] = useState(false);
 
-  const catalogItems = useQuery(api.rewards.listCatalog, userId ? { userId } : 'skip');
-  const redeemMutation = useMutation(api.rewards.redeem);
+  const vasPlans = useQuery(api.vas.listPlans, vasModal && vasKind === 'DATA' ? { network: vasNetwork } : 'skip');
+  const vasRate = useQuery(api.vas.airtimeRate, vasModal ? {} : 'skip');
+  const buyVas = useMutation(api.vas.buy);
+
+  const vasPlan = vasPlans?.find((pl) => pl.planId === vasPlanId);
+  const vasAirtimeNaira = parseInt(vasAirtime, 10) || 0;
+  const vasCost =
+    vasKind === 'DATA' ? vasPlan?.points ?? 0 : Math.ceil(vasAirtimeNaira * (vasRate?.pointsPerNaira ?? 0));
+  const vasReady =
+    !!vasPhone.trim() && vasCost > 0 && (vasKind === 'DATA' ? !!vasPlan : vasAirtimeNaira >= (vasRate?.min ?? 50));
+  const vasShort = !!wallet && vasCost > wallet.pointsBalance;
 
   const handleBuyVas = async () => {
-    if (!userId || !selectedCatalogId || !vasPhone.trim()) {
-      Alert.alert('Missing Info', 'Select a bundle and enter your phone number.');
-      return;
-    }
+    if (!userId || !vasReady) return;
     setVasLoading(true);
     try {
-      await redeemMutation({
+      await buyVas({
         userId,
-        catalogId: selectedCatalogId as any,
+        kind: vasKind,
+        network: vasNetwork,
         phoneNumber: vasPhone.trim(),
-        paidWith: vasPaymentMethod,
+        ...(vasKind === 'DATA' ? { planId: vasPlanId } : { amountNaira: vasAirtimeNaira }),
       });
-      Alert.alert('Order Submitted!', `Your request for ${vasPhone.trim()} has been submitted and is processing.`);
+      Alert.alert(
+        'Order submitted',
+        `${vasKind === 'DATA' ? vasPlan?.name : `₦${vasAirtimeNaira} airtime`} is on its way to ${vasPhone.trim()}. If it fails, your points are refunded automatically.`,
+      );
       setVasModal(false);
-      setVasPhone('');
-      setSelectedCatalogId('');
+      setVasPlanId('');
+      setVasAirtime('');
     } catch (e: any) {
-      Alert.alert('Purchase Failed', e.message?.replace('[CONVEX] ', '') ?? String(e));
+      Alert.alert('Purchase failed', e.message?.replace('[CONVEX] ', '') ?? String(e));
     } finally {
       setVasLoading(false);
     }
@@ -395,9 +470,11 @@ export default function WalletScreen() {
       return;
     }
     const solanaPayUrl = `solana:${platformAddr}?spl-token=${PIPRO_MINT}&amount=${numAmount}&label=PIPRO%20Deposit&message=View2Earn%20Deposit`;
-    openTaskLink(solanaPayUrl).catch(() => {
+    // Straight to Android (not openTaskLink: it rewrites any link with a "." —
+    // e.g. amount=1.5 — into https://, which breaks the solana: scheme).
+    Linking.openURL(solanaPayUrl).catch(() => {
       const phantomUrl = `https://phantom.app/ul/transfer/${platformAddr}?token=${PIPRO_MINT}&amount=${numAmount}`;
-      openTaskLink(phantomUrl).catch(() => {
+      Linking.openURL(phantomUrl).catch(() => {
         Alert.alert('No Wallet Found', 'Install Phantom, Solflare, or another Solana wallet app.');
       });
     });
@@ -747,7 +824,7 @@ export default function WalletScreen() {
         {...sheetProps}
         visible={depositModal}
         onClose={() => setDepositModal(false)}
-        title={depositAsset === 'SIDRA' ? 'Deposit SIDRA' : 'Deposit PIPRO'}
+        title={depositAsset === 'SIDRA' ? 'Deposit SIDRA' : depositAsset === 'BANK' ? 'Deposit with bank / cash' : 'Deposit PIPRO'}
         icon={
           depositAsset === 'SIDRA'
             ? sidraLogo(26)
@@ -760,10 +837,35 @@ export default function WalletScreen() {
           options={[
             { key: 'PIPRO', label: 'PIPRO', icon: <Image source={PIPRO_LOGO} style={{ width: 16, height: 16 }} resizeMode="contain" /> },
             { key: 'SIDRA', label: 'SIDRA', icon: sidraLogo(16) },
+            { key: 'BANK', label: 'Bank', icon: <Icon name="building-columns" iconStyle="solid" size={14} color={p.textMuted} /> },
           ]}
         />
 
-        {depositAsset === 'SIDRA' ? (
+        {depositAsset === 'BANK' ? (
+          <>
+            <Text style={[styles.hint, { color: p.textMuted }]}>
+              Pay through our licensed partner. They verify your identity when the amount needs it, then your deposit
+              is converted to points and added to your balance automatically.
+            </Text>
+            {anchorRate && anchorRate.pointsPerUnit > 0 ? (
+              <View style={[styles.addrCard, { backgroundColor: p.surfaceAlt }]}>
+                <Text style={[styles.addrLabel, { color: p.textMuted }]}>Current rate</Text>
+                <Text style={[styles.addrValue, { color: p.text }]}>
+                  1 {anchorRate.assetCode} = {anchorRate.pointsPerUnit.toLocaleString()} PTS
+                </Text>
+                <Text style={[styles.addrLabel, { color: p.textMuted, marginTop: 4 }]}>
+                  You're credited for the {anchorRate.assetCode} the partner delivers, after their fee. The partner shows its fee before you pay.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.warn}>
+                <Icon name="triangle-exclamation" iconStyle="solid" size={14} color={colors.warn} />
+                <Text style={styles.warnText}>Bank deposits aren't available yet. Please check back soon.</Text>
+              </View>
+            )}
+            <PrimaryButton label="Continue to partner" icon="arrow-up-right-from-square" onPress={handleAnchorDeposit} loading={anchorLoading} disabled={!anchorRate?.pointsPerUnit} />
+          </>
+        ) : depositAsset === 'SIDRA' ? (
           !me?.payoutEvm ? (
             <>
               <View style={[styles.availBox, { backgroundColor: p.primarySoft, alignItems: 'flex-start' }]}>
@@ -809,6 +911,47 @@ export default function WalletScreen() {
                 <Text style={[styles.addrValue, { color: p.text }]} numberOfLines={1}>{me.payoutEvm}</Text>
               </View>
 
+              <Segment
+                p={p}
+                value={depositMethod}
+                onChange={(k) => setDepositMethod(k as typeof depositMethod)}
+                options={[
+                  { key: 'payNow', label: 'Pay with wallet' },
+                  { key: 'manual', label: 'I already sent' },
+                ]}
+              />
+
+              {depositMethod === 'payNow' ? (
+                <>
+                  <Text style={labelStyle}>Amount (SIDRA)</Text>
+                  <TextInput
+                    style={inputStyle}
+                    value={sidraAmount}
+                    onChangeText={(t) => setSidraAmount(t.replace(',', '.').replace(/[^0-9.]/g, ''))}
+                    placeholder="e.g. 10"
+                    placeholderTextColor={p.textFaint}
+                    keyboardType="decimal-pad"
+                  />
+                  {pointsPerSidra > 0 && parseFloat(sidraAmount) > 0 ? (
+                    <Text style={[styles.hint, { color: p.textMuted }]}>
+                      ≈ {Math.floor(parseFloat(sidraAmount) * pointsPerSidra).toLocaleString()} PTS at today's rate
+                    </Text>
+                  ) : null}
+                  <PrimaryButton
+                    label="Open my wallet app"
+                    icon="wallet"
+                    onPress={handleSidraPayNow}
+                    disabled={!platformSidraAddr || !sidraToWei(sidraAmount)}
+                    color="#059669"
+                  />
+                  <Text style={[styles.hint, { color: p.textMuted, marginTop: 10 }]}>
+                    Pick SafePal, MetaMask, Bitget, OKX or Trust Wallet, make sure it's using your registered address above, and confirm.
+                    Your wallet needs the Sidra Chain network (Chain ID {SIDRA_CHAIN_ID}, RPC {SIDRA_RPC}). Points arrive automatically a
+                    minute or two after the transfer confirms.
+                  </Text>
+                </>
+              ) : (
+                <>
               <Text style={labelStyle}>Transaction hash (optional, speeds it up)</Text>
               <TextInput
                 style={inputStyle}
@@ -827,6 +970,8 @@ export default function WalletScreen() {
                 disabled={!sidraTxHash.trim() || !platformSidraAddr}
                 color="#059669"
               />
+                </>
+              )}
             </>
           )
         ) : null}
@@ -946,69 +1091,117 @@ export default function WalletScreen() {
         icon={<Icon name="mobile-screen-button" iconStyle="solid" size={20} color={colors.primary} />}>
         <Segment
           p={p}
-          value={vasPaymentMethod}
-          onChange={(k) => setVasPaymentMethod(k as typeof vasPaymentMethod)}
+          value={vasKind}
+          onChange={(k) => { setVasKind(k as typeof vasKind); setVasPlanId(''); }}
           options={[
-            { key: 'PIPRO', label: 'Pay with PIPRO', icon: <Image source={PIPRO_LOGO} style={{ width: 14, height: 14 }} resizeMode="contain" /> },
-            { key: 'POINTS', label: 'Pay with points', icon: <Icon name="coins" iconStyle="solid" size={12} color="#FBBF24" /> },
+            { key: 'DATA', label: 'Data', icon: <Icon name="wifi" iconStyle="solid" size={12} color={p.textMuted} /> },
+            { key: 'AIRTIME', label: 'Airtime', icon: <Icon name="phone" iconStyle="solid" size={12} color={p.textMuted} /> },
           ]}
         />
 
-        <Text style={labelStyle}>Select a bundle</Text>
-        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 230 }}>
-          {!catalogItems ? (
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
-          ) : catalogItems.length === 0 ? (
-            <Text style={[styles.hint, { color: p.textMuted, textAlign: 'center' }]}>No bundles available.</Text>
-          ) : (
-            catalogItems.map((item) => {
-              const selected = selectedCatalogId === item._id;
-              const priceInPipro = item.coinPrice ?? ((item.pointsPrice ?? 500) / (pointsPerPipro || 1000));
-              const displayCost =
-                vasPaymentMethod === 'PIPRO'
-                  ? `${priceInPipro.toFixed(4)} PIPRO`
-                  : `${item.pointsPrice ?? 0} PTS`;
-              return (
-                <TouchableOpacity
-                  key={item._id}
-                  style={[
-                    styles.bundle,
-                    { backgroundColor: p.surfaceAlt, borderColor: selected ? colors.primary : 'transparent' },
-                  ]}
-                  onPress={() => setSelectedCatalogId(item._id)}
-                  activeOpacity={0.8}>
-                  <View style={[styles.bundleIcon, { backgroundColor: p.primarySoft }]}>
-                    <Icon name={item.itemType === 'DATA' ? 'wifi' : 'phone'} iconStyle="solid" size={15} color={colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.rowTitle, { color: p.text }]}>{item.name}</Text>
-                    <Text style={[styles.rowSub, { color: p.textMuted }]}>{item.itemType} bundle</Text>
-                  </View>
-                  <View style={styles.costChip}>
-                    <Text style={styles.costText}>{displayCost}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </ScrollView>
+        <Text style={labelStyle}>Network</Text>
+        <View style={styles.netRow}>
+          {VAS_NETWORKS.map((n) => {
+            const on = vasNetwork === n.key;
+            return (
+              <TouchableOpacity
+                key={n.key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                style={[styles.netChip, { backgroundColor: on ? n.color : p.surfaceAlt, borderColor: on ? n.color : 'transparent' }]}
+                onPress={() => { setVasNetwork(n.key); setVasPlanId(''); }}
+                activeOpacity={0.8}>
+                <Text style={[styles.netText, { color: on ? n.ink : p.text }]}>{n.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <Text style={labelStyle}>Phone number</Text>
         <TextInput
           style={inputStyle}
           value={vasPhone}
           onChangeText={setVasPhone}
-          placeholder="e.g. +234 801 234 5678"
+          placeholder="e.g. 0803 123 4567"
           placeholderTextColor={p.textFaint}
           keyboardType="phone-pad"
+          maxLength={17}
         />
+
+        {vasKind === 'DATA' ? (
+          <>
+            <Text style={labelStyle}>Choose a {vasNetwork === '9MOBILE' ? '9mobile' : vasNetwork} data plan</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 230 }} nestedScrollEnabled>
+              {!vasPlans ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginVertical: 20 }} />
+              ) : vasPlans.length === 0 ? (
+                <Text style={[styles.hint, { color: p.textMuted, textAlign: 'center' }]}>No plans for this network right now.</Text>
+              ) : (
+                vasPlans.map((pl) => {
+                  const selected = vasPlanId === pl.planId;
+                  return (
+                    <TouchableOpacity
+                      key={pl.planId}
+                      style={[styles.bundle, { backgroundColor: p.surfaceAlt, borderColor: selected ? colors.primary : 'transparent' }]}
+                      onPress={() => setVasPlanId(pl.planId)}
+                      activeOpacity={0.8}>
+                      <View style={[styles.bundleIcon, { backgroundColor: p.primarySoft }]}>
+                        <Icon name="wifi" iconStyle="solid" size={15} color={colors.primary} />
+                      </View>
+                      <Text style={[styles.rowTitle, { color: p.text, flex: 1 }]}>{pl.name}</Text>
+                      <View style={styles.costChip}>
+                        <Text style={styles.costText}>{pl.points.toLocaleString()} PTS</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+          </>
+        ) : (
+          <>
+            <Text style={labelStyle}>Amount (₦{vasRate?.min ?? 50} – ₦{(vasRate?.max ?? 20000).toLocaleString()})</Text>
+            <TextInput
+              style={inputStyle}
+              value={vasAirtime}
+              onChangeText={(t) => setVasAirtime(t.replace(/[^0-9]/g, ''))}
+              placeholder="₦ amount"
+              placeholderTextColor={p.textFaint}
+              keyboardType="number-pad"
+            />
+            <View style={styles.netRow}>
+              {[100, 200, 500, 1000].map((a) => (
+                <TouchableOpacity
+                  key={a}
+                  style={[styles.netChip, { backgroundColor: p.surfaceAlt, borderColor: vasAirtimeNaira === a ? colors.primary : 'transparent' }]}
+                  onPress={() => setVasAirtime(String(a))}
+                  activeOpacity={0.8}>
+                  <Text style={[styles.netText, { color: p.text }]}>₦{a}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+
+        {vasReady && (
+          <View style={[styles.addrCard, { backgroundColor: p.surfaceAlt }]}>
+            <Text style={[styles.addrLabel, { color: p.textMuted }]}>Review</Text>
+            <Text style={[styles.addrValue, { color: p.text }]}>
+              {vasKind === 'DATA' ? `${vasNetwork} ${vasPlan?.name}` : `${vasNetwork} ₦${vasAirtimeNaira} airtime`} → {vasPhone.trim()}
+            </Text>
+            <Text style={[styles.addrLabel, { color: vasShort ? colors.warn : p.textMuted, marginTop: 4 }]}>
+              Cost {vasCost.toLocaleString()} PTS · Balance {wallet ? wallet.pointsBalance.toLocaleString() : '…'} PTS
+              {vasShort ? ' · not enough points' : ''}
+            </Text>
+          </View>
+        )}
+
         <PrimaryButton
-          label="Confirm purchase"
+          label={vasCost > 0 ? `Buy for ${vasCost.toLocaleString()} PTS` : 'Buy'}
           icon="bolt"
           onPress={handleBuyVas}
           loading={vasLoading}
-          disabled={!selectedCatalogId || !vasPhone.trim()}
-          color={vasPaymentMethod === 'PIPRO' ? colors.primary : '#D97706'}
+          disabled={!vasReady || vasShort}
         />
       </Sheet>
 
@@ -1367,6 +1560,9 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
+  netRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  netChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.pill, borderWidth: 2 },
+  netText: { fontSize: 13, fontWeight: '800' },
   bundleIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   costChip: { backgroundColor: 'rgba(16, 185, 129, 0.12)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
   costText: { color: colors.success, fontWeight: '800', fontSize: 12 },

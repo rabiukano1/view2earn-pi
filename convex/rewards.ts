@@ -38,10 +38,10 @@ export const listMyRedemptions = query({
       .take(20);
     return Promise.all(
       rows.map(async (r) => {
-        const item = await ctx.db.get(r.catalogId);
+        const item = r.catalogId ? await ctx.db.get(r.catalogId) : null;
         return {
           _id: r._id,
-          name: item?.name ?? "Reward",
+          name: item?.name ?? r.planName ?? "Reward",
           amount: r.amount,
           status: r.status,
           phoneNumber: r.phoneNumber,
@@ -59,7 +59,7 @@ export const redeem = mutation({
     userId: v.id("users"),
     catalogId: v.id("catalog"),
     phoneNumber: v.string(),
-    paidWith: v.optional(v.union(v.literal("POINTS"), v.literal("PIPRO"))),
+    paidWith: v.optional(v.union(v.literal("POINTS"), v.literal("PIPRO"), v.literal("PI_CREDIT"))),
     clientIp: v.optional(v.string()),
   },
   handler: async (ctx, { userId, catalogId, phoneNumber, paidWith = "POINTS", clientIp }) => {
@@ -134,6 +134,29 @@ export const redeem = mutation({
       });
 
       balanceAfter = newPiproBal;
+    } else if (paidWith === "PI_CREDIT") {
+      // Paid from Pi-deposit credit (piDonations.ts). No level gate: it's the
+      // user's own Pi, and it can only ever be spent here.
+      const price = item.pointsPrice;
+      if (price === undefined) throw new Error("Reward not redeemable with credit");
+      const wallet = await ctx.db
+        .query("wallets")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .unique();
+      const credit = wallet?.piCredit ?? 0;
+      if (!wallet || credit < price) throw new Error("Insufficient Pi deposit credit");
+
+      redemptionId = await ctx.db.insert("redemptions", {
+        userId,
+        economy: "pi-browser",
+        catalogId,
+        paidWith: "PI_CREDIT",
+        amount: price,
+        phoneNumber: phoneNumber.trim(),
+        status: "processing",
+      });
+      balanceAfter = credit - price;
+      await ctx.db.patch(wallet._id, { piCredit: balanceAfter });
     } else {
       // Paid with POINTS — points are drawn ONLY from the pi-browser economy
       // ledger (requireEconomy above already asserted pi-browser).
@@ -188,6 +211,15 @@ export const refundRedemption = internalMutation({
       return;
     }
 
+    if (r.paidWith === "PI_CREDIT") {
+      const wallet = await ctx.db
+        .query("wallets")
+        .withIndex("by_user", (q) => q.eq("userId", r.userId))
+        .unique();
+      if (wallet) await ctx.db.patch(wallet._id, { piCredit: (wallet.piCredit ?? 0) + r.amount });
+      return;
+    }
+
     if (r.paidWith === "PIPRO") {
       const wallet = await ctx.db
         .query("wallets")
@@ -206,6 +238,8 @@ export const refundRedemption = internalMutation({
           note: `Refund for failed redemption: ${reason ?? "Failed"}`,
         });
       }
+    } else if (r.economy === "wallet") {
+      await appendLedger(ctx, r.userId, "wallet", r.amount, reason ?? "REFUND_REDEMPTION_FAILED", `refund:${redemptionId}`);
     } else {
       await ctx.runMutation(internal.points.creditHelper, {
         userId: r.userId,

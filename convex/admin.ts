@@ -1,11 +1,13 @@
 import { v } from "convex/values";
-import { query, mutation, action, type MutationCtx } from "./_generated/server";
+import { query, mutation, action, internalMutation, type MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { recomputeUserScore } from "./fraud";
 import { fraudTier } from "@view2earn/core";
-import { REWARD_KEYS } from "./rewardsConfig";
-import { economyOfUser, appendLedger, POINTS_ISSUED_KEY, POINTS_SPENT_KEY } from "./lib/ledger";
+import { REWARD_KEYS, getNum } from "./rewardsConfig";
+import { creditAnchorDeposit } from "./anchorDb";
+import { adminAdjustSpins } from "./spin";
+import { economyOfUser, appendLedger, lastBalance, POINTS_ISSUED_KEY, POINTS_SPENT_KEY } from "./lib/ledger";
 
 // Every admin function requires the shared admin secret (ADMIN_PASSWORD) as a
 // `token` arg, checked by requireAdmin below. The Next.js panel gate is UI-only,
@@ -278,12 +280,29 @@ export const adjustPoints = mutation({
     userId: v.id("users"),
     delta: v.number(),
     reason: v.optional(v.string()),
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet"))),
   },
   handler: async (ctx, { token, userId, delta, reason, economy }) => {
     requireAdmin(token);
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
+
+    // Wallet pool (what the wallet app spends/withdraws from). appendLedger
+    // refuses to go negative; the history row makes it visible to the user.
+    if (economy === "wallet") {
+      const note = reason || (delta >= 0 ? "ADMIN_CREDIT" : "ADMIN_DEBIT");
+      const after = await appendLedger(ctx, userId, "wallet", delta, note, `admin:${Date.now()}`);
+      await ctx.db.insert("walletTransactions", {
+        userId,
+        type: "admin_adjust",
+        pointsDelta: delta,
+        piproDelta: 0,
+        pointsBalanceAfter: after,
+        piproBalanceAfter: 0,
+        note: `Admin: ${note}`,
+      });
+      return { ok: true };
+    }
 
     await ctx.runMutation(internal.points.creditHelper, {
       userId,
@@ -1029,58 +1048,6 @@ export const setRewardSettings = mutation({
   },
 });
 
-/** Super admin: manually adjust a user's wallet balance (for support, corrections). */
-export const adminAdjustWallet = mutation({
-  args: {
-    token: v.string(),
-    userId: v.id("users"),
-    pointsDelta: v.number(),
-    piproDelta: v.number(),
-    reason: v.string(),
-  },
-  handler: async (ctx, { token, userId, pointsDelta, piproDelta, reason }) => {
-    requireAdmin(token);
-    const user = await ctx.db.get(userId);
-    if (!user) throw new Error("User not found");
-
-    // Get or create wallet
-    let wallet = await ctx.db
-      .query("wallets")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!wallet) {
-      const id = await ctx.db.insert("wallets", {
-        userId,
-        pointsBalance: 0,
-        piproBalance: 0,
-      });
-      wallet = (await ctx.db.get(id))!;
-    }
-
-    const newPoints = wallet.pointsBalance + pointsDelta;
-    const newPipro = wallet.piproBalance + piproDelta;
-    if (newPoints < 0) throw new Error("Would result in negative points balance");
-    if (newPipro < 0) throw new Error("Would result in negative pipro balance");
-
-    await ctx.db.patch(wallet._id, {
-      pointsBalance: newPoints,
-      piproBalance: newPipro,
-    });
-
-    await ctx.db.insert("walletTransactions", {
-      userId,
-      type: "admin_adjust",
-      pointsDelta,
-      piproDelta,
-      pointsBalanceAfter: newPoints,
-      piproBalanceAfter: newPipro,
-      note: `Admin: ${reason}`,
-    });
-
-    return { pointsBalance: newPoints, piproBalance: newPipro };
-  },
-});
-
 /** List pending pipro deposits for admin review. */
 export const listPendingDeposits = query({
   args: { token: v.string() },
@@ -1245,5 +1212,140 @@ export const rejectListing = mutation({
         listingId,
       );
     }
+  },
+});
+
+// ─── Deposits (all sources, newest first) ───────────────────────────────────
+
+export const listDeposits = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    requireAdmin(token);
+    const [anchor, sidra, pipro, pi] = await Promise.all([
+      ctx.db.query("anchorDeposits").order("desc").take(100),
+      ctx.db.query("sidraDeposits").order("desc").take(100),
+      ctx.db.query("piproDeposits").order("desc").take(100),
+      ctx.db.query("piDonations").order("desc").take(200),
+    ]);
+    const rows = [
+      ...anchor.map((d) => ({ _id: d._id, source: "Anchor", userId: d.userId, asset: d.assetCode, amount: d.amount, credited: `${d.pointsCredited} PTS`, status: d.status, ref: d.memo !== undefined ? `memo ${d.memo} · ${d.txHash}` : d.txHash, at: d._creationTime })),
+      ...sidra.map((d) => ({ _id: d._id, source: "SIDRA", userId: d.userId, asset: "SIDRA", amount: d.amount, credited: `${d.pointsCredited ?? 0} PTS`, status: d.status, ref: d.txHash, at: d._creationTime })),
+      ...pipro.map((d) => ({ _id: d._id, source: "PIPRO", userId: d.userId, asset: "PIPRO", amount: d.amount, credited: `${d.amount} PIPRO`, status: d.status, ref: d.txSignature, at: d._creationTime })),
+      ...pi.filter((d) => d.deposit).map((d) => ({ _id: d._id, source: "Pi", userId: d.userId, asset: "PI", amount: d.amount, credited: "Pi credit", status: d.status, ref: d.txid ?? d.paymentId ?? "", at: d._creationTime })),
+    ].sort((a, b) => b.at - a.at).slice(0, 200);
+    return await Promise.all(rows.map(async (r) => {
+      const user = r.userId ? await ctx.db.get(r.userId) : null;
+      return { ...r, username: user ? (user.username ?? user.name ?? "—") : null };
+    }));
+  },
+});
+
+/** Give an "unmatched" anchor deposit (no/wrong memo) to a user, at today's rate. */
+export const assignAnchorDeposit = mutation({
+  args: { token: v.string(), depositId: v.id("anchorDeposits"), username: v.string() },
+  handler: async (ctx, { token, depositId, username }) => {
+    requireAdmin(token);
+    const d = await ctx.db.get(depositId);
+    if (!d || d.status !== "unmatched") throw new Error("Only unmatched deposits can be assigned");
+    const user = await ctx.db.query("users").filter((q) => q.eq(q.field("username"), username.trim())).first();
+    if (!user) throw new Error(`No user named "${username}"`);
+    const points = Math.floor(d.amount * (await getNum(ctx, "anchorPointsPerUnit")));
+    if (points <= 0) throw new Error("Set 'Points per 1 anchor asset' first");
+    await ctx.db.patch(depositId, { userId: user._id, pointsCredited: points, status: "credited" });
+    await creditAnchorDeposit(ctx, user._id, d.opId, d.txHash, d.amount, d.assetCode, points);
+  },
+});
+
+// ─── Bulk point adjustments (Users page: selected users, or everyone) ───────
+
+const adjustEconomy = v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet"));
+type AdjustEconomy = "android" | "pi-browser" | "telegram" | "wallet";
+
+const adjustKind = v.union(v.literal("points"), v.literal("spins"));
+type AdjustKind = "points" | "spins";
+
+// Deductions take at most what the user has, so one low balance never blocks
+// a batch. Returns the delta actually applied (0 = nothing to do).
+async function adjustOne(ctx: MutationCtx, kind: AdjustKind, userId: Id<"users">, economy: AdjustEconomy, delta: number, reason: string, ref: string) {
+  if (kind === "spins") {
+    if (economy === "wallet") throw new Error("The wallet has no spins. Pick Android, Pi Browser or Telegram.");
+    return adminAdjustSpins(ctx, userId, economy, delta);
+  }
+  const applied = delta < 0 ? -Math.min(await lastBalance(ctx, userId, economy), -delta) : delta;
+  if (applied === 0) return 0;
+  const after = await appendLedger(ctx, userId, economy, applied, reason, ref);
+  if (economy === "wallet") {
+    await ctx.db.insert("walletTransactions", {
+      userId, type: "admin_adjust", pointsDelta: applied, piproDelta: 0,
+      pointsBalanceAfter: after, piproBalanceAfter: 0, note: `Admin: ${reason}`,
+    });
+  }
+  return applied;
+}
+
+function checkDelta(delta: number) {
+  if (!Number.isInteger(delta) || delta === 0) throw new Error("Enter a whole, non-zero number");
+}
+
+/** Add/deduct spins for one user on one app. */
+export const adjustSpins = mutation({
+  args: { token: v.string(), userId: v.id("users"), economy: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram")), delta: v.number() },
+  handler: async (ctx, { token, userId, economy, delta }) => {
+    requireAdmin(token);
+    checkDelta(delta);
+    const applied = await adminAdjustSpins(ctx, userId, economy, delta);
+    if (!applied) throw new Error("This user has no spins to remove on that app");
+    return { applied };
+  },
+});
+
+/** Add/deduct points for a hand-picked set of users (max 500 per call). */
+export const adjustPointsBulk = mutation({
+  args: { token: v.string(), kind: adjustKind, userIds: v.array(v.id("users")), economy: adjustEconomy, delta: v.number(), reason: v.string() },
+  handler: async (ctx, { token, kind, userIds, economy, delta, reason }) => {
+    requireAdmin(token);
+    checkDelta(delta);
+    if (userIds.length > 500) throw new Error("Select at most 500 users at a time, or use 'All users'");
+    const ref = `admin-bulk:${Date.now()}`;
+    let changed = 0;
+    for (const id of userIds) if (await adjustOne(ctx, kind, id, economy, delta, reason || "ADMIN_BULK", ref)) changed++;
+    return { changed, ref };
+  },
+});
+
+/** Add/deduct points for EVERY user who uses that app. Runs in background
+ *  batches of 200 (one mutation can't touch the whole user table). */
+export const adjustPointsAll = mutation({
+  args: { token: v.string(), kind: adjustKind, economy: adjustEconomy, delta: v.number(), reason: v.string() },
+  handler: async (ctx, { token, kind, economy, delta, reason }) => {
+    requireAdmin(token);
+    checkDelta(delta);
+    if (kind === "spins" && economy === "wallet") throw new Error("The wallet has no spins. Pick Android, Pi Browser or Telegram.");
+    const ref = `admin-all:${Date.now()}`;
+    await ctx.scheduler.runAfter(0, internal.admin.adjustPointsAllPage, {
+      kind, economy, delta, reason: reason || "ADMIN_ALL", ref, cursor: null, changed: 0,
+    });
+    return { ref };
+  },
+});
+
+export const adjustPointsAllPage = internalMutation({
+  args: { kind: adjustKind, economy: adjustEconomy, delta: v.number(), reason: v.string(), ref: v.string(), cursor: v.union(v.string(), v.null()), changed: v.number() },
+  handler: async (ctx, { kind, economy, delta, reason, ref, cursor, changed }) => {
+    const page = await ctx.db.query("users").paginate({ numItems: 200, cursor });
+    for (const u of page.page) {
+      if (u.accountStatus === "suspended" || u.accountStatus === "merged") continue;
+      // Only users who actually use this app (have a ledger row there).
+      const uses = await ctx.db.query("pointsLedger")
+        .withIndex("by_user_economy", (q) => q.eq("userId", u._id).eq("economy", economy)).first();
+      if (uses && (await adjustOne(ctx, kind, u._id, economy, delta, reason, ref))) changed++;
+    }
+    if (page.isDone) {
+      console.log(`[admin] ${ref}: ${delta} ${kind} on ${economy} applied to ${changed} users`);
+      return;
+    }
+    await ctx.scheduler.runAfter(0, internal.admin.adjustPointsAllPage, {
+      kind, economy, delta, reason, ref, cursor: page.continueCursor, changed,
+    });
   },
 });

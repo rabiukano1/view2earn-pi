@@ -37,4 +37,10 @@ crons.interval("recover-unclaimed-spins", { hours: 1 }, internal.spin.recoverSta
 // addresses, so deposits credit without the user pasting a hash.
 crons.interval("scan-sidra-deposits", { minutes: 2 }, internal.sidra.scanPlatformDeposits, {});
 
+// Credit Stellar anchor deposits into the platform account by memo (anchor.ts).
+crons.interval("scan-anchor-deposits", { minutes: 1 }, internal.anchor.scanPayments, {});
+
+// Keep data plans/prices in sync with ClubKonnect (vas.ts).
+crons.interval("refresh-vas-plans", { hours: 12 }, internal.vas.refreshPlans, {});
+
 export default crons;

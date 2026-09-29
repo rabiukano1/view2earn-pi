@@ -246,10 +246,14 @@ const handleVoiceFile = httpAction(async (ctx, request) => {
   if (!id) return new Response("missing id", { status: 400 });
   const note = await ctx.runQuery(internal.voiceNotes.getForStream, { id: id as any });
   if (!note) return new Response("not found", { status: 404 });
+  const wantDownload = !!url.searchParams.get("dl");
+  const name = note.title.replace(/[^\w\d .-]+/g, "_").slice(0, 80) || "voice-note";
+
   const extra: Record<string, string> = {};
-  if (url.searchParams.get("dl")) {
+  if (wantDownload) {
+    // Telegram voice notes are Opus in an OGG container, which WhatsApp and
+    // modern Android players open fine — served as-is, nothing transcoded.
     const ext = note.mimeType.includes("mpeg") ? "mp3" : /mp4|m4a/.test(note.mimeType) ? "m4a" : "ogg";
-    const name = note.title.replace(/[^\w\d .-]+/g, "_").slice(0, 80) || "voice-note";
     extra["Content-Disposition"] = `attachment; filename="${name}.${ext}"`;
   }
   return streamTelegramFile(request, note.fileId, note.mimeType, extra);

@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import { requireUser } from "./lib/guards";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { appendLedger } from "./lib/ledger";
+import { getNum } from "./rewardsConfig";
 
 // Pi Network donation payment flow for Pi Browser testing (plan §7.8 extension).
 // Follows Pi's official 3-phase U2A payment model:
@@ -87,6 +88,26 @@ export const markCompleted = internalMutation({
       txid,
     });
 
+    // Deposit: credit spend-only piCredit (airtime/data), never the ledger.
+    if (donation.deposit) {
+      const credit = Math.round(donation.amount * (await getNum(ctx, "piDepositPointsPerPi")));
+      const wallet = await ctx.db
+        .query("wallets")
+        .withIndex("by_user", (q) => q.eq("userId", donation.userId))
+        .first();
+      if (wallet) {
+        await ctx.db.patch(wallet._id, { piCredit: (wallet.piCredit ?? 0) + credit });
+      } else {
+        await ctx.db.insert("wallets", {
+          userId: donation.userId,
+          pointsBalance: 0,
+          piproBalance: 0,
+          piCredit: credit,
+        });
+      }
+      return;
+    }
+
     // Reward donor with bonus points. Donations come from the Pi Browser
     // economy only (real Pi), so the bonus credits the pi-browser ledger.
     const bonusPts = Math.round(donation.amount * DONATION_PTS_PER_PI);
@@ -140,8 +161,9 @@ export const startDonation = mutation({
     memo: v.string(),
     paymentId: v.string(),
     displayName: v.optional(v.string()),
+    deposit: v.optional(v.boolean()),
   },
-  handler: async (ctx, { userId, amount, memo, paymentId, displayName }) => {
+  handler: async (ctx, { userId, amount, memo, paymentId, displayName, deposit }) => {
     await requireUser(ctx, userId);
 
     const existing = await ctx.db
@@ -168,6 +190,7 @@ export const startDonation = mutation({
       paymentId,
       status: "pending",
       displayName: displayName || user.username || user.name || "Anonymous Pi User",
+      ...(deposit ? { deposit: true } : {}),
     });
 
     await ctx.scheduler.runAfter(0, internal.piDonations.approveDonation, {
@@ -331,6 +354,7 @@ export const listTopDonors = query({
 
     const totals = new Map<string, { userId: string; displayName: string; totalPi: number; count: number }>();
     for (const d of donations) {
+      if (d.deposit) continue;
       const existing = totals.get(d.userId);
       if (existing) {
         existing.totalPi += d.amount;
@@ -359,5 +383,20 @@ export const listMyDonations = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .collect();
+  },
+});
+
+export const myPiCredit = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    await requireUser(ctx, userId);
+    const wallet = await ctx.db
+      .query("wallets")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    return {
+      credit: wallet?.piCredit ?? 0,
+      pointsPerPi: await getNum(ctx, "piDepositPointsPerPi"),
+    };
   },
 });

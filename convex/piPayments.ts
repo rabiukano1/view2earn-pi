@@ -65,7 +65,7 @@ export const getFulfillmentData = internalQuery({
   handler: async (ctx, { redemptionId }) => {
     const redemption = await ctx.db.get(redemptionId);
     if (!redemption) return null;
-    const catalogItem = await ctx.db.get(redemption.catalogId);
+    const catalogItem = redemption.catalogId ? await ctx.db.get(redemption.catalogId) : null;
     const user = await ctx.db.get(redemption.userId);
     const piUid = extractPiUid(user?.externalUid);
     return {

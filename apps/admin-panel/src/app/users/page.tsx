@@ -14,14 +14,23 @@ export default function UsersPage() {
   const deleteUser = useAdminMutation(api.admin.deleteUser);
 
   const adjustPoints = useAdminMutation(api.admin.adjustPoints);
+  const adjustPointsBulk = useAdminMutation(api.admin.adjustPointsBulk);
+  const adjustPointsAll = useAdminMutation(api.admin.adjustPointsAll);
+  const adjustSpins = useAdminMutation(api.admin.adjustSpins);
+  const [adjustKind, setAdjustKind] = useState<"points" | "spins">("points");
+  const [selected, setSelected] = useState<Set<Id<"users">>>(new Set());
   const generatePdf = useAdminAction(api.reports.generatePdf);
   const [generatingPdf, setGeneratingPdf] = useState<Id<"users"> | null>(null);
 
   const [editing, setEditing] = useState<Id<"users"> | null>(null);
   const [form, setForm] = useState<UserForm>({ tier: 0, fraudScore: 0, country: "" });
-  const [pointsModal, setPointsModal] = useState<{ userId: Id<"users">; username: string } | null>(null);
+  // Who the points modal applies to: one user, the ticked users, or everyone.
+  const [pointsModal, setPointsModal] = useState<
+    { kind: "one"; userId: Id<"users">; username: string } | { kind: "some" } | { kind: "all" } | null
+  >(null);
   const [pointsDelta, setPointsDelta] = useState<number>(100);
   const [pointsReason, setPointsReason] = useState<string>("ADMIN_BONUS");
+  const [pointsEconomy, setPointsEconomy] = useState<"wallet" | "android" | "pi-browser" | "telegram">("wallet");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -62,12 +71,24 @@ export default function UsersPage() {
   const savePoints = async () => {
     if (!pointsModal) return;
     try {
-      await adjustPoints({
-        userId: pointsModal.userId,
-        delta: pointsDelta,
-        reason: pointsReason,
-      });
-      alert(`Successfully adjusted ${pointsDelta} points for ${pointsModal.username}`);
+      if (adjustKind === "spins" && pointsEconomy === "wallet") throw new Error("The wallet has no spins. Pick an app.");
+      if (pointsModal.kind === "one") {
+        if (adjustKind === "spins") {
+          const { applied } = await adjustSpins({ userId: pointsModal.userId, delta: pointsDelta, economy: pointsEconomy as "android" | "pi-browser" | "telegram" });
+          alert(`Adjusted ${applied} spins for ${pointsModal.username}`);
+        } else {
+          await adjustPoints({ userId: pointsModal.userId, delta: pointsDelta, reason: pointsReason, economy: pointsEconomy });
+          alert(`Successfully adjusted ${pointsDelta} points for ${pointsModal.username}`);
+        }
+      } else if (pointsModal.kind === "some") {
+        const { changed } = await adjustPointsBulk({ kind: adjustKind, userIds: [...selected], delta: pointsDelta, reason: pointsReason, economy: pointsEconomy });
+        alert(`Adjusted ${pointsDelta} ${adjustKind} for ${changed} of ${selected.size} selected users`);
+        setSelected(new Set());
+      } else {
+        if (!window.confirm(`${pointsDelta > 0 ? "Add" : "Remove"} ${Math.abs(pointsDelta)} ${adjustKind} ${pointsDelta > 0 ? "to" : "from"} EVERY ${pointsEconomy} user? This can't be undone in one click.`)) return;
+        await adjustPointsAll({ kind: adjustKind, delta: pointsDelta, reason: pointsReason, economy: pointsEconomy });
+        alert("Started. All users are being updated in the background (a few seconds per 200 users).");
+      }
       setPointsModal(null);
     } catch (e) {
       alert(String(e));
@@ -129,10 +150,24 @@ export default function UsersPage() {
             <option value="paused">Paused</option>
             <option value="suspended">Suspended</option>
           </select>
+          <button className="btn btn-primary btn-sm" disabled={!selected.size} onClick={() => setPointsModal({ kind: "some" })}>
+            🪙 Points / 🎰 spins for selected ({selected.size})
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setPointsModal({ kind: "all" })}>
+            🪙 Points / 🎰 spins for ALL users
+          </button>
         </div>
         <table>
           <thead>
             <tr>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all shown users"
+                  checked={!!filteredUsers?.length && filteredUsers.every((u) => selected.has(u._id))}
+                  onChange={(e) => setSelected(e.target.checked ? new Set(filteredUsers?.map((u) => u._id)) : new Set())}
+                />
+              </th>
               <th>Username</th>
               <th>Ecosystem</th>
               <th>Tier</th>
@@ -146,6 +181,18 @@ export default function UsersPage() {
           <tbody>
             {filteredUsers?.map((u) => (
               <tr key={u._id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${u.username}`}
+                    checked={selected.has(u._id)}
+                    onChange={(e) => setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (e.target.checked) next.add(u._id); else next.delete(u._id);
+                      return next;
+                    })}
+                  />
+                </td>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 36, height: 36, borderRadius: 18, background: 'var(--accent-weak)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 800, color: 'var(--accent)' }}>
@@ -181,7 +228,7 @@ export default function UsersPage() {
                       className="btn btn-ghost btn-sm"
                       title="Adjust Points"
                       style={{ padding: '4px 8px' }}
-                      onClick={() => setPointsModal({ userId: u._id, username: u.username })}>
+                      onClick={() => setPointsModal({ kind: "one", userId: u._id, username: u.username })}>
                       🪙
                     </button>
                     <button
@@ -221,7 +268,7 @@ export default function UsersPage() {
                 </td>
               </tr>
             ))}
-            {(!filteredUsers || filteredUsers.length === 0) && <EmptyRow colSpan={8} text="No users found matching filters" />}
+            {(!filteredUsers || filteredUsers.length === 0) && <EmptyRow colSpan={9} text="No users found matching filters" />}
           </tbody>
         </table>
       </div>
@@ -259,16 +306,38 @@ export default function UsersPage() {
       </Modal>
 
       <Modal
-        title={`Adjust Points: ${pointsModal?.username ?? ""}`}
+        title={
+          pointsModal?.kind === "one" ? `Adjust points / spins: ${pointsModal.username}`
+            : pointsModal?.kind === "some" ? `Adjust points / spins: ${selected.size} selected users`
+            : "Adjust points / spins: ALL users of this app"
+        }
         open={pointsModal !== null}
         onClose={() => setPointsModal(null)}>
         <div className="form-grid">
-          <Field label="Points Delta (e.g. 500 to add, -100 to deduct)">
+          <Field label={adjustKind === "spins" ? "Spins (e.g. 5 to add, -2 to remove)" : "Points Delta (e.g. 500 to add, -100 to deduct)"}>
             <input
               type="number"
               value={pointsDelta}
               onChange={(e) => setPointsDelta(Number(e.target.value))}
             />
+          </Field>
+          <Field label="What">
+            <select value={adjustKind} onChange={(e) => {
+              const k = e.target.value as "points" | "spins";
+              setAdjustKind(k);
+              if (k === "spins" && pointsEconomy === "wallet") setPointsEconomy("pi-browser");
+            }}>
+              <option value="points">Points</option>
+              <option value="spins">Spins (never expire, used after free spins)</option>
+            </select>
+          </Field>
+          <Field label={adjustKind === "spins" ? "App" : "Balance"}>
+            <select value={pointsEconomy} onChange={(e) => setPointsEconomy(e.target.value as typeof pointsEconomy)}>
+              {adjustKind === "points" && <option value="wallet">Wallet (wallet app, withdrawable)</option>}
+              <option value="android">Android app</option>
+              <option value="pi-browser">Pi Browser app</option>
+              <option value="telegram">Telegram app</option>
+            </select>
           </Field>
           <Field label="Reason / Reference">
             <input
@@ -280,7 +349,7 @@ export default function UsersPage() {
         </div>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={() => setPointsModal(null)}>Cancel</button>
-          <button className="btn btn-primary" onClick={savePoints}>Credit / Deduct Points</button>
+          <button className="btn btn-primary" onClick={savePoints}>{adjustKind === "spins" ? "Add / Remove Spins" : "Credit / Deduct Points"}</button>
         </div>
       </Modal>
     </div>

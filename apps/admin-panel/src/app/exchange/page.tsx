@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
 import { PageHeader } from "@/components/ui";
+import { NumField, TextField, FeeField } from "@/components/settingsFields";
 
 export default function ExchangePage() {
   const rate = useAdminQuery(api.admin.getExchangeRate);
@@ -19,6 +20,43 @@ export default function ExchangePage() {
       setPointsPerPipro(rate.pointsPerPipro);
     }
   }, [rate]);
+
+  // Withdrawal / deposit / rate settings (platformSettings via rewardsConfig).
+  // Only changed keys are saved, so this never overwrites the Rewards page.
+  const settingsData = useAdminQuery(api.admin.getRewardSettings);
+  const setRewardSettings = useAdminMutation(api.admin.setRewardSettings);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [dirty, setDirty] = useState<Record<string, string>>({});
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (!settingsData) return;
+    const next: Record<string, string> = {};
+    for (const [key, s] of Object.entries(settingsData)) next[key] = (s as { value: string }).value;
+    setForm({ ...next, ...dirty });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsData]);
+
+  const updateField = (k: string, val: string) => {
+    setForm((f) => ({ ...f, [k]: val }));
+    setDirty((d) => ({ ...d, [k]: val }));
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    setSuccessMsg("");
+    setErrorMsg("");
+    try {
+      await setRewardSettings({ settings: dirty });
+      setDirty({});
+      setSuccessMsg("Withdrawal settings updated successfully!");
+      setTimeout(() => setSuccessMsg(""), 3500);
+    } catch (err) {
+      setErrorMsg(String(err));
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const currentRate = rate?.pointsPerPipro ?? null;
   const samplePts = 1000;
@@ -154,6 +192,59 @@ export default function ExchangePage() {
           }}>
           Users will see <strong style={{ color: "var(--text)" }}>1 PIPRO = {pointsPerPipro.toLocaleString()} PTS</strong> in the
           app wallet when swapping points.
+        </div>
+      </div>
+
+      {/* Withdrawals & Claims (moved from Rewards) */}
+      <div className="card" style={{ padding: 24, marginTop: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>🏦 Withdrawals & Claims</div>
+          <button className="btn btn-primary btn-sm" onClick={saveSettings} disabled={savingSettings || !Object.keys(dirty).length}>
+            {savingSettings ? "Saving..." : "Save withdrawal settings"}
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 18 }}>
+          Each app unlocks claiming and cash-out on its own once it reaches the level below. Claimed points move into the wallet pool, which is what the wallet app withdraws from.
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 18 }}>
+          <NumField label="Level required to claim / withdraw" k="withdrawMinLevel" form={form} set={updateField} min={1} unit="level" />
+          <NumField label="Android override" k="withdrawMinLevel@android" form={form} set={updateField} min={1} unit="level" placeholder="global" />
+          <NumField label="Telegram override" k="withdrawMinLevel@telegram" form={form} set={updateField} min={1} unit="level" placeholder="global" />
+          <NumField label="Pi Browser override" k="withdrawMinLevel@pi-browser" form={form} set={updateField} min={1} unit="level" placeholder="global" />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 18 }}>
+          <NumField label="Max points per claim (0 = no cap)" k="claimMaxPoints" form={form} set={updateField} min={0} unit="PTS" />
+          <NumField label="Min SIDRA withdrawal (0 = none)" k="minWithdrawSidra" form={form} set={updateField} min={0} unit="SIDRA" />
+          <NumField label="Min PIPRO withdrawal (0 = none)" k="minWithdrawPipro" form={form} set={updateField} min={0} unit="PIPRO" />
+          <NumField label="Min VINTA withdrawal (0 = none)" k="minWithdrawVinta" form={form} set={updateField} min={0} unit="VINTA" />
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 10px" }}>Fees</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 18 }}>
+          <FeeField
+            title="Withdrawal fee"
+            hint="Taken from the payout of every withdrawal (all assets)."
+            enabledKey="withdrawFeeEnabled" percentKey="withdrawFeePercent" form={form} set={updateField}
+          />
+          <FeeField
+            title="Promote Hub fee"
+            hint="Charged on top of a listing budget. Budget is refundable on cancel; the fee is not."
+            enabledKey="promoteFeeEnabled" percentKey="promoteFeePercent" form={form} set={updateField}
+          />
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 10px" }}>SIDRA &amp; deposit addresses</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
+          <NumField label="Points per 1 SIDRA (0 = SIDRA off)" k="pointsPerSidra" form={form} set={updateField} min={0} unit="PTS" />
+          <TextField label="Platform Sidra Chain address (0x…)" k="platformSidraAddress" form={form} set={updateField} placeholder="0x…" />
+          <TextField label="Platform Solana address (PIPRO deposits)" k="platformSolanaAddress" form={form} set={updateField} placeholder="Solana address" />
+          <NumField label="Credit per 1 Pi deposited (airtime/data only)" k="piDepositPointsPerPi" form={form} set={updateField} min={0} unit="CR" />
+          <TextField label="Stellar anchor domain" k="anchorDomain" form={form} set={updateField} placeholder="testanchor.stellar.org" />
+          <TextField label="Anchor asset code" k="anchorAssetCode" form={form} set={updateField} placeholder="SRT" />
+          <NumField label="Points per 1 anchor asset (0 = anchor off)" k="anchorPointsPerUnit" form={form} set={updateField} min={0} unit="PTS" />
+          <NumField label="Data & airtime: points per ₦1 of cost (0 = off)" k="vasPointsPerNaira" form={form} set={updateField} min={0} unit="PTS" />
         </div>
       </div>
     </div>

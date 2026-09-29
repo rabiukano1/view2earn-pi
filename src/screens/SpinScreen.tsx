@@ -19,11 +19,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../auth/AuthContext';
+import { showInterstitial } from '../services/interstitialService';
 import { radius, shadow } from '../theme';
 import SvgSpinWheel from '../components/SvgSpinWheel';
 import RewardedAdModal from '../components/RewardedAdModal';
 import Icon from '../components/Icon';
-import { showInterstitial } from '../services/interstitialService';
 
 type StackNav = NativeStackNavigationProp<RootStackParamList, 'Spin'>;
 
@@ -352,10 +352,14 @@ export default function SpinScreen() {
   };
 
   const handleDirectClaim = async () => {
-    showInterstitial().catch(() => { });
     const pending = pendingSpinRef.current;
     if (pending) {
       await doClaim(false);
+      // Claiming WITHOUT watching the double ad — this is the ad break for the
+      // win. After a rewarded double we never get here (the button becomes
+      // TRY AGAIN), and noteRewardedAdShown() would suppress it anyway, so the
+      // user is never shown two full-screen ads in a row.
+      setTimeout(() => showInterstitial().catch(() => {}), 400);
     } else {
       setResult(null);
     }
@@ -367,17 +371,14 @@ export default function SpinScreen() {
     if (pendingSpinRef.current) {
       await doClaim(false);
     }
+    setResult(null);
+    pendingSpinRef.current = null;
+    setHasPending(false);
     if (spinsRemaining > 0) {
-      showInterstitial().catch(() => { });
-      setResult(null);
-      pendingSpinRef.current = null;
-      setHasPending(false);
-      executeSpin();
-    } else {
-      showInterstitial().catch(() => { });
-      setResult(null);
-      pendingSpinRef.current = null;
-      setHasPending(false);
+      // force=true: `result` is still the old value in this closure because
+      // setResult(null) above has not re-rendered yet, and executeSpin bails
+      // out when result !== null — that is why TRY AGAIN did nothing.
+      executeSpin(true);
     }
   };
 

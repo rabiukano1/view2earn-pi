@@ -46,6 +46,7 @@ const links = [
   { href: "/voice-notes", label: "Voice notes", icon: ICONS.mentors },
   { href: "/exchange", label: "Exchange", icon: ICONS.exchange },
   { href: "/redemptions", label: "Redemptions", icon: ICONS.redemptions },
+  { href: "/deposits", label: "Deposits", icon: ICONS.exchange },
   { href: "/inquiries", label: "Inquiries", icon: ICONS.exchange },
   { href: "/visitors", label: "Visitors", icon: ICONS.visitors },
   { href: "/fraud", label: "Fraud", icon: ICONS.fraud },

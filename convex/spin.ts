@@ -61,17 +61,55 @@ function grantedToday(now: number, spinsPerWindow: number, windowMs: number): nu
 // Compute the remaining balance for a record. `spinsUsed` only counts when the
 // record is still on the same Nigerian day; otherwise the day has reset.
 function resolveBalance(
-  record: { windowStart?: number; spinsUsedInWindow?: number; bonusSpins?: number } | null,
+  record: { windowStart?: number; spinsUsedInWindow?: number; bonusSpins?: number; extraSpins?: number } | null,
   now: number,
   spinsPerWindow: number,
   windowMs: number,
-): { granted: number; used: number; bonus: number; remaining: number } {
+): { granted: number; used: number; bonus: number; extra: number; remaining: number } {
   const dayStart = nigerianDayStart(now);
   const granted = grantedToday(now, spinsPerWindow, windowMs);
   const sameDay = record?.windowStart === dayStart;
   const used = sameDay ? (record?.spinsUsedInWindow ?? 0) : 0;
   const bonus = sameDay ? (record?.bonusSpins ?? 0) : 0;
-  return { granted, used, bonus, remaining: Math.max(0, granted - used) + bonus };
+  const extra = record?.extraSpins ?? 0; // admin-granted: survives midnight
+  return { granted, used, bonus, extra, remaining: Math.max(0, granted - used) + bonus + extra };
+}
+
+/** Admin: add (+) or remove (−) spins on one surface. Added spins go to
+ *  extraSpins (never reset). Removal takes extra → today's bonus → today's free
+ *  spins and stops at 0. Returns the change actually applied. */
+export async function adminAdjustSpins(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  economy: Surface,
+  delta: number,
+): Promise<number> {
+  const rec = await getSpinRecord(ctx, userId, economy);
+  if (delta > 0) {
+    if (rec) await ctx.db.patch(rec._id, { extraSpins: (rec.extraSpins ?? 0) + delta });
+    else await ctx.db.insert("dailySpins", { userId, economy, extraSpins: delta });
+    return delta;
+  }
+  if (!rec) return 0;
+  const now = Date.now();
+  const dayStart = nigerianDayStart(now);
+  const windowMs = ((await getNum(ctx, "spinWindowHours", economy)) || 3) * HOUR_MS;
+  const spinsPerWindow = await getNum(ctx, "spinsPerWindow", economy);
+  const { granted, used, bonus, extra } = resolveBalance(rec, now, spinsPerWindow, windowMs);
+  let left = -delta;
+  const fromExtra = Math.min(extra, left); left -= fromExtra;
+  const fromBonus = Math.min(bonus, left); left -= fromBonus;
+  const fromFree = Math.min(Math.max(0, granted - used), left);
+  const removed = fromExtra + fromBonus + fromFree;
+  if (!removed) return 0;
+  await ctx.db.patch(rec._id, {
+    windowStart: dayStart,
+    extraSpins: extra - fromExtra,
+    bonusSpins: bonus - fromBonus,
+    spinsUsedInWindow: used + fromFree,
+    adBonusEarned: rec.windowStart === dayStart ? (rec.adBonusEarned ?? 0) : 0,
+  });
+  return -removed;
 }
 
 // Shared points credit: ledger row + wallet balance mirror + wallet history.
@@ -152,7 +190,7 @@ export const getSpinStatus = query({
 
     const spinRecord = await getSpinRecord(ctx, userId, economy);
 
-    const { granted, used, bonus, remaining } = resolveBalance(
+    const { granted, used, bonus, extra, remaining } = resolveBalance(
       spinRecord,
       now,
       spinsPerWindow,
@@ -171,6 +209,7 @@ export const getSpinStatus = query({
       spinsRemaining: remaining,
       baseSpinsRemaining: Math.max(0, granted - used),
       bonusSpins: bonus,
+      extraSpins: extra,
       adBonusEarned,
       adBonusLimit,
       adBonusRemaining: Math.max(0, adBonusLimit - adBonusEarned),
@@ -197,7 +236,7 @@ export const spin = mutation({
 
     const spinRecord = await getSpinRecord(ctx, userId, economy);
 
-    const { granted, used, bonus, remaining } = resolveBalance(
+    const { granted, used, bonus, extra, remaining } = resolveBalance(
       spinRecord,
       now,
       spinsPerWindow,
@@ -208,14 +247,18 @@ export const spin = mutation({
       throw new Error(`No spins left! Come back after the next ${windowHours}-hour top-up or watch an ad for extra spins.`);
     }
 
-    // Consume a bonus spin first if available, else consume today's granted spin.
+    // Consume a bonus spin first, then today's granted spins, and admin-granted
+    // extra spins last (they don't expire, so keep them longest).
     let newBonusSpins = bonus;
     let newSpinsUsed = used;
+    let newExtraSpins = extra;
 
     if (bonus > 0) {
       newBonusSpins = bonus - 1;
-    } else {
+    } else if (granted - used > 0) {
       newSpinsUsed = used + 1;
+    } else {
+      newExtraSpins = extra - 1;
     }
 
     const newAdBonusEarned = spinRecord?.windowStart === dayStart ? (spinRecord.adBonusEarned ?? 0) : 0;
@@ -234,6 +277,7 @@ export const spin = mutation({
         windowStart: dayStart,
         spinsUsedInWindow: newSpinsUsed,
         bonusSpins: newBonusSpins + bonusSpinsToAdd,
+        extraSpins: newExtraSpins,
         adBonusEarned: newAdBonusEarned,
       });
     } else {

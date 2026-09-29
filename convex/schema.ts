@@ -37,6 +37,9 @@ export default defineSchema({
     // account is topped up by `spinsPerWindow` (no daily reset).
     balance: v.optional(v.number()),
     lastChargeSlot: v.optional(v.number()),
+    // Spins granted by an admin. Unlike bonusSpins these never reset at
+    // midnight; spent last (after bonus + today's free spins).
+    extraSpins: v.optional(v.number()),
   }).index("by_user", ["userId"])
     .index("by_user_economy", ["userId", "economy"]),
 
@@ -112,6 +115,7 @@ export default defineSchema({
     pendingSurfaceAt: v.optional(v.number()),
     payoutEvm: v.optional(v.string()), // EVM payout address (public only, no keys held)
     payoutSolana: v.optional(v.string()), // Solana payout address
+    stellarMemo: v.optional(v.number()), // numeric memo identifying this user's Stellar anchor deposits (anchor.ts)
     piWalletAddress: v.optional(v.string()), // Pi blockchain wallet address (public, no keys held)
     piUsername: v.optional(v.string()), // Pi Network username, set only from a Pi.authenticate() verified server-side
     referredBy: v.optional(v.id("users")), // set at signup if a referral code was applied
@@ -119,7 +123,8 @@ export default defineSchema({
     .index("by_externalUid", ["externalUid"])
     .index("by_telegramUserId", ["telegramUserId"])
     .index("email", ["email"])
-    .index("by_payoutEvm", ["payoutEvm"]),
+    .index("by_payoutEvm", ["payoutEvm"])
+    .index("by_stellarMemo", ["stellarMemo"]),
 
   linkedProfiles: defineTable({
     userId: v.id("users"),
@@ -215,6 +220,10 @@ export default defineSchema({
     piproBalance: v.number(),
     vintaBalance: v.optional(v.number()),
     sidraBalance: v.optional(v.number()),
+    // Points bought with a Pi deposit. Spend-only on airtime/data: kept out of
+    // the points ledger so it never counts toward level, claim, or any
+    // withdrawal (Pi rules forbid Pi → crypto/fiat exchange).
+    piCredit: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
   // User withdrawal requests (VINTA token, PIPRO token, Sidra coin)
@@ -358,8 +367,15 @@ export default defineSchema({
 
   redemptions: defineTable({
     userId: v.id("users"),
-    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"))),
-    catalogId: v.id("catalog"),
+    economy: v.optional(v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet"))),
+    // Catalog purchases (Pi app) have catalogId; wallet-app purchases (vas.buy)
+    // carry the chosen network + ClubKonnect plan/amount directly instead.
+    catalogId: v.optional(v.id("catalog")),
+    itemType: v.optional(v.string()),   // "DATA" | "AIRTIME"
+    network: v.optional(v.string()),    // "MTN" | "GLO" | "9MOBILE" | "AIRTEL"
+    planId: v.optional(v.string()),     // ClubKonnect PRODUCT_ID (data)
+    planName: v.optional(v.string()),
+    nairaAmount: v.optional(v.number()),// ₦ value sent (airtime) / plan cost (data)
     paidWith: v.string(),
     amount: v.number(),
     phoneNumber: v.string(),
@@ -369,6 +385,28 @@ export default defineSchema({
   }).index("by_user", ["userId"])
     .index("by_status", ["status"]),
 
+  // Stellar anchor deposits (anchor.ts): one row per Horizon payment op into
+  // the platform account. "unmatched" = no/unknown memo, admin resolves.
+  anchorDeposits: defineTable({
+    opId: v.string(),
+    txHash: v.string(),
+    memo: v.optional(v.number()),
+    userId: v.optional(v.id("users")),
+    assetCode: v.string(),
+    amount: v.number(),
+    pointsCredited: v.number(),
+    status: v.string(), // "credited" | "unmatched"
+  }).index("by_opId", ["opId"])
+    .index("by_user", ["userId"]),
+
+  // Live data plans synced from ClubKonnect (vas.refreshPlans, daily).
+  vasPlans: defineTable({
+    network: v.string(),   // "MTN" | "GLO" | "9MOBILE" | "AIRTEL"
+    planId: v.string(),    // ClubKonnect PRODUCT_ID, sent as DataPlan
+    name: v.string(),
+    costNaira: v.number(), // what ClubKonnect charges us
+  }).index("by_network", ["network"]),
+
   piDonations: defineTable({
     userId: v.id("users"),
     amount: v.number(),
@@ -377,6 +415,7 @@ export default defineSchema({
     txid: v.optional(v.string()),
     status: v.string(), // "pending" | "completed" | "failed" | "cancelled"
     displayName: v.optional(v.string()),
+    deposit: v.optional(v.boolean()), // true = Pi deposit → wallet piCredit, not a donation
   }).index("by_user", ["userId"])
     .index("by_status", ["status"])
     .index("by_paymentId", ["paymentId"]),
@@ -817,6 +856,10 @@ export default defineSchema({
     telegramChatId: v.string(),
     telegramMessageId: v.number(),
     fileUniqueId: v.string(),
+    // Legacy: an earlier build cached an MP3 transcode here. Downloads now
+    // serve the original Opus (WhatsApp and Android play it). Kept optional so
+    // any row written by that build still validates.
+    mp3StorageId: v.optional(v.id("_storage")),
     createdAt: v.number(),
   })
     .index("by_file", ["fileUniqueId"])

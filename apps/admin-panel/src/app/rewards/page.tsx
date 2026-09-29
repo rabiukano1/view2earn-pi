@@ -7,11 +7,10 @@ import { useAdminMutation, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
 import { PageHeader } from "@/components/ui";
 
-type Category = "all" | "withdrawals" | "ads" | "spins" | "streaks" | "quiz" | "referrals";
+type Category = "all" | "ads" | "spins" | "streaks" | "quiz" | "referrals";
 
 const CATEGORIES: { key: Category; label: string; icon: string }[] = [
   { key: "all", label: "All Settings", icon: "⚙️" },
-  { key: "withdrawals", label: "Withdrawals & Claims", icon: "🏦" },
   { key: "ads", label: "Ads", icon: "📺" },
   { key: "spins", label: "Spins & Mystery Box", icon: "🎰" },
   { key: "streaks", label: "Streaks & Combos", icon: "🔥" },
@@ -191,51 +190,6 @@ export default function RewardsPage() {
           </button>
         ))}
       </div>
-
-      {/* SECTION 0: Withdrawals & Claims */}
-      {(activeCategory === "all" || activeCategory === "withdrawals") && (
-        <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>🏦 Withdrawals & Claims</div>
-          <p style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 18 }}>
-            Each app unlocks claiming and cash-out on its own once it reaches the level below. Claimed points move into the wallet pool, which is what the wallet app withdraws from.
-          </p>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 18 }}>
-            <NumField label="Level required to claim / withdraw" k="withdrawMinLevel" form={form} set={updateField} min={1} unit="level" />
-            <NumField label="Android override" k="withdrawMinLevel@android" form={form} set={updateField} min={1} unit="level" placeholder="global" />
-            <NumField label="Telegram override" k="withdrawMinLevel@telegram" form={form} set={updateField} min={1} unit="level" placeholder="global" />
-            <NumField label="Pi Browser override" k="withdrawMinLevel@pi-browser" form={form} set={updateField} min={1} unit="level" placeholder="global" />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 18 }}>
-            <NumField label="Max points per claim (0 = no cap)" k="claimMaxPoints" form={form} set={updateField} min={0} unit="PTS" />
-            <NumField label="Min SIDRA withdrawal (0 = none)" k="minWithdrawSidra" form={form} set={updateField} min={0} unit="SIDRA" />
-            <NumField label="Min PIPRO withdrawal (0 = none)" k="minWithdrawPipro" form={form} set={updateField} min={0} unit="PIPRO" />
-            <NumField label="Min VINTA withdrawal (0 = none)" k="minWithdrawVinta" form={form} set={updateField} min={0} unit="VINTA" />
-          </div>
-
-          <div style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 10px" }}>Fees</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 18 }}>
-            <FeeField
-              title="Withdrawal fee"
-              hint="Taken from the payout of every withdrawal (all assets)."
-              enabledKey="withdrawFeeEnabled" percentKey="withdrawFeePercent" form={form} set={updateField}
-            />
-            <FeeField
-              title="Promote Hub fee"
-              hint="Charged on top of a listing budget. Budget is refundable on cancel; the fee is not."
-              enabledKey="promoteFeeEnabled" percentKey="promoteFeePercent" form={form} set={updateField}
-            />
-          </div>
-
-          <div style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 10px" }}>SIDRA &amp; deposit addresses</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-            <NumField label="Points per 1 SIDRA (0 = SIDRA off)" k="pointsPerSidra" form={form} set={updateField} min={0} unit="PTS" />
-            <TextField label="Platform Sidra Chain address (0x…)" k="platformSidraAddress" form={form} set={updateField} placeholder="0x…" />
-            <TextField label="Platform Solana address (PIPRO deposits)" k="platformSolanaAddress" form={form} set={updateField} placeholder="Solana address" />
-          </div>
-        </div>
-      )}
 
       {/* SECTION 1: Ads */}
       {(activeCategory === "all" || activeCategory === "ads") && (
@@ -596,58 +550,6 @@ export default function RewardsPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-const inputStyle: React.CSSProperties = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontWeight: 700 };
-const labelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 };
-
-function NumField({ label, k, form, set, min, unit, placeholder }: {
-  label: string; k: string; form: Record<string, string>; set: (k: string, v: string) => void;
-  min?: number; unit?: string; placeholder?: string;
-}) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input type="number" min={min} value={form[k] ?? ""} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} style={inputStyle} />
-        {unit ? <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>{unit}</span> : null}
-      </div>
-    </div>
-  );
-}
-
-function TextField({ label, k, form, set, placeholder }: {
-  label: string; k: string; form: Record<string, string>; set: (k: string, v: string) => void; placeholder?: string;
-}) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <input type="text" value={form[k] ?? ""} placeholder={placeholder} onChange={(e) => set(k, e.target.value.trim())} style={{ ...inputStyle, fontFamily: "monospace", fontWeight: 500 }} />
-    </div>
-  );
-}
-
-function FeeField({ title, hint, enabledKey, percentKey, form, set }: {
-  title: string; hint: string; enabledKey: string; percentKey: string;
-  form: Record<string, string>; set: (k: string, v: string) => void;
-}) {
-  const on = form[enabledKey] === "1";
-  return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, background: on ? "var(--ok-weak)" : "var(--bg)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontWeight: 800 }}>{title}</span>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-          <input type="checkbox" checked={on} onChange={(e) => set(enabledKey, e.target.checked ? "1" : "0")} />
-          {on ? "ON" : "OFF"}
-        </label>
-      </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <input type="number" min={0} max={100} step="0.1" value={form[percentKey] ?? ""} onChange={(e) => set(percentKey, e.target.value)} style={inputStyle} disabled={!on} />
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>%</span>
-      </div>
-      <p style={{ fontSize: 11, color: "var(--text-3)", margin: "6px 0 0" }}>{hint}</p>
     </div>
   );
 }

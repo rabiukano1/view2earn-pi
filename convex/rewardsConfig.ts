@@ -48,6 +48,15 @@ export const REWARD_KEYS = {
   pointsPerSidra: "0",            // SIDRA ⇄ points rate; 0 = SIDRA deposits/withdrawals off
   platformSidraAddress: "",       // 0x… address that receives SIDRA deposits
   platformSolanaAddress: "",      // Solana address that receives PIPRO deposits
+  piDepositPointsPerPi: "1000",
+  // Stellar anchor deposits (anchor.ts). Signing key, issuer and network come
+  // from the anchor's stellar.toml. Rate 0 = anchor deposits off.
+  anchorDomain: "testanchor.stellar.org",
+  anchorAssetCode: "SRT",
+  anchorPointsPerUnit: "0",
+  // Wallet-app data/airtime (vas.ts): points charged per ₦1 of provider cost.
+  // Set it above what 1 point is worth to you to keep a margin.
+  vasPointsPerNaira: "3",   // spend-only credit per 1 Pi deposited (airtime/data only)
   // Fees. Each has a switch admin can flip at any time; a fee applies only when
   // its switch is "1" AND its percent is > 0.
   withdrawFeeEnabled: "0",

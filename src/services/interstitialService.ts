@@ -88,6 +88,15 @@ function createAndLoad() {
   }
 }
 
+/**
+ * Call this whenever a REWARDED ad finishes. It starts the same cooldown an
+ * interstitial would, so the user is never shown two full-screen ads back to
+ * back (e.g. watch-to-double, then an interstitial on the very next tap).
+ */
+export function noteRewardedAdShown() {
+  lastShownAt = Date.now();
+}
+
 export function preloadInterstitial() {
   if (loading || loaded) return;
   canRequestAds().then((ok) => {

@@ -32,6 +32,8 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -82,6 +84,9 @@ export default function ForgotPasswordScreen() {
     if (!code) return setError('Enter the code from your email');
     if (!newPassword || newPassword.length < 8) {
       return setError('New password must be at least 8 characters');
+    }
+    if (newPassword !== confirmPassword) {
+      return setError('The two passwords do not match');
     }
     setBusy(true);
     setError('');
@@ -153,11 +158,46 @@ export default function ForgotPasswordScreen() {
                   style={[styles.input, dark && styles.textLight]}
                   placeholder="New password (min 8 chars)"
                   placeholderTextColor={colors.textFaint}
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                   value={newPassword}
                   onChangeText={setNewPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                  <Icon name={showPassword ? 'eye-slash' : 'eye'} iconStyle="solid" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
               </View>
+              <View style={styles.inputWrapper}>
+                <Icon name="lock" iconStyle="solid" size={16} color={colors.textMuted} />
+                <TextInput
+                  style={[styles.input, dark && styles.textLight]}
+                  placeholder="Confirm new password"
+                  placeholderTextColor={colors.textFaint}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+              </View>
+              {confirmPassword.length > 0 ? (
+                  <View style={styles.matchRow}>
+                    <Icon
+                      name={newPassword === confirmPassword ? 'circle-check' : 'circle-xmark'}
+                      iconStyle="solid"
+                      size={12}
+                      color={newPassword === confirmPassword ? colors.success : '#EF4444'}
+                    />
+                    <Text style={[styles.matchText, { color: newPassword === confirmPassword ? colors.success : '#EF4444' }]}>
+                      {newPassword === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                    </Text>
+                  </View>
+                ) : null}
             </>
           )}
 
@@ -214,6 +254,8 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
+  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -6, marginBottom: 10, paddingLeft: 4 },
+  matchText: { fontSize: 12, fontWeight: '600' },
   container: { flex: 1, backgroundColor: colors.bg },
   containerDark: { backgroundColor: colors.bgDark },
   textLight: { color: colors.textDark },

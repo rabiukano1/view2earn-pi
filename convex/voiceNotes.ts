@@ -70,7 +70,7 @@ export async function insertNote(
     await ctx.db.patch(dup._id, { ...next, searchText: searchTextOf(next) });
     return "updated";
   }
-  await ctx.db.insert("voiceNotes", {
+  const newId = await ctx.db.insert("voiceNotes", {
     title: a.title,
     mentor: a.mentor,
     type: a.type,
@@ -259,7 +259,9 @@ export const getForStream = internalQuery({
   args: { id: v.id("voiceNotes") },
   handler: async (ctx, { id }) => {
     const row = await ctx.db.get(id);
-    return row ? { fileId: row.telegramFileId, mimeType: row.mimeType, title: row.title } : null;
+    return row
+      ? { fileId: row.telegramFileId, mimeType: row.mimeType, title: row.title }
+      : null;
   },
 });
 

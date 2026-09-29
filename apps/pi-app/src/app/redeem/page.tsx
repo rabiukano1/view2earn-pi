@@ -8,7 +8,7 @@ import { api } from "@convex/api";
 import { startPiPayment } from "@/pi/pi";
 import type { Id } from "@convex/dataModel";
 
-type Method = "POINTS" | "PI";
+type Method = "POINTS" | "PI" | "PI_CREDIT";
 
 const STATUS_LABEL: Record<string, string> = {
   processing: "Processing…",
@@ -34,6 +34,10 @@ export default function PiRedeem() {
   const redeem = useMutation(api.rewards.redeem);
   const startPi = useMutation(api.piPayments.startPiRedemption);
   const completePi = useMutation(api.piPayments.completePiRedemption);
+  const piCredit = useQuery(api.piDonations.myPiCredit, userId ? { userId } : "skip");
+  const startDeposit = useMutation(api.piDonations.startDonation);
+  const completeDeposit = useMutation(api.piDonations.completeDonation);
+  const [depositPi, setDepositPi] = useState("");
 
   const [sel, setSel] = useState<{ id: Id<"catalog">; name: string; method: Method } | null>(null);
   const [phone, setPhone] = useState("");
@@ -50,6 +54,39 @@ export default function PiRedeem() {
 
   const piUid = me.externalUid?.startsWith("pi:") ? me.externalUid.slice(3) : undefined;
 
+  // Deposit Pi → spend-only credit for airtime/data (credited after Pi confirms).
+  const deposit = async () => {
+    const amount = parseFloat(depositPi);
+    if (!piUid || !(amount > 0)) {
+      setMsg({ ok: false, text: "Sign in with Pi and enter an amount to deposit." });
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    const memo = `View2Earn deposit: ${amount} Pi`;
+    try {
+      await startPiPayment(
+        { amount, memo, metadata: { type: "deposit" }, uid: piUid },
+        {
+          onReadyForServerApproval: async (paymentId) => {
+            await startDeposit({ userId, amount, memo, paymentId, deposit: true });
+          },
+          onReadyForServerCompletion: async (paymentId, txid) => {
+            await completeDeposit({ userId, paymentId, txid });
+          },
+          onCancel: () => setMsg({ ok: false, text: "Pi deposit cancelled." }),
+          onError: (e) => setMsg({ ok: false, text: e?.message ?? "Pi payment error." }),
+        },
+      );
+      setMsg({ ok: true, text: "Deposit submitted. Your credit appears once Pi confirms it." });
+      setDepositPi("");
+    } catch (e) {
+      setMsg({ ok: false, text: String((e as Error)?.message ?? e).replace("[CONVEX] ", "") });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const confirm = async () => {
     if (!sel || !phone.trim()) {
       setMsg({ ok: false, text: "Pick a bundle and enter your phone number." });
@@ -58,8 +95,8 @@ export default function PiRedeem() {
     setBusy(true);
     setMsg(null);
     try {
-      if (sel.method === "POINTS") {
-        await redeem({ userId, catalogId: sel.id, phoneNumber: phone });
+      if (sel.method === "POINTS" || sel.method === "PI_CREDIT") {
+        await redeem({ userId, catalogId: sel.id, phoneNumber: phone, paidWith: sel.method });
         setMsg({ ok: true, text: "Redemption submitted. Your top-up is on the way." });
       } else {
         const item = catalog?.find((c) => c._id === sel.id);
@@ -106,6 +143,31 @@ export default function PiRedeem() {
         </p>
       </div>
 
+      <section className="pi-card">
+        <div className="pi-card-head">
+          <h2>Deposit Pi</h2>
+          <span className="pi-badge pi-badge-accent">Credit: {piCredit?.credit ?? "…"}</span>
+        </div>
+        <p className="pi-muted">
+          1 π = {piCredit?.pointsPerPi ?? "…"} credit. Credit buys airtime &amp; data only; it can't be withdrawn.
+        </p>
+        <div className="pi-checkout-actions">
+          <input
+            className="pi-input"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            placeholder="Amount in π"
+            value={depositPi}
+            onChange={(e) => setDepositPi(e.target.value)}
+          />
+          <button className="btn btn-primary" onClick={deposit} disabled={busy || !piUid}>
+            Deposit π
+          </button>
+        </div>
+      </section>
+
       {msg && (
         <div className={`pi-msg ${msg.ok ? "pi-msg-ok" : "pi-msg-err"}`}>{msg.text}</div>
       )}
@@ -137,6 +199,13 @@ export default function PiRedeem() {
                       {item.pointsPrice} pts
                     </button>
                   )}
+                  {item.pointsPrice !== undefined && (piCredit?.credit ?? 0) >= item.pointsPrice && (
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => setSel({ id: item._id, name: item.name, method: "PI_CREDIT" })}>
+                      {item.pointsPrice} credit
+                    </button>
+                  )}
                   {item.coinPrice !== undefined && (
                     <button
                       className="btn btn-secondary btn-sm pi-coin-btn"
@@ -157,7 +226,7 @@ export default function PiRedeem() {
           <div className="pi-card-head">
             <h2>Checkout · {sel.name}</h2>
             <span className="pi-badge pi-badge-accent">
-              {sel.method === "POINTS" ? "Pay with points" : "Pay with Pi"}
+              {sel.method === "POINTS" ? "Pay with points" : sel.method === "PI_CREDIT" ? "Pay with Pi credit" : "Pay with Pi"}
             </span>
           </div>
           <input
@@ -176,7 +245,7 @@ export default function PiRedeem() {
               Cancel
             </button>
             <button className="btn btn-primary" onClick={confirm} disabled={busy || (sel.method === "PI" && !piUid)}>
-              {busy ? "Processing…" : sel.method === "POINTS" ? "Redeem" : `Pay π & top up`}
+              {busy ? "Processing…" : sel.method === "PI" ? `Pay π & top up` : "Redeem"}
             </button>
           </div>
         </section>

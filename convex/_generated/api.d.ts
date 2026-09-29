@@ -18,6 +18,8 @@ import type * as activities from "../activities.js";
 import type * as admin from "../admin.js";
 import type * as ads from "../ads.js";
 import type * as adsgram from "../adsgram.js";
+import type * as anchor from "../anchor.js";
+import type * as anchorDb from "../anchorDb.js";
 import type * as auth from "../auth.js";
 import type * as backfill from "../backfill.js";
 import type * as bonus from "../bonus.js";
@@ -100,6 +102,8 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   ads: typeof ads;
   adsgram: typeof adsgram;
+  anchor: typeof anchor;
+  anchorDb: typeof anchorDb;
   auth: typeof auth;
   backfill: typeof backfill;
   bonus: typeof bonus;

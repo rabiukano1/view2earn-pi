@@ -16,6 +16,7 @@ import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import Icon from './Icon';
 import { ADMOB_AD_UNITS, ADMOB_TEST_AD_UNIT } from '../services/admobService';
+import { noteRewardedAdShown } from '../services/interstitialService';
 
 interface RewardedAdModalProps {
   visible: boolean;
@@ -186,6 +187,8 @@ export default function RewardedAdModal({
   const handleRewardEarned = useCallback(async () => {
     if (!userId || claimedRef.current) return;
     claimedRef.current = true;
+    // Start the interstitial cooldown so no full-screen ad follows this one.
+    noteRewardedAdShown();
     setClaiming(true);
     try {
       if (skipReward || isSpinFlow) {

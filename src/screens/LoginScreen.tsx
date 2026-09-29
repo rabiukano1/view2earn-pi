@@ -534,6 +534,19 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
                     </TouchableOpacity>
                   </View>
                 )}
+                {flow === 'signUp' && confirmPassword.length > 0 ? (
+                  <View style={styles.matchRow}>
+                    <Icon
+                      name={password === confirmPassword ? 'circle-check' : 'circle-xmark'}
+                      iconStyle="solid"
+                      size={12}
+                      color={password === confirmPassword ? colors.success : '#EF4444'}
+                    />
+                    <Text style={[styles.matchText, { color: password === confirmPassword ? colors.success : '#EF4444' }]}>
+                      {password === confirmPassword ? 'Passwords match' : 'Passwords do not match'}
+                    </Text>
+                  </View>
+                ) : null}
               </>
             )}
 
@@ -731,6 +744,8 @@ export default function LoginScreen({ onShowSplash }: LoginScreenProps = {}) {
 }
 
 const styles = StyleSheet.create({
+  matchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -6, marginBottom: 10, paddingLeft: 4 },
+  matchText: { fontSize: 12, fontWeight: '600' },
   container: { flex: 1, backgroundColor: colors.bg },
   content: { paddingHorizontal: 20 },
   hero: { alignItems: 'center', marginBottom: 32 },
