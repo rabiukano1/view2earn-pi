@@ -15,12 +15,14 @@ function getInterstitialUnitId(): string {
 //  - hard cap per session
 const MIN_INTERVAL_MS = 30_000; // at least 30s between interstitials
 const MAX_PER_SESSION = 10; // never exceed 10 per app session
+const MAX_LOAD_RETRIES = 3; // 5s, 10s, 20s — then stop asking for this session
 
 let interstitial: InterstitialAd | null = null;
 let loaded = false;
 let loading = false;
 let lastShownAt = 0;
 let shownInSession = 0;
+let failStreak = 0;
 
 async function canRequestAds(): Promise<boolean> {
   try {
@@ -59,17 +61,21 @@ function createAndLoad() {
       console.log('[Interstitial] LOADED');
       loaded = true;
       loading = false;
+      failStreak = 0;
     });
 
     interstitial.addAdEventListener(AdEventType.ERROR, (e: any) => {
       console.log('[Interstitial] ERROR', e);
       loaded = false;
       loading = false;
-      // Retry once after a short delay.
-      setTimeout(() => {
-        loading = false;
-        preloadInterstitial();
-      }, 5000);
+      // A no-fill IS a counted request: retrying on a fixed timer tanks match
+      // rate (every retry is another unfilled request). Back off, then stop.
+      failStreak += 1;
+      if (failStreak > MAX_LOAD_RETRIES) {
+        console.log('[Interstitial] giving up after', failStreak, 'failures');
+        return;
+      }
+      setTimeout(preloadInterstitial, 5000 * 2 ** (failStreak - 1));
     });
 
     interstitial.addAdEventListener(AdEventType.CLOSED, () => {
@@ -174,5 +180,6 @@ export function initInterstitial() {
 export function resetInterstitialSession() {
   shownInSession = 0;
   lastShownAt = 0;
+  failStreak = 0;
   console.log('[Interstitial] session reset');
 }

@@ -5,7 +5,8 @@ import mobileAds, {
 } from 'react-native-google-mobile-ads';
 
 // Live rewarded ad unit IDs (AdMob account ca-app-pub-5278018921408798).
-// Google test unit always fills — used in __DEV__ and as fallback in prod when live has no fill.
+// Google test unit — __DEV__ ONLY. Never serve this in a release build:
+// it earns nothing and violates AdMob policy.
 export const ADMOB_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/5224354917';
 export const ADMOB_AD_UNITS = {
   android: 'ca-app-pub-5278018921408798/8327151927',

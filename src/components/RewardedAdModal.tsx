@@ -33,6 +33,9 @@ interface RewardedAdModalProps {
 
 type AdPhase = 'loading' | 'ready' | 'error';
 
+// Bounded live-unit retries before we tell the user there is no fill.
+const MAX_LOAD_ATTEMPTS = 2;
+
 // Never surface provider names or ad unit IDs to the user — strip them from any
 // SDK error string so they can't leak through the UI.
 function sanitize(msg: string, adUnitId: string): string {
@@ -76,12 +79,11 @@ export default function RewardedAdModal({
     Platform.OS === 'ios'
       ? (parsedConfig.adMobIosUnitId || ADMOB_AD_UNITS.ios)
       : (parsedConfig.adMobAndroidUnitId || parsedConfig.unityPlacementId || ADMOB_AD_UNITS.android);
-  const baseUnitId = __DEV__ ? ADMOB_TEST_AD_UNIT : liveAdUnitId;
-  const [effectiveAdUnitId, setEffectiveAdUnitId] = useState(baseUnitId);
-  // Keep in sync when modal reopens or config changes (unless already fell back to test)
-  useEffect(() => {
-    setEffectiveAdUnitId(baseUnitId);
-  }, [baseUnitId, visible]);
+  // The Google demo unit is for __DEV__ ONLY. Falling back to it in a release
+  // build served real users free test videos: $0 revenue, and against AdMob
+  // policy. A live no-fill now surfaces as the 'error' phase instead.
+  const effectiveAdUnitId = __DEV__ ? ADMOB_TEST_AD_UNIT : liveAdUnitId;
+  const loadAttempts = useRef(0);
 
   const { isLoaded, isClosed, isEarnedReward, error, load, show } = useRewardedAd(effectiveAdUnitId);
 
@@ -99,6 +101,7 @@ export default function RewardedAdModal({
     if (visible && effectiveAdUnitId) {
       claimedRef.current = false;
       setAdError('');
+      loadAttempts.current = 0;
       if (isLoaded) {
         setPhase('ready');
         return;
@@ -116,28 +119,26 @@ export default function RewardedAdModal({
     }
   }, [visible, effectiveAdUnitId, load, isLoaded]);
 
-  // Silent error handling — if live unit has no fill/error, switch to test unit immediately.
-  // The test unit always fills (Google guarantee), so 'ready' is ONLY reached via isLoaded —
-  // never via a timeout — so show() always plays a real rewarded video.
+  // No fill / load error: retry the SAME (live) unit a bounded number of times,
+  // then tell the user. Each retry is a counted ad request, so the cap matters —
+  // an unbounded retry loop inflates requests and tanks match rate.
   useEffect(() => {
-    if (error) {
-      const raw = (error as any)?.code ? `[${(error as any).code}] ${error.message}` : error.message;
-      console.warn('[RewardedAd] load error:', raw, 'unit:', effectiveAdUnitId);
-      if (effectiveAdUnitId !== ADMOB_TEST_AD_UNIT) {
-        console.log('[RewardedAd] error on live unit -> fallback to test unit silently');
-        setEffectiveAdUnitId(ADMOB_TEST_AD_UNIT);
-        setPhase('loading');
-        setAdError('');
-        return;
-      }
-      // Test unit errored — retry the load (it refills on the next attempt).
-      console.warn('[RewardedAd] test unit error -> retrying load');
-      setPhase('loading');
-      setAdError('');
-      setTimeout(() => {
-        try { load(); } catch { }
-      }, 1500);
+    if (!error) return;
+    const raw = (error as any)?.code ? `[${(error as any).code}] ${error.message}` : error.message;
+    console.warn('[RewardedAd] load error:', raw, 'unit:', effectiveAdUnitId);
+    if (loadAttempts.current >= MAX_LOAD_ATTEMPTS) {
+      console.warn('[RewardedAd] no fill after', loadAttempts.current, 'attempts — giving up');
+      setPhase('error');
+      setAdError('No video available right now. Please try again in a moment.');
+      return;
     }
+    loadAttempts.current += 1;
+    setPhase('loading');
+    setAdError('');
+    const t = setTimeout(() => {
+      try { load(); } catch { }
+    }, 1500 * loadAttempts.current);
+    return () => clearTimeout(t);
   }, [error, effectiveAdUnitId, load]);
 
   // Ad became ready → flip to the "ready" CTA.
@@ -161,20 +162,20 @@ export default function RewardedAdModal({
   }, [isClosed, load]);
 
   // Load timeout: 6s — gives rewarded video enough time to fill (typically 3-10s).
-  // If the live unit is slow, fall back to the test unit (which always fills).
   // NEVER force 'ready' on timeout — the "Watch Video" button must only appear
   // when a real rewarded video is loaded, otherwise show() would do nothing.
   useEffect(() => {
     if (!visible || phase !== 'loading') return;
     const t = setTimeout(() => {
-      console.warn('[RewardedAd] load timeout (6s) — fallback to test unit', effectiveAdUnitId);
-      if (effectiveAdUnitId !== ADMOB_TEST_AD_UNIT) {
-        setEffectiveAdUnitId(ADMOB_TEST_AD_UNIT);
-        setPhase('loading');
-      } else {
-        // Test unit slow — retry once; keep user in loading (never show a dead button)
-        try { load(); } catch { }
+      if (loadAttempts.current >= MAX_LOAD_ATTEMPTS) {
+        console.warn('[RewardedAd] load timeout — giving up', effectiveAdUnitId);
+        setPhase('error');
+        setAdError('No video available right now. Please try again in a moment.');
+        return;
       }
+      loadAttempts.current += 1;
+      console.warn('[RewardedAd] load timeout (6s) — retry', loadAttempts.current, effectiveAdUnitId);
+      try { load(); } catch { }
     }, 6000);
     return () => clearTimeout(t);
   }, [visible, phase, effectiveAdUnitId, load]);
@@ -244,6 +245,7 @@ export default function RewardedAdModal({
   }, [isClosed, visible, isEarnedReward, onClose]);
 
   const retry = () => {
+    loadAttempts.current = 0;
     setPhase('loading');
     setAdError('');
     load();
@@ -287,7 +289,15 @@ export default function RewardedAdModal({
               </>
             )}
 
-            {/* Never show error to user — silently retries/fallbacks so request always gets an ad */}
+            {phase === 'error' && (
+              <>
+                <Icon name="circle-exclamation" iconStyle="solid" size={40} color="#F59E0B" />
+                <Text style={styles.adTitle}>No video available</Text>
+                <Text style={styles.adSubtitle}>
+                  {adError || 'Please try again in a moment.'}
+                </Text>
+              </>
+            )}
           </View>
 
           <View style={{ gap: 10, width: '100%' }}>
@@ -314,6 +324,12 @@ export default function RewardedAdModal({
                   <Text style={styles.claimText}>
                     {isSpinFlow ? 'Watch Video' : `Watch Video (+${displayReward} PTS)`}
                   </Text>
+                </TouchableOpacity>
+              )}
+              {phase === 'error' && (
+                <TouchableOpacity style={styles.claimBtn} onPress={retry} activeOpacity={0.85}>
+                  <Icon name="rotate-right" iconStyle="solid" size={15} color={colors.white} />
+                  <Text style={styles.claimText}>Try again</Text>
                 </TouchableOpacity>
               )}
               {phase === 'loading' && (
