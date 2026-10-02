@@ -22,6 +22,7 @@ import PageHeader from '../components/PageHeader';
 import Icon from '../components/Icon';
 import { useLanguage } from '../i18n/LanguageContext';
 import { openTaskLink } from '../services/TaskLinkService';
+import mobileAds from 'react-native-google-mobile-ads';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Settings'>,
@@ -230,7 +231,18 @@ export default function SettingsScreen() {
         {/* App Footer Info */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>View2Earn • Community Engagement & Growth</Text>
-          <Text style={styles.footerSub}>v2.1.0</Text>
+          {/* Long-press the version to open AdMob Ad Inspector — the only way to
+              see per-ad-source (Unity, AdMob) fill results live on the device. */}
+          <Text
+            style={styles.footerSub}
+            suppressHighlighting
+            onLongPress={() => {
+              mobileAds()
+                .openAdInspector()
+                .catch(err => console.warn('[AdInspector] failed to open:', err));
+            }}>
+            v2.1.0
+          </Text>
         </View>
       </ScrollView>
     </View>

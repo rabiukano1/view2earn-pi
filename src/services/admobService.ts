@@ -8,16 +8,27 @@ import mobileAds, {
 // Google test unit — __DEV__ ONLY. Never serve this in a release build:
 // it earns nothing and violates AdMob policy.
 export const ADMOB_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/5224354917';
+
+// Mediation (Unity, ironSource, …) NEVER serves on Google's test ad units —
+// those only ever return Google's own demo ads. To verify Unity actually fills
+// you must request the LIVE unit from a device listed in ADMOB_TEST_DEVICE_IDS.
+// Flip this to true in a debug build to do that, then flip it back to false.
+export const FORCE_LIVE_ADS_IN_DEV = false;
+
+/** True when ad requests should go to the real (revenue-earning) ad units. */
+export function shouldUseLiveAdUnits(): boolean {
+  return !__DEV__ || FORCE_LIVE_ADS_IN_DEV;
+}
 export const ADMOB_AD_UNITS = {
   android: 'ca-app-pub-5278018921408798/8327151927',
   ios: 'ca-app-pub-5278018921408798/8327151927',
 } as const;
 
 export function getRewardedAdUnitId(): string {
-  return __DEV__ ? ADMOB_TEST_AD_UNIT : ADMOB_AD_UNITS.android;
+  return shouldUseLiveAdUnits() ? ADMOB_AD_UNITS.android : ADMOB_TEST_AD_UNIT;
 }
 export function getRewardedAdUnitIdIOS(): string {
-  return __DEV__ ? ADMOB_TEST_AD_UNIT : ADMOB_AD_UNITS.ios;
+  return shouldUseLiveAdUnits() ? ADMOB_AD_UNITS.ios : ADMOB_TEST_AD_UNIT;
 }
 
 export const INTERSTITIAL_AD_UNIT = 'ca-app-pub-5278018921408798/5251615181';
@@ -86,7 +97,12 @@ export async function initializeAdMob(): Promise<void> {
     }
 
     const adapterStatuses = await mobileAds().initialize();
-    console.log('[AdMob] Initialized successfully with compliance check:', adapterStatuses);
+    // One line per mediation adapter. Unity must appear as READY here, or its
+    // demand is never requested and match rate will not improve — a silent
+    // failure otherwise only visible in AdMob stats days later.
+    for (const a of adapterStatuses ?? []) {
+      console.log(`[AdMob] adapter ${a.name}: ${a.state === 1 ? 'READY' : 'NOT READY'}`, a.description ?? '');
+    }
     isMobileAdsInitialized = true;
   } catch (error) {
     console.warn('[AdMob] Initialization warning (non-fatal):', error);

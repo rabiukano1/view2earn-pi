@@ -15,7 +15,7 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import Icon from './Icon';
-import { ADMOB_AD_UNITS, ADMOB_TEST_AD_UNIT } from '../services/admobService';
+import { ADMOB_AD_UNITS, ADMOB_TEST_AD_UNIT, shouldUseLiveAdUnits } from '../services/admobService';
 import { noteRewardedAdShown } from '../services/interstitialService';
 
 interface RewardedAdModalProps {
@@ -82,7 +82,7 @@ export default function RewardedAdModal({
   // The Google demo unit is for __DEV__ ONLY. Falling back to it in a release
   // build served real users free test videos: $0 revenue, and against AdMob
   // policy. A live no-fill now surfaces as the 'error' phase instead.
-  const effectiveAdUnitId = __DEV__ ? ADMOB_TEST_AD_UNIT : liveAdUnitId;
+  const effectiveAdUnitId = shouldUseLiveAdUnits() ? liveAdUnitId : ADMOB_TEST_AD_UNIT;
   const loadAttempts = useRef(0);
 
   const { isLoaded, isClosed, isEarnedReward, error, load, show } = useRewardedAd(effectiveAdUnitId);
@@ -90,7 +90,7 @@ export default function RewardedAdModal({
   // Debug: log which unit is actually being used (helps catch prod no-fill)
   useEffect(() => {
     if (visible) {
-      console.log('[RewardedAd] effectiveAdUnitId:', effectiveAdUnitId, __DEV__ ? '(TEST)' : '(LIVE)', 'provider:', activeProvider?.name ?? 'none');
+      console.log('[RewardedAd] effectiveAdUnitId:', effectiveAdUnitId, shouldUseLiveAdUnits() ? '(LIVE)' : '(TEST)', 'provider:', activeProvider?.name ?? 'none');
       if (error) console.log('[RewardedAd] hook error:', JSON.stringify(error));
     }
   }, [visible, effectiveAdUnitId, activeProvider?.name, error]);

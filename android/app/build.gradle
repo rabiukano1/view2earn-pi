@@ -94,8 +94,8 @@ android {
         applicationId "com.view2earn"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.0.2"
 
         // react-native-app-auth: redirect back to the app after Google OAuth consent.
         manifestPlaceholders = [
@@ -151,6 +151,14 @@ dependencies {
     // Play Install Referrer API — resolves the `referrer=` query param from the
     // Play Store listing (referral attribution) on all Android versions.
     implementation("com.android.installreferrer:installreferrer:2.2")
+
+    // AdMob mediation: Unity Ads as an extra demand source, to cut no-fills.
+    // Pinned to the adapter whose transitive play-services-ads (24.9.0) matches
+    // the version react-native-google-mobile-ads@16.0.3 declares. Newer adapters
+    // (4.17.0.0+) pull play-services-ads 25.x, which needs rn-gma >= 17 — bump
+    // both together or not at all.
+    // The Unity Ads SDK itself arrives transitively.
+    implementation("com.google.ads.mediation:unity:4.16.6.0")
 
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
