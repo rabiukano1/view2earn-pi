@@ -36,14 +36,16 @@ export async function linkedSurfaces(
 // Per-surface level = level of lifetime points earned on that surface.
 async function surfaceLevels(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
   const levels = await levelsWithOverrides(ctx);
+  // economyBalances holds the running lifetimeEarned per surface, maintained by
+  // lib/ledger.ts:insertLedgerRow. At most 4 rows, vs the user's whole ledger.
   const rows = await ctx.db
-    .query("pointsLedger")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .query("economyBalances")
+    .withIndex("by_user_economy", (q) => q.eq("userId", userId))
     .collect();
   const earned: Record<Surface, number> = { "pi-browser": 0, telegram: 0, android: 0 };
   for (const r of rows) {
-    const e = (r.economy ?? "android") as Economy;
-    if (r.delta > 0 && e !== "wallet") earned[e] += r.delta;
+    const e = r.economy as Economy;
+    if (e !== "wallet") earned[e] += r.lifetimeEarned ?? 0;
   }
   return {
     "pi-browser": levelForXp(levels, earned["pi-browser"]),

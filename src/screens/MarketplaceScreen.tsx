@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useColorScheme,
@@ -18,12 +19,13 @@ import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 import { useAuth } from '../auth/AuthContext';
 import { useNavigation } from '@react-navigation/native';
+import { smartOpenUrl } from '../lib/openUrl';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import PageHeader from '../components/PageHeader';
 import PlatformIcon from '../components/PlatformIcon';
 import Icon from '../components/Icon';
-import { colors, radius, shadow } from '../theme';
+import { colors, radius, shadow, spacing } from '../theme';
 
 // ponytail: DEFAULT_PLATFORM_FILTER fallback set to 'all'; calibrate with marketplace analytics metrics.
 type PlatformFilter = 'all' | 'telegram' | 'youtube' | 'tiktok' | 'facebook' | 'x';
@@ -58,7 +60,54 @@ export default function MarketplaceScreen() {
   const listings = useQuery(api.marketplace.listListings);
   const myListings = useQuery(api.marketplace.myListings, userId ? { userId } : 'skip');
   const balance = useQuery(api.users.balance, userId ? { userId } : 'skip');
+  const me = useQuery(api.users.me);
   const cancelListing = useMutation(api.marketplace.cancelListing);
+  const submitContact = useMutation(api.inquiries.submitContact);
+
+  // "Need points?" — a user with too few points cannot promote anything, and
+  // previously had no way forward from this screen. Below this threshold we
+  // surface a direct line to the team instead of a dead end.
+  // Support line. wa.me needs the number in full international form with no
+  // "+" or spaces: 0806… -> 234806…
+  const SUPPORT_WHATSAPP = '2348062526132';
+  const openWhatsApp = () => {
+    const text = encodeURIComponent(
+      `Hi View2Earn team, I need help with Promote Hub (balance ${balance ?? 0} pts).`,
+    );
+    // smartOpenUrl opens the WhatsApp app when installed and falls back to the
+    // browser otherwise.
+    void smartOpenUrl(`https://wa.me/${SUPPORT_WHATSAPP}?text=${text}`, 'whatsapp');
+  };
+
+  const LOW_BALANCE_POINTS = 100;
+  const lowBalance = balance !== undefined && balance < LOW_BALANCE_POINTS;
+
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactMsg, setContactMsg] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+
+  const sendContact = async () => {
+    const message = contactMsg.trim();
+    if (message.length < 10) {
+      Alert.alert('Message too short', 'Please describe what you need in a little more detail.');
+      return;
+    }
+    setContactSending(true);
+    try {
+      await submitContact({
+        name: me?.username ?? 'View2Earn user',
+        email: me?.email ?? 'no-email@view2earn.org',
+        message: `[Promote Hub — balance ${balance ?? 0} pts] ${message}`,
+      });
+      setContactOpen(false);
+      setContactMsg('');
+      Alert.alert('Message sent', 'The team has your request and will get back to you.');
+    } catch (e) {
+      Alert.alert('Could not send', String(e).replace('[CONVEX] ', ''));
+    } finally {
+      setContactSending(false);
+    }
+  };
 
   const handleCancel = (listingId: Id<'marketplaceListings'>) => {
     Alert.alert('Cancel Promotion', 'Unused points will be refunded to your balance instantly.', [
@@ -157,6 +206,29 @@ export default function MarketplaceScreen() {
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         ListHeaderComponent={
           <View style={styles.headerBlock}>
+            {/* Not enough points to promote — offer a way forward. */}
+            {lowBalance ? (
+              <View style={[styles.lowBalCard, dark && styles.lowBalCardDark]}>
+                <View style={styles.lowBalIcon}>
+                  <Icon name="coins" iconStyle="solid" size={18} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.lowBalTitle, dark && styles.textLight]}>
+                    You have {balance ?? 0} points
+                  </Text>
+                  <Text style={styles.lowBalSub}>
+                    Earn more from tasks, quiz and spin — or ask the team about a promotion package.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.lowBalBtn}
+                  activeOpacity={0.85}
+                  onPress={() => setContactOpen(true)}>
+                  <Text style={styles.lowBalBtnText}>Get help</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             {/* Create Promotion Hero Card */}
             <TouchableOpacity
               style={styles.heroCtaCard}
@@ -230,6 +302,21 @@ export default function MarketplaceScreen() {
             </View>
           )
         }
+        ListFooterComponent={
+          <TouchableOpacity
+            style={[styles.contactRow, dark && styles.contactRowDark]}
+            activeOpacity={0.85}
+            onPress={() => setContactOpen(true)}>
+            <Icon name="headset" iconStyle="solid" size={15} color={colors.primaryDeep} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.contactRowTitle, dark && styles.textLight]}>
+                Need help or a custom package?
+              </Text>
+              <Text style={styles.contactRowSub}>Chat on WhatsApp or send us a message</Text>
+            </View>
+            <Icon name="chevron-right" iconStyle="solid" size={14} color={colors.textFaint} />
+          </TouchableOpacity>
+        }
       />
 
       {/* Platform Dropdown Modal */}
@@ -272,11 +359,174 @@ export default function MarketplaceScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Contact the team — for users who cannot afford a promotion yet. */}
+      <Modal
+        visible={contactOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setContactOpen(false)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setContactOpen(false)}>
+          <Pressable style={[styles.contactSheet, dark && styles.contactSheetDark]} onPress={() => {}}>
+            <View style={styles.sheetGrabber} />
+            <Text style={[styles.contactTitle, dark && styles.textLight]}>Contact the team</Text>
+            <Text style={styles.contactSub}>
+              Tell us what you want to promote and we'll come back to you with options.
+            </Text>
+
+            {/* Fastest route first — most users prefer chat over a form. */}
+            <TouchableOpacity style={styles.waCard} activeOpacity={0.85} onPress={openWhatsApp}>
+              <View style={styles.waIcon}>
+                <Icon name="whatsapp" iconStyle="brand" size={20} color="#FFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.waTitle}>Chat on WhatsApp</Text>
+                <Text style={styles.waSub}>Usually replies fastest</Text>
+              </View>
+              <Icon name="arrow-up-right-from-square" iconStyle="solid" size={13} color="#FFF" />
+            </TouchableOpacity>
+
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>or send a message</Text>
+              <View style={styles.orLine} />
+            </View>
+            <TextInput
+              style={[styles.contactInput, dark && styles.contactInputDark]}
+              placeholder="What do you need? e.g. 5,000 followers for my TikTok page…"
+              placeholderTextColor={colors.textFaint}
+              value={contactMsg}
+              onChangeText={setContactMsg}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              maxLength={800}
+            />
+            <Text style={styles.contactHint}>
+              Replying to {me?.email ? me.email : 'your account'} · {contactMsg.trim().length}/800
+            </Text>
+            <TouchableOpacity
+              style={[styles.contactSend, contactSending && { opacity: 0.6 }]}
+              disabled={contactSending}
+              activeOpacity={0.85}
+              onPress={sendContact}>
+              <Text style={styles.contactSendText}>
+                {contactSending ? 'Sending…' : 'Send message'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.pickerCancel} onPress={() => setContactOpen(false)}>
+              <Text style={styles.pickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  lowBalCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  lowBalCardDark: { backgroundColor: '#2A2411', borderColor: '#4D3F14' },
+  lowBalIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(245,158,11,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lowBalTitle: { fontSize: 14, fontWeight: '800', color: colors.text },
+  lowBalSub: { fontSize: 11, color: colors.textMuted, marginTop: 2, lineHeight: 15 },
+  lowBalBtn: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  lowBalBtnText: { color: '#FFF', fontWeight: '800', fontSize: 12 },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#FFF',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    ...shadow.card,
+  },
+  contactRowDark: { backgroundColor: '#17171F' },
+  contactRowTitle: { fontSize: 13, fontWeight: '800', color: colors.text },
+  contactRowSub: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  sheetGrabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(120,120,140,0.35)',
+    marginBottom: spacing.sm,
+  },
+  waCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#25D366',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.xs,
+  },
+  waIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waTitle: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  waSub: { color: 'rgba(255,255,255,0.9)', fontSize: 11, marginTop: 2 },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.md },
+  orLine: { flex: 1, height: 1, backgroundColor: 'rgba(120,120,140,0.25)' },
+  orText: { fontSize: 11, color: colors.textFaint, fontWeight: '600' },
+  contactSheet: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  contactSheetDark: { backgroundColor: '#17171F' },
+  contactTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+  contactSub: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm },
+  contactInput: {
+    minHeight: 110,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: '#FAFAFC',
+  },
+  contactInputDark: { backgroundColor: '#1F1F2A', borderColor: '#2E2E3C', color: '#FFF' },
+  contactHint: { fontSize: 11, color: colors.textFaint, textAlign: 'right' },
+  contactSend: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  contactSendText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
   container: {
     flex: 1,
     backgroundColor: colors.bg,

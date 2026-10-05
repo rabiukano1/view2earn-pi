@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, action, internalMutation, type MutationCtx } from "./_generated/server";
+import { query, mutation, action, internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { recomputeUserScore } from "./fraud";
@@ -811,31 +811,70 @@ export const listAdWatches = query({
   },
 });
 
-/** Leaderboard: top ad watchers, plus totals by kind. */
-export const adWatchLeaderboard = query({
+/** One page of ad watch logs, trimmed to what the leaderboard needs. */
+export const adWatchLogPage = internalQuery({
+  args: { cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, { cursor }) => {
+    const res = await ctx.db.query("adWatchLogs").paginate({ cursor, numItems: 4000 });
+    return {
+      rows: res.page.map((l) => ({ userId: l.userId, kind: l.kind, points: l.points })),
+      isDone: res.isDone,
+      cursor: res.continueCursor,
+    };
+  },
+});
+
+export const usernamesFor = internalQuery({
+  args: { ids: v.array(v.id("users")) },
+  handler: async (ctx, { ids }) =>
+    Promise.all(ids.map(async (id) => (await ctx.db.get(id))?.username ?? "unknown")),
+});
+
+type AdWatchAgg = { watches: number; rewarded: number; spinDouble: number; spinBonus: number; points: number };
+
+/**
+ * Leaderboard: top ad watchers, plus totals by kind. An action, not a query:
+ * a single query can't read the whole log table any more, and a reactive one
+ * re-ran on every ad watched. Reads it page by page, on demand.
+ */
+export const adWatchLeaderboard = action({
   args: { token: v.string() },
-  handler: async (ctx, { token }) => {
+  handler: async (ctx, { token }): Promise<{
+    total: number;
+    totalPoints: number;
+    byKind: { rewarded: number; spin_double: number; spin_bonus: number };
+    topUsers: ({ userId: Id<"users">; username: string } & AdWatchAgg)[];
+  }> => {
     requireAdmin(token);
-    const logs = await ctx.db.query("adWatchLogs").collect();
-    const byUser = new Map<string, { watches: number; rewarded: number; spinDouble: number; spinBonus: number; points: number }>();
+    const byUser = new Map<Id<"users">, AdWatchAgg>();
     const byKind = { rewarded: 0, spin_double: 0, spin_bonus: 0 };
-    let totalPoints = 0;
-    for (const l of logs) {
-      const u = byUser.get(l.userId) ?? { watches: 0, rewarded: 0, spinDouble: 0, spinBonus: 0, points: 0 };
-      u.watches++; u.points += l.points;
-      if (l.kind === "rewarded") u.rewarded++;
-      else if (l.kind === "spin_double") u.spinDouble++;
-      else u.spinBonus++;
-      byUser.set(l.userId, u);
-      byKind[l.kind]++;
-      totalPoints += l.points;
+    let total = 0, totalPoints = 0;
+    let cursor: string | null = null;
+    for (;;) {
+      const page: { rows: { userId: Id<"users">; kind: "rewarded" | "spin_double" | "spin_bonus"; points: number }[]; isDone: boolean; cursor: string } =
+        await ctx.runQuery(internal.admin.adWatchLogPage, { cursor });
+      for (const l of page.rows) {
+        const u = byUser.get(l.userId) ?? { watches: 0, rewarded: 0, spinDouble: 0, spinBonus: 0, points: 0 };
+        u.watches++; u.points += l.points;
+        if (l.kind === "rewarded") u.rewarded++;
+        else if (l.kind === "spin_double") u.spinDouble++;
+        else u.spinBonus++;
+        byUser.set(l.userId, u);
+        byKind[l.kind]++;
+        totalPoints += l.points;
+        total++;
+      }
+      if (page.isDone) break;
+      cursor = page.cursor;
     }
-    const topUsers = [];
-    for (const [id, agg] of [...byUser].sort((a, b) => b[1].watches - a[1].watches || b[1].points - a[1].points)) {
-      const u = await ctx.db.get(id as Id<"users">);
-      topUsers.push({ userId: id, username: u?.username ?? "unknown", ...agg });
+    const sorted = [...byUser].sort((a, b) => b[1].watches - a[1].watches || b[1].points - a[1].points);
+    const topUsers: ({ userId: Id<"users">; username: string } & AdWatchAgg)[] = [];
+    for (let i = 0; i < sorted.length; i += 500) {
+      const chunk = sorted.slice(i, i + 500);
+      const names: string[] = await ctx.runQuery(internal.admin.usernamesFor, { ids: chunk.map(([id]) => id) });
+      chunk.forEach(([userId, agg], k) => topUsers.push({ userId, username: names[k], ...agg }));
     }
-    return { total: logs.length, totalPoints, byKind, topUsers };
+    return { total, totalPoints, byKind, topUsers };
   },
 });
 

@@ -1,12 +1,14 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   LayoutChangeEvent,
   Linking,
   PanResponder,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useColorScheme,
@@ -16,6 +18,7 @@ import WebView from 'react-native-webview';
 import { CONVEX_SITE_URL } from '../config';
 import Icon from './Icon';
 import { colors, radius, spacing, shadow } from '../theme';
+import { useVoicePlayer } from '../audio/VoicePlayerContext';
 
 const WebViewPlayer = WebView as any;
 
@@ -46,6 +49,22 @@ export const initials = (name?: string) =>
     .join('');
 
 const SPEEDS = [1, 1.25, 1.5, 2] as const;
+
+type SortKey = 'newest' | 'oldest' | 'episode' | 'longest' | 'shortest';
+const SORTS: Array<[SortKey, string]> = [
+  ['newest', 'Newest'],
+  ['oldest', 'Oldest'],
+  ['episode', 'Episode'],
+  ['longest', 'Longest'],
+  ['shortest', 'Shortest'],
+];
+type TypeFilter = 'all' | NoteType;
+const TYPE_FILTERS: Array<[TypeFilter, string]> = [
+  ['all', 'All'],
+  ['episode', 'Episodes'],
+  ['update', 'Updates'],
+  ['announcement', 'Announcements'],
+];
 const BAR_COUNT = 44;
 
 // Deterministic bar heights from the note id, so a note's waveform is stable
@@ -92,71 +111,74 @@ type Props = {
   emptyText: string;
   /** Hide the mentor line on rows (already known on a mentor's own screen). */
   hideMentor?: boolean;
+  /** Hide the built-in search bar (parent supplies its own). */
+  hideSearch?: boolean;
+  /** Hide the type filter chips (parent supplies its own). */
+  hideTypeFilter?: boolean;
+  /** Hide search + type chips + sort chips (parent supplies a full toolbar). */
+  hideToolbar?: boolean;
   ListHeaderComponent?: React.ReactElement | null;
 };
 
-export default function VoiceNoteList({ notes, emptyText, hideMentor, ListHeaderComponent }: Props) {
+export default function VoiceNoteList({
+  notes,
+  emptyText,
+  hideMentor,
+  hideSearch,
+  hideTypeFilter,
+  hideToolbar,
+  ListHeaderComponent,
+}: Props) {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
-  const [current, setCurrent] = useState<Note | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [buffering, setBuffering] = useState(false);
-  const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [rate, setRate] = useState<number>(1);
+  // Playback is owned by the app-root provider, so leaving this screen does
+  // not stop the audio. This component only renders controls for it.
+  const player = useVoicePlayer();
   const [scrub, setScrub] = useState<number | null>(null);
-  const [error, setError] = useState(false);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const barWidth = useRef(1);
-  const webRef = useRef<any>(null);
 
-  const js = (code: string) => webRef.current?.injectJavaScript(`${code}; true;`);
+  const current = (player.current as Note | null) ?? null;
+
+  // While this screen shows the full player, suppress the floating mini bar
+  // (it would overlap these controls). Releasing it on unmount is what makes
+  // the bar appear the moment the user navigates away.
+  const panelOpen = !!current;
+  const { setFullPlayerVisible } = player;
+  useEffect(() => {
+    setFullPlayerVisible(panelOpen);
+    return () => setFullPlayerVisible(false);
+  }, [panelOpen, setFullPlayerVisible]);
+  // A note still playing from another screen may not be in this list.
+  const isMine = current ? (notes ?? []).some((n) => n._id === current._id) : false;
+  const playing = player.playing;
+  const buffering = player.buffering;
+  const error = player.error;
+  const time = player.time;
+  const duration = player.duration || current?.duration || 0;
+  const rate = player.rate;
+  const js = (code: string) => {
+    if (code === 'toggle()') player.toggle();
+    else if (code.startsWith('skip(')) player.skip(Number(code.slice(5, -1)));
+    else if (code.startsWith('seekTo(')) player.seek(Number(code.slice(7, -1)));
+  };
 
   const index = useMemo(
     () => (current && notes ? notes.findIndex((n) => n._id === current._id) : -1),
     [current, notes],
   );
-  const hasPrev = index > 0;
-  const hasNext = notes ? index >= 0 && index < notes.length - 1 : false;
+  const hasPrev = isMine ? player.hasPrev : false;
+  const hasNext = isMine ? player.hasNext : false;
 
-  const open = (n: Note) => {
-    setCurrent(n);
-    setPlaying(false);
-    setBuffering(true);
-    setTime(0);
-    setDuration(n.duration);
-    setError(false);
-  };
-  const select = (n: Note) => (current?._id === n._id ? js('toggle()') : open(n));
-  const step = (delta: number) => {
-    if (!notes || index < 0) return;
-    const next = notes[index + delta];
-    if (next) open(next);
-  };
+  const open = (n: Note) => player.play(n, notes ?? [n]);
+  const select = (n: Note) => (current?._id === n._id ? player.toggle() : open(n));
+  const step = (delta: number) => player.step(delta >= 0 ? 1 : -1);
 
   const cycleRate = () => {
     const next = SPEEDS[(SPEEDS.indexOf(rate as any) + 1) % SPEEDS.length];
-    setRate(next);
-    js(`setRate(${next})`);
-  };
-
-  const onMessage = (e: any) => {
-    try {
-      const m = JSON.parse(e.nativeEvent.data);
-      if (m.error) {
-        setError(true);
-        setBuffering(false);
-        return;
-      }
-      if (scrub === null) setTime(m.t);
-      if (m.d > 0) setDuration(m.d);
-      setPlaying(!!m.playing);
-      if (typeof m.buffering === 'boolean') setBuffering(m.buffering);
-      if (m.ended) {
-        // Auto-advance through the list, like a podcast queue.
-        if (hasNext) step(1);
-        else setPlaying(false);
-      }
-    } catch {}
+    player.changeRate(next);
   };
 
   const seekToX = (x: number) => {
@@ -180,6 +202,47 @@ export default function VoiceNoteList({ notes, emptyText, hideMentor, ListHeader
     }),
   ).current;
 
+  // Search + sort over the notes this screen was given. Both are local: the
+  // list is already loaded, so filtering here is instant and costs no queries.
+  const visible = useMemo(() => {
+    const list = notes ?? [];
+    const q = search.trim().toLowerCase();
+    const filtered = list.filter((n) => {
+      if (typeFilter !== 'all' && n.type !== typeFilter) return false;
+      if (!q) return true;
+      const ep = n.episodeNumber != null ? String(n.episodeNumber) : '';
+      return (
+        n.title.toLowerCase().includes(q) ||
+        (n.mentor ?? '').toLowerCase().includes(q) ||
+        (n.series ?? '').toLowerCase().includes(q) ||
+        (n.note ?? '').toLowerCase().includes(q) ||
+        (n.caption ?? '').toLowerCase().includes(q) ||
+        (ep && ep.includes(q))
+      );
+    });
+
+    const sorted = [...filtered];
+    if (sortBy === 'newest') sorted.sort((a, b) => b.createdAt - a.createdAt);
+    else if (sortBy === 'oldest') sorted.sort((a, b) => a.createdAt - b.createdAt);
+    else if (sortBy === 'longest') sorted.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+    else if (sortBy === 'shortest') sorted.sort((a, b) => (a.duration || 0) - (b.duration || 0));
+    else if (sortBy === 'episode') {
+      // Series first (A-Z), then by episode number inside each series, so a
+      // multi-part series reads in order instead of newest-first.
+      sorted.sort((a, b) => {
+        const sa = (a.series ?? '').toLowerCase();
+        const sb = (b.series ?? '').toLowerCase();
+        if (sa !== sb) {
+          if (!sa) return 1;
+          if (!sb) return -1;
+          return sa < sb ? -1 : 1;
+        }
+        return (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0);
+      });
+    }
+    return sorted;
+  }, [notes, search, sortBy, typeFilter]);
+
   const download = (n: Note) => Linking.openURL(fileUrl(n, true)).catch(() => {});
   const progress = scrub ?? (duration > 0 ? Math.min(1, time / duration) : 0);
   const bars = useMemo(() => (current ? waveform(current._id) : []), [current]);
@@ -188,12 +251,75 @@ export default function VoiceNoteList({ notes, emptyText, hideMentor, ListHeader
   return (
     <View style={{ flex: 1 }}>
       <FlatList
-        data={notes ?? []}
+        data={visible}
         keyExtractor={(n) => n._id}
-        ListHeaderComponent={ListHeaderComponent}
+        ListHeaderComponent={
+          <>
+            {ListHeaderComponent}
+            {hideToolbar ? null : (
+              <>
+                {hideSearch ? null : (
+                  <View style={[styles.searchWrap, dark && styles.searchWrapDark]}>
+                    <Icon name="magnifying-glass" iconStyle="solid" size={14} color={colors.textFaint} />
+                    <TextInput
+                      style={[styles.searchInput, dark && styles.textLight]}
+                      placeholder="Search voices, mentors, series…"
+                      placeholderTextColor={colors.textFaint}
+                      value={search}
+                      onChangeText={setSearch}
+                      returnKeyType="search"
+                      autoCorrect={false}
+                    />
+                    {search.length > 0 ? (
+                      <TouchableOpacity onPress={() => setSearch('')} hitSlop={10}>
+                        <Icon name="xmark" iconStyle="solid" size={14} color={colors.textFaint} />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                )}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.sortRow}>
+                  {hideTypeFilter
+                    ? null
+                    : TYPE_FILTERS.map(([key, label]) => (
+                        <TouchableOpacity
+                          key={key}
+                          style={[styles.sortChip, typeFilter === key && styles.sortChipOn]}
+                          onPress={() => setTypeFilter(key)}>
+                          <Text style={[styles.sortChipText, typeFilter === key && styles.sortChipTextOn]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                  {hideTypeFilter ? null : <View style={styles.sortDivider} />}
+                  {SORTS.map(([key, label]) => (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.sortChip, sortBy === key && styles.sortChipOn]}
+                      onPress={() => setSortBy(key)}>
+                      <Text style={[styles.sortChipText, sortBy === key && styles.sortChipTextOn]}>
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </>
+        }
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: (current ? 230 : 20) + insets.bottom }}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={notes ? <Text style={styles.empty}>{emptyText}</Text> : null}
+        ListEmptyComponent={
+          notes ? (
+            <Text style={styles.empty}>
+              {search.trim() || typeFilter !== 'all'
+                ? `No voices match${search.trim() ? ` "${search.trim()}"` : ''}${typeFilter !== 'all' ? ` in ${TYPE_LABEL[typeFilter]}s` : ''}.`
+                : emptyText}
+            </Text>
+          ) : null
+        }
         renderItem={({ item }) => {
           const active = current?._id === item._id;
           return (
@@ -263,7 +389,7 @@ export default function VoiceNoteList({ notes, emptyText, hideMentor, ListHeader
                 {current.mentor || 'Mentor'}
               </Text>
             </View>
-            <TouchableOpacity onPress={() => setCurrent(null)} hitSlop={10} style={styles.iconBtn}>
+            <TouchableOpacity onPress={() => player.stop()} hitSlop={10} style={styles.iconBtn}>
               <Icon name="chevron-down" iconStyle="solid" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
@@ -345,17 +471,6 @@ export default function VoiceNoteList({ notes, emptyText, hideMentor, ListHeader
             </TouchableOpacity>
           </View>
 
-          <WebViewPlayer
-            ref={webRef}
-            key={current._id}
-            source={{ html: audioHtml(fileUrl(current), rate), baseUrl: 'https://localhost' }}
-            style={styles.hiddenWebview}
-            originWhitelist={['*']}
-            mediaPlaybackRequiresUserAction={false}
-            allowsInlineMediaPlayback
-            javaScriptEnabled
-            onMessage={onMessage}
-          />
         </View>
       ) : null}
     </View>
@@ -455,4 +570,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   hiddenWebview: { height: 1, width: 1, opacity: 0.01, position: 'absolute', top: 0, left: 0 },
+
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    height: 42,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  searchWrapDark: { backgroundColor: colors.surfaceDark, borderColor: colors.borderDark },
+  searchInput: { flex: 1, fontSize: 14, color: colors.text, padding: 0 },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  sortChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  sortChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sortChipText: { fontSize: 12, fontWeight: '700', color: colors.textMuted },
+  sortChipTextOn: { color: '#fff' },
+  sortDivider: { width: 1, height: 18, backgroundColor: colors.border, marginHorizontal: 2 },
 });

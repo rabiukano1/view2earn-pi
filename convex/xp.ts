@@ -78,13 +78,13 @@ async function calculateUserLevelProgress(ctx: QueryCtx | MutationCtx, userId: I
   // referrals). `user.xp` was only updated by a subset of flows (tasks, quiz,
   // academy, achievements, streaks), which left point-heavy users stuck at
   // STARTER. Take the max so both metrics count toward the level.
-  const ledger = await ctx.db
-    .query("pointsLedger")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+  const balances = await ctx.db
+    .query("economyBalances")
+    .withIndex("by_user_economy", (q) => q.eq("userId", userId))
     .collect();
   let lifetimeEarned = 0;
-  for (const row of ledger) {
-    if (row.delta > 0) lifetimeEarned += row.delta;
+  for (const row of balances) {
+    lifetimeEarned += row.lifetimeEarned ?? 0;
   }
   const xp = Math.max(user.xp ?? 0, lifetimeEarned);
 

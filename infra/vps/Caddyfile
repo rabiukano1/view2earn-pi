@@ -1,0 +1,18 @@
+# /etc/caddy/Caddyfile — TLS + reverse proxy for self-hosted Convex.
+# Caddy obtains and renews Let's Encrypt certificates automatically.
+# Both names must already point at this server in DNS before reloading.
+
+# Client API (WebSocket + HTTP). This is NEXT_PUBLIC_CONVEX_URL / CONVEX_URL.
+api.view2earn.org {
+	reverse_proxy localhost:3210
+}
+
+# HTTP actions: webhooks and file downloads. This is CONVEX_SITE_URL and the
+# JWT issuer (convex/auth.config.ts) — it must match CONVEX_SITE_ORIGIN exactly.
+site.view2earn.org {
+	reverse_proxy localhost:3211
+}
+
+# The dashboard is NOT exposed. Reach it over an SSH tunnel instead:
+#   ssh -L 6791:127.0.0.1:6791 deploy@<SERVER_IP>
+# then open http://127.0.0.1:6791

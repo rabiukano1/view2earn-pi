@@ -121,56 +121,6 @@ function HomeScreenLevelCard({ onPress }: { onPress: () => void }) {
   );
 }
 
-function HomeScreenLiveFootballCard({ onPress }: { onPress: () => void }) {
-  const dark = useColorScheme() === 'dark';
-  const channels = useQuery(api.iptv.list) ?? [];
-  const football = channels.filter((c) => c.type === 'football');
-  const youtube = channels.filter((c) => c.type === 'youtube');
-  const other = channels.filter((c) => c.type === 'other');
-
-  return (
-    <TouchableOpacity
-      style={[styles.footballBanner, dark && styles.footballBannerDark]}
-      onPress={onPress}
-      activeOpacity={0.88}>
-      <View style={styles.footballBannerTop}>
-        <View style={styles.liveBadgeRow}>
-          <View style={styles.livePulseDot} />
-          <Text style={styles.footballBannerBadge}>WATCH{channels.length ? ` · ${channels.length} STREAMS` : ''}</Text>
-        </View>
-        <View style={styles.hdChip}>
-          <Text style={styles.hdChipText}>1080p HD</Text>
-        </View>
-      </View>
-
-      <View style={styles.footballMainRow}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.footballBannerTitle}>⚽ Football · 🎬 YouTube · 📺 Live</Text>
-          <Text style={styles.footballBannerSub}>
-            Watch matches, videos and live streams free with strong signal
-          </Text>
-        </View>
-
-        <View style={styles.playActionBtn}>
-          <Icon name="play" iconStyle="solid" size={14} color="#FFFFFF" />
-          <Text style={styles.playActionText}>Watch</Text>
-        </View>
-      </View>
-
-      <View style={styles.footballFooterChips}>
-        <View style={styles.footballChipItem}>
-          <Text style={styles.footballChipText}>⚽ {football.length} Football</Text>
-        </View>
-        <View style={styles.footballChipItem}>
-          <Text style={styles.footballChipText}>🎬 {youtube.length} YouTube</Text>
-        </View>
-        <View style={styles.footballChipItem}>
-          <Text style={styles.footballChipText}>📺 {other.length} Live</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -201,6 +151,7 @@ export default function HomeScreen() {
         ...(flags['feature:quiz'] !== false ? [{ icon: 'brain', label: t('dailyQuiz'), desc: t('dailyQuizDesc'), tint: '#6366F1', go: () => stackNav.navigate('Quiz', userId ? { userId, ecosystem: 'SIDRA' } : undefined) }] : []),
         ...(flags['feature:spin'] !== false ? [{ icon: 'arrows-spin', label: t('spinAndWin'), desc: t('spinDesc'), tint: '#EC4899', go: () => stackNav.navigate('Spin', userId ? { userId } : undefined) }] : []),
         ...(flags['feature:surveys'] !== false ? [{ icon: 'clipboard-list', label: t('surveys'), desc: t('surveysDesc'), tint: '#F97316', go: () => stackNav.navigate('Surveys', userId ? { userId } : undefined) }] : []),
+        ...(flags['feature:watch'] !== false ? [{ icon: 'tv', label: 'Watch', desc: 'Short tutorials & mentors', tint: '#10B981', go: () => stackNav.navigate('WatchHub') }] : []),
       ],
     },
     {
@@ -241,11 +192,8 @@ export default function HomeScreen() {
               <HomeScreenActivityHubCard userId={userId} onPress={() => stackNav.navigate('Achievements')} />
               <StreakCard userId={userId} />
               <DailyBox userId={userId} />
-              <HomeScreenLiveFootballCard onPress={() => stackNav.navigate('WatchHub')} />
             </>
-          ) : (
-            <HomeScreenLiveFootballCard onPress={() => stackNav.navigate('WatchHub')} />
-          )}
+          ) : null}
 
           {/* Categorized Explore Sections */}
           <Text style={[styles.sectionTitle, dark && styles.textLight, { marginTop: spacing.md }]}>Explore Platform</Text>

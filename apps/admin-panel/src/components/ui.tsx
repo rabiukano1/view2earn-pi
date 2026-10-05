@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 
 export function Modal({
   title,
@@ -76,6 +76,33 @@ export function PageHeader({
       {action}
     </div>
   );
+}
+
+/** Client-side paging for an already-loaded list. Render `pager` under the table; call `reset` when filters change. */
+export function usePaged<T>(items: T[] | undefined, initialSize = 15) {
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState(initialSize);
+  const total = items?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  const current = Math.min(page, pageCount);
+  const start = (current - 1) * size;
+  const pager = (
+    <div style={{ padding: "12px 20px", display: "flex", gap: 12, alignItems: "center", justifyContent: "flex-end", borderTop: "1px solid var(--border)", fontSize: 13 }}>
+      <span style={{ color: "var(--text-3)" }}>{total ? `${start + 1}–${Math.min(start + size, total)} of ${total}` : "0 of 0"}</span>
+      <select
+        aria-label="Rows per page"
+        value={size}
+        onChange={(e) => { setSize(Number(e.target.value)); setPage(1); }}
+        style={{ padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)" }}
+      >
+        {[10, 15, 25, 50].map((n) => <option key={n} value={n}>{n} / page</option>)}
+      </select>
+      <button className="btn btn-ghost btn-sm" disabled={current <= 1} onClick={() => setPage(current - 1)}>‹ Prev</button>
+      <span>Page {current} of {pageCount}</span>
+      <button className="btn btn-ghost btn-sm" disabled={current >= pageCount} onClick={() => setPage(current + 1)}>Next ›</button>
+    </div>
+  );
+  return { rows: items?.slice(start, start + size), start, pager, reset: () => setPage(1) };
 }
 
 export function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {

@@ -157,8 +157,12 @@ dependencies {
     // the version react-native-google-mobile-ads@16.0.3 declares. Newer adapters
     // (4.17.0.0+) pull play-services-ads 25.x, which needs rn-gma >= 17 — bump
     // both together or not at all.
-    // The Unity Ads SDK itself arrives transitively.
+    // The Google adapter does NOT depend on the Unity Ads SDK (its POM lists only
+    // play-services-ads, annotation and kotlin-stdlib), so the SDK must be declared
+    // explicitly or the adapter loads but can never fill. Keep these two in lockstep:
+    // adapter 4.16.6.0 pairs with Unity Ads SDK 4.16.6.
     implementation("com.google.ads.mediation:unity:4.16.6.0")
+    implementation("com.unity3d.ads:unity-ads:4.16.6")
 
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")

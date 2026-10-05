@@ -35,6 +35,42 @@ export async function lastBalance(
   return last?.balanceAfter ?? 0;
 }
 
+// The ONLY way to add a pointsLedger row. Also updates the economyBalances
+// cache in the same transaction, so the two can never disagree.
+export async function insertLedgerRow(
+  ctx: MutationCtx,
+  row: {
+    userId: Id<"users">;
+    economy: Economy;
+    delta: number;
+    reason: string;
+    refId?: string;
+    balanceAfter: number;
+  },
+): Promise<void> {
+  await ctx.db.insert("pointsLedger", row);
+  const existing = await ctx.db
+    .query("economyBalances")
+    .withIndex("by_user_economy", (q) =>
+      q.eq("userId", row.userId).eq("economy", row.economy),
+    )
+    .unique();
+  const earned = row.delta > 0 ? row.delta : 0;
+  if (existing) {
+    await ctx.db.patch(existing._id, {
+      balance: row.balanceAfter,
+      lifetimeEarned: (existing.lifetimeEarned ?? 0) + earned,
+    });
+  } else {
+    await ctx.db.insert("economyBalances", {
+      userId: row.userId,
+      economy: row.economy,
+      balance: row.balanceAfter,
+      lifetimeEarned: earned,
+    });
+  }
+}
+
 // Append a ledger row for (userId, economy). Throws if the resulting balance
 // would go negative. Returns the new balanceAfter.
 export async function appendLedger(
@@ -49,14 +85,7 @@ export async function appendLedger(
   if (balanceAfter < 0) {
     throw new Error(`Insufficient ${economy} balance`);
   }
-  await ctx.db.insert("pointsLedger", {
-    userId,
-    economy,
-    delta,
-    reason,
-    refId,
-    balanceAfter,
-  });
+  await insertLedgerRow(ctx, { userId, economy, delta, reason, refId, balanceAfter });
   await bumpPointsTotal(ctx, delta);
   return balanceAfter;
 }

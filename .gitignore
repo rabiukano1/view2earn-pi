@@ -108,3 +108,22 @@ app-video/
 apps/pi-app/.next-tg/
 apps/tg-app/out/
 .env.live
+
+# Convex data snapshots (contain user data)
+convex-export-*.zip
+.env.convex-backup
+
+# Convex deployment targets (secrets)
+.env.cloud
+.env.selfhosted
+.env.localdev
+.env.local.bak
+.env.test
+cloud-env-vars.txt
+backups/
+
+# Server-side secrets (created on the VPS, never here)
+infra/vps/.env
+infra/vps/backup.env
+convex-export-full-*.zip
+.env.development.local

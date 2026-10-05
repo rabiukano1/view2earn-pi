@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { requireUser } from "./lib/guards";
+import { accountKeyOf } from "@view2earn/core";
 
 function normalizeUrl(url: string): string {
   return url
@@ -41,6 +42,12 @@ export const list = query({
       .withIndex("by_user_url", (q) => q.eq("userId", userId))
       .collect();
     const doneUrls = new Set(completed.map((c) => c.normalizedUrl));
+    // Lifetime de-duplication by ACCOUNT, not URL: once a user has completed a
+    // task for @someone, that account never appears for them again, no matter
+    // which URL form it is re-listed under (admin or self-listed).
+    const doneAccounts = new Set(
+      completed.map((c) => c.accountKey).filter((k): k is string => !!k),
+    );
 
     const mine = await ctx.db
       .query("verifications")
@@ -66,9 +73,14 @@ export const list = query({
       .filter((t) => {
         if (t.expiresAt <= now) return false;
         if (t.creatorUserId === userId) return false;
-        // A task is done if every one of its target URLs was already completed.
+        // Done if every target is already completed — matched by account key
+        // first, falling back to the URL for rows written before account keys.
         const urls = targetUrlsOf(t);
-        if (urls.length > 0 && urls.every((u) => doneUrls.has(normalizeUrl(u)))) {
+        const isDone = (u: string) => {
+          const key = accountKeyOf(t.platform, u);
+          return (key !== null && doneAccounts.has(key)) || doneUrls.has(normalizeUrl(u));
+        };
+        if (urls.length > 0 && urls.every(isDone)) {
           return false;
         }
         if (excludedTaskIds.has(t._id)) return false;

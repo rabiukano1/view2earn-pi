@@ -12,8 +12,12 @@ export const ADMOB_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/5224354917';
 // Mediation (Unity, ironSource, …) NEVER serves on Google's test ad units —
 // those only ever return Google's own demo ads. To verify Unity actually fills
 // you must request the LIVE unit from a device listed in ADMOB_TEST_DEVICE_IDS.
-// Flip this to true in a debug build to do that, then flip it back to false.
-export const FORCE_LIVE_ADS_IN_DEV = false;
+// Flip this to true in a debug build to do that. It is DEV-ONLY: release builds
+// always use live units via the !__DEV__ term below, so leaving this true cannot
+// affect production. The only cost of leaving it on is that debug builds request
+// real ads, so keep every dev device registered in ADMOB_TEST_DEVICE_IDS or in
+// AdMob's Test devices list — clicking live ads otherwise is invalid traffic.
+export const FORCE_LIVE_ADS_IN_DEV = true;
 
 /** True when ad requests should go to the real (revenue-earning) ad units. */
 export function shouldUseLiveAdUnits(): boolean {

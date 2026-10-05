@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, internalMutation } from "./_generated/server";
 import { requireUserAndEconomy } from "./lib/guards";
+import { insertLedgerRow } from "./lib/ledger";
 
 // Points ledger, economy-aware (ONE user, TWO economies).
 //
@@ -104,7 +105,7 @@ export const creditHelper = internalMutation({
       .first();
     const balanceAfter = (last?.balanceAfter ?? 0) + args.delta;
     if (balanceAfter < 0) throw new Error("Insufficient points");
-    await ctx.db.insert("pointsLedger", {
+    await insertLedgerRow(ctx, {
       userId: args.userId,
       economy: args.economy,
       delta: args.delta,

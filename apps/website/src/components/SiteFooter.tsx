@@ -11,9 +11,9 @@ export function SiteFooter() {
               <span>View2Earn</span>
             </div>
             <p className="footer-desc">
-              A social-engagement and rewards platform on Pi Network and Sidra
-              Chain. Earn points for following, liking and joining — then redeem
-              them for digital rewards and perks.
+              A verified social-engagement and rewards platform. Earn points for
+              following, joining and completing tasks — then redeem them for
+              mobile airtime and data bundles.
             </p>
           </div>
           <div className="footer-col">
@@ -28,7 +28,8 @@ export function SiteFooter() {
               iOS App Store <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "999px", background: "rgba(245, 158, 11, 0.15)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.3)" }}>Soon</span>
             </span>
             <Link href="/#features">Features</Link>
-            <Link href="/#roadmap">What&apos;s next</Link>
+            <Link href="/roadmap">Roadmap</Link>
+            <Link href="/whitepaper">Whitepaper</Link>
             <Link href="/#how-it-works">How it works</Link>
             <Link href="/#faq">FAQ</Link>
           </div>
@@ -56,7 +57,7 @@ export function SiteFooter() {
         </div>
         <div className="footer-bottom">
           <span>© {new Date().getFullYear()} View2Earn. All rights reserved.</span>
-          <span>Pi Network · Sidra Chain · Rewards for your engagement</span>
+          <span>Verified engagement · Rewards that reach you</span>
         </div>
       </div>
     </footer>

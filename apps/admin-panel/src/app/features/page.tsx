@@ -15,6 +15,15 @@ const FEATURE_KEYS = [
   { key: "feature:promote", label: "Promote Hub", app: "Mobile App", place: "Home Screen (Top Action)" },
   { key: "feature:academy", label: "Academy (Learn)", app: "Mobile App", place: "Home Screen" },
   { key: "feature:donate", label: "Donate Pi", app: "Mobile App", place: "Wallet Tab / Balances" },
+  // Watch Hub. "feature:watch" hides the whole hub (and its Home card); the
+  // rest hide individual rows inside it.
+  { key: "feature:watch", label: "Watch Hub (all)", app: "Mobile App", place: "Home Screen card + Watch screen" },
+  { key: "feature:watch.football", label: "— Live Football", app: "Mobile App", place: "Watch Hub" },
+  { key: "feature:watch.youtube", label: "— YouTube Videos", app: "Mobile App", place: "Watch Hub" },
+  { key: "feature:watch.other", label: "— Live Streams", app: "Mobile App", place: "Watch Hub" },
+  { key: "feature:watch.movies", label: "— Movies", app: "Mobile App", place: "Watch Hub" },
+  { key: "feature:watch.videos", label: "— Community Videos", app: "Mobile App", place: "Watch Hub" },
+  { key: "feature:watch.voice", label: "— Mentor Voice Notes", app: "Mobile App", place: "Watch Hub" },
 ];
 
 export default function FeaturesPage() {

@@ -9,7 +9,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { enforceRateLimit } from "./lib/ratelimit";
 import { requireUser, requireAuth, requireUserAndSurface } from "./lib/guards";
-import { isImpossibleSpeed } from "@view2earn/core";
+import { accountKeyOf, isImpossibleSpeed } from "@view2earn/core";
 import { recomputeUserScore } from "./fraud";
 import { targetUrlsOf } from "./tasks";
 import { economyOfUser } from "./lib/ledger";
@@ -511,6 +511,7 @@ export const releaseImmediately = internalMutation({
     if (task.targetUrl || (Array.isArray(task.steps) && task.steps.length > 0)) {
       for (const url of targetUrlsOf(task)) {
         await ctx.db.insert("completedTargets", {
+          accountKey: accountKeyOf(task.platform, url) ?? undefined,
           userId: verification.userId,
           normalizedUrl: normalizeUrl(url),
         });
@@ -591,6 +592,7 @@ export const release = internalMutation({
     if (task.targetUrl || (Array.isArray(task.steps) && task.steps.length > 0)) {
       for (const url of targetUrlsOf(task)) {
         await ctx.db.insert("completedTargets", {
+          accountKey: accountKeyOf(task.platform, url) ?? undefined,
           userId: verification.userId,
           normalizedUrl: normalizeUrl(url),
         });

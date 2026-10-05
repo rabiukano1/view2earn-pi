@@ -10,7 +10,7 @@ export default function TermsPage() {
     <div className="legal-page py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-slate-200">
       <div className="container">
         <div className="text-center mb-10 pb-6 border-b border-slate-800">
-          <span className="inline-block px-3 py-1 bg-violet-500/10 text-violet-400 text-xs font-semibold uppercase tracking-wider rounded-full mb-3">
+          <span className="kicker">
             Official Agreement
           </span>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Terms &amp; Conditions</h1>
@@ -507,7 +507,7 @@ export default function TermsPage() {
 
             <h3 className="text-md font-semibold text-white mt-4 mb-2">8.6 Reporting Infringement</h3>
             <p className="text-slate-300 text-sm leading-relaxed">
-              If you believe that content available through the Service infringes your intellectual property rights, please notify us through our official support channels (<span className="text-violet-400 font-medium">ip@view2earn.org</span>). Your notice should include sufficient information to identify the alleged infringement and establish your ownership or authorization.
+              If you believe that content available through the Service infringes your intellectual property rights, please notify us through our official support channels (<a href="mailto:ip@view2earn.org">ip@view2earn.org</a>). Your notice should include sufficient information to identify the alleged infringement and establish your ownership or authorization.
             </p>
           </section>
 
@@ -777,26 +777,42 @@ export default function TermsPage() {
             <p className="text-slate-300 text-sm leading-relaxed mb-4">
               View2Earn welcomes your questions, feedback, and legal inquiries. If you need assistance or wish to contact us regarding the Service or these Terms, please use the appropriate communication channel below:
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">General Support</span>
-                <a href="mailto:support@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">support@view2earn.org</a>
+            <div className="contact-grid">
+              <div className="contact-card">
+                <span className="contact-label">General Support</span>
+                <a href="mailto:support@view2earn.org">support@view2earn.org</a>
               </div>
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">Business Partnerships</span>
-                <a href="mailto:partners@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">partners@view2earn.org</a>
+              <div className="contact-card">
+                <span className="contact-label">Business Partnerships</span>
+                <a href="mailto:partners@view2earn.org">partners@view2earn.org</a>
               </div>
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">Legal Notices</span>
-                <a href="mailto:legal@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">legal@view2earn.org</a>
+              <div className="contact-card">
+                <span className="contact-label">Legal Notices</span>
+                <a href="mailto:legal@view2earn.org">legal@view2earn.org</a>
               </div>
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">Intellectual Property</span>
-                <a href="mailto:ip@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">ip@view2earn.org</a>
+              <div className="contact-card">
+                <span className="contact-label">Intellectual Property</span>
+                <a href="mailto:ip@view2earn.org">ip@view2earn.org</a>
               </div>
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">Security Reports</span>
-                <a href="mailto:security@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">security@view2earn.org</a>
+              <div className="contact-card">
+                <span className="contact-label">Security Reports</span>
+                <a href="mailto:security@view2earn.org">security@view2earn.org</a>
+              </div>
+              <div className="contact-card">
+                <span className="contact-label">Privacy &amp; Data Requests</span>
+                <a href="mailto:privacy@view2earn.org">privacy@view2earn.org</a>
+              </div>
+              <div className="contact-card">
+                <span className="contact-label">Fraud Reports</span>
+                <a href="mailto:fraud@view2earn.org">fraud@view2earn.org</a>
+              </div>
+              <div className="contact-card">
+                <span className="contact-label">Rewards &amp; Redemptions</span>
+                <a href="mailto:rewards@view2earn.org">rewards@view2earn.org</a>
+              </div>
+              <div className="contact-card">
+                <span className="contact-label">Suspension Appeals</span>
+                <a href="mailto:appeals@view2earn.org">appeals@view2earn.org</a>
               </div>
             </div>
             <p className="text-slate-300 text-sm leading-relaxed mt-4">

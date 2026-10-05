@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireAdmin } from "./admin";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 // Telegram bots can only DOWNLOAD files up to 20 MB (getFile), and playback
 // goes back through the bot — so that ceiling, not the 50 MB send limit, is
@@ -306,5 +307,126 @@ export const submitVideoLink = mutation({
     });
 
     return { videoId, youtubeId };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// User reporting (UGC moderation)
+// ---------------------------------------------------------------------------
+
+export const REPORT_REASONS = [
+  "sexual",
+  "violence",
+  "hate",
+  "harassment",
+  "misleading",
+  "copyright",
+  "spam",
+  "other",
+] as const;
+
+/** A viewer flags a video. One report per user per video. */
+export const reportVideo = mutation({
+  args: {
+    videoId: v.id("videos"),
+    reason: v.string(),
+    details: v.optional(v.string()),
+  },
+  handler: async (ctx, { videoId, reason, details }) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not signed in");
+    if (!(REPORT_REASONS as readonly string[]).includes(reason)) {
+      throw new Error("Pick a reason");
+    }
+    const video = await ctx.db.get(videoId);
+    if (!video) throw new Error("Video not found");
+
+    const existing = await ctx.db
+      .query("contentReports")
+      .withIndex("by_reporter_video", (q) =>
+        q.eq("reporterId", userId).eq("videoId", videoId),
+      )
+      .first();
+    if (existing) return { ok: true, alreadyReported: true };
+
+    await ctx.db.insert("contentReports", {
+      reporterId: userId,
+      videoId,
+      reason,
+      details: details?.trim().slice(0, 1000) || undefined,
+      status: "open",
+      createdAt: Date.now(),
+    });
+
+    // Auto-hide once several distinct users flag the same video, so bad
+    // content stops being served before a human gets to it.
+    const all = await ctx.db
+      .query("contentReports")
+      .withIndex("by_video", (q) => q.eq("videoId", videoId))
+      .collect();
+    if (all.length >= 3 && video.status === "ACTIVE") {
+      await ctx.db.patch(videoId, { status: "BLOCKED" });
+    }
+    return { ok: true, alreadyReported: false };
+  },
+});
+
+/** Admin: open reports, newest first, with the video they point at. */
+export const listReports = query({
+  args: { token: v.string(), status: v.optional(v.string()) },
+  handler: async (ctx, { token, status }) => {
+    requireAdmin(token);
+    const rows = await ctx.db
+      .query("contentReports")
+      .withIndex("by_status", (q) => q.eq("status", status ?? "open"))
+      .order("desc")
+      .take(200);
+
+    return Promise.all(
+      rows.map(async (r) => {
+        const video = await ctx.db.get(r.videoId);
+        const reporter = await ctx.db.get(r.reporterId);
+        return {
+          _id: r._id,
+          videoId: r.videoId,
+          reason: r.reason,
+          details: r.details,
+          status: r.status,
+          createdAt: r.createdAt,
+          reporter: reporter?.username ?? "unknown",
+          videoTitle: video?.title ?? "(deleted)",
+          videoStatus: video?.status ?? "deleted",
+        };
+      }),
+    );
+  },
+});
+
+/** Admin: close a report, optionally taking the video down at the same time. */
+export const resolveReport = mutation({
+  args: {
+    token: v.string(),
+    reportId: v.id("contentReports"),
+    action: v.union(v.literal("dismiss"), v.literal("remove")),
+  },
+  handler: async (ctx, { token, reportId, action }) => {
+    requireAdmin(token);
+    const report = await ctx.db.get(reportId);
+    if (!report) throw new Error("Report not found");
+
+    if (action === "remove") {
+      const video = await ctx.db.get(report.videoId);
+      if (video) await ctx.db.patch(report.videoId, { status: "BLOCKED" });
+      // Every report on that video is settled by the takedown.
+      for (const r of await ctx.db
+        .query("contentReports")
+        .withIndex("by_video", (q) => q.eq("videoId", report.videoId))
+        .collect()) {
+        await ctx.db.patch(r._id, { status: "reviewed" });
+      }
+    } else {
+      await ctx.db.patch(reportId, { status: "dismissed" });
+    }
+    return { ok: true };
   },
 });

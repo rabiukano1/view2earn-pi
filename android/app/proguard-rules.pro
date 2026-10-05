@@ -28,3 +28,19 @@
 -keep class com.google.android.gms.ads.** { *; }
 -dontwarn com.google.android.gms.ads.**
 
+# ---------------------------------------------------------------- AdMob mediation
+# AdMob instantiates mediation adapters BY REFLECTION from a class-name string it
+# receives from the server, so R8 cannot see these as reachable and strips or
+# renames them. The Unity adapter AAR ships no consumer rules of its own, so
+# without these keeps Unity works in a debug build and silently never fills in
+# release — verified: unity-4.16.6.0.aar contains no proguard.txt.
+-keep class com.google.ads.mediation.unity.** { *; }
+-keep class com.unity3d.ads.** { *; }
+-keep class com.unity3d.services.** { *; }
+-dontwarn com.google.ads.mediation.unity.**
+-dontwarn com.unity3d.ads.**
+-dontwarn com.unity3d.services.**
+
+# Adapter entry points the Google Mobile Ads SDK looks up by name.
+-keep class * implements com.google.android.gms.ads.mediation.MediationAdapter { *; }
+-keep class * extends com.google.android.gms.ads.mediation.Adapter { *; }

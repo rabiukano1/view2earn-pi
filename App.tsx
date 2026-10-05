@@ -94,6 +94,8 @@ function Gate() {
 }
 
 import { LanguageProvider } from './src/i18n/LanguageContext';
+import { VoicePlayerProvider } from './src/audio/VoicePlayerContext';
+import { navigationRef } from './src/navigation/navigationRef';
 
 import type { LinkingOptions } from '@react-navigation/native';
 import type { RootStackParamList } from './src/navigation/types';
@@ -145,10 +147,13 @@ function App() {
     <ConvexAuthProvider client={convex} storage={tokenStorage}>
       <SafeAreaProvider>
         <LanguageProvider>
-          <NavigationContainer linking={linking}>
+          {/* Above the navigator: voice playback must outlive any screen. */}
+          <VoicePlayerProvider>
+          <NavigationContainer ref={navigationRef} linking={linking}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             <Gate />
           </NavigationContainer>
+          </VoicePlayerProvider>
         </LanguageProvider>
       </SafeAreaProvider>
     </ConvexAuthProvider>

@@ -12,7 +12,7 @@ const FEATURES = [
   },
   {
     title: "Like, share & comment",
-    desc: "Engagement is currency. Like, share and comment on creator posts — every social action on the task feed earns points.",
+    desc: "Multi-step tasks bundle follows, likes, comments and shares into one job — complete every step, submit one proof.",
     icon: "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z",
   },
   {
@@ -22,7 +22,7 @@ const FEATURES = [
   },
   {
     title: "Redeem reward points",
-    desc: "Redeem your points for available in-app perks, partner offers, and digital rewards across supported ecosystems.",
+    desc: "Redeem your points for mobile airtime and data bundles. Delivery is automatic, and points come back if it fails.",
     icon: "M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4 M4 6v12c0 1.1.9 2 2 2h14v-4 M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z",
   },
   {
@@ -40,7 +40,7 @@ const FEATURES = [
 const STEPS = [
   {
     title: "Sign in",
-    desc: "Sign in with your Pi or Sidra account. Your ecosystem is detected automatically.",
+    desc: "Sign in with your email, a one-time email code, or Telegram. No wallet credentials, ever.",
   },
   {
     title: "Engage on social",
@@ -48,7 +48,7 @@ const STEPS = [
   },
   {
     title: "Redeem points",
-    desc: "Redeem verified points for available platform rewards and digital vouchers right from your wallet.",
+    desc: "Redeem verified points for mobile airtime and data bundles, delivered automatically.",
   },
 ];
 
@@ -60,75 +60,78 @@ const TRUST = [
   { label: "Join Channels", icon: "M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z" },
   { label: "Telegram", icon: "M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z" },
   { label: "Facebook", icon: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" },
-  { label: "Pi Network", icon: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 6v6l4 2" },
-  { label: "Sidra Chain", icon: "M8 3v18 M8 3l8 5-8 5" },
+  { label: "TikTok", icon: "M9 12a4 4 0 1 0 4 4V4c.5 2.5 2.5 4 5 4" },
+  { label: "Instagram", icon: "M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M3 7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z M17.5 6.5h.01" },
 ];
 
+// The six items we are actually building. Mirrors the "Next" stage of
+// /roadmap — keep the two in step. `gated` means it waits on an outside
+// approval, so we publish no date for it.
 const ROADMAP = [
   {
-    title: "AI task matching",
-    desc: "A smart feed that learns what you actually do and surfaces the highest-value engagements for you.",
-    icon: "M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3z",
+    title: "Pi Network sign-in & payments",
+    desc: "Sign in with Pi and pay with Pi inside the Pi Browser app.",
+    icon: "M4 7h16 M8 7v12 M16 7v12",
+    tag: "Gated",
+    tone: "gated",
+  },
+  {
+    title: "Google Play release",
+    desc: "A full Play Store listing, once consent gating and advertising configuration are finalised.",
+    icon: "M5 3l14 9-14 9V3z",
     tag: "In development",
     tone: "ship",
   },
   {
-    title: "Team quests & contests",
-    desc: "Form squads, compete in weekly contests and split bonus pools with the people you earn with.",
-    icon: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
-    tag: "Planned",
-    tone: "plan",
+    title: "iOS app",
+    desc: "An App Store build, pending the iOS tracking permission flow Apple requires before we can submit.",
+    icon: "M12 7c-2 0-4 1.5-4 5s2 5 4 5 4-1.5 4-5-2-5-4-5z M12 7V3",
+    tag: "Gated",
+    tone: "gated",
   },
   {
-    title: "Creator dashboard",
-    desc: "Turn your own page or channel into a featured engagement magnet with transparent campaign analytics.",
-    icon: "M18 20V10 M12 20V4 M6 20v-6",
-    tag: "Planned",
-    tone: "plan",
+    title: "More surveys",
+    desc: "A wider survey inventory so there is always something to earn from. Waiting on a provider account.",
+    icon: "M4 20V10 M10 20V4 M16 20v-7 M22 20H2",
+    tag: "Gated",
+    tone: "gated",
   },
   {
-    title: "Faster redemptions",
-    desc: "Streamlined point redemptions and partner rewards with lower claim thresholds.",
-    icon: "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
-    tag: "Planned",
-    tone: "plan",
+    title: "Phone & WhatsApp sign-in",
+    desc: "Two more ways to get in, using a one-time code sent to your phone.",
+    icon: "M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.2 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.11L8.1 9.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.92z",
+    tag: "Gated",
+    tone: "gated",
   },
   {
-    title: "Streak multipliers",
-    desc: "Combo multipliers that boost every point you earn when your daily engagement streak keeps growing.",
-    icon: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
-    tag: "Planned",
-    tone: "plan",
-  },
-  {
-    title: "Leaderboards & badges",
-    desc: "Weekly leaderboards and collectible achievement badges for your biggest engagement milestones.",
-    icon: "M18 2H6v7a6 6 0 0 0 12 0V2z M4 22h16 M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22 M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22",
-    tag: "Planned",
-    tone: "plan",
+    title: "Bigger quiz banks",
+    desc: "Continuously refreshed question pools, so the daily quiz stops repeating itself.",
+    icon: "M9 3a3 3 0 0 0-3 3v1a3 3 0 0 0 0 6v1a3 3 0 0 0 3 3h1V3H9z M15 3a3 3 0 0 1 3 3v1a3 3 0 0 1 0 6v1a3 3 0 0 1-3 3h-1V3h1z",
+    tag: "In development",
+    tone: "ship",
   },
 ];
 
 const FAQS: [string, string][] = [
   [
     "How do I earn points?",
-    "Complete social engagements — follow pages, like and share posts, join channels — answer daily quizzes and build your check-in streak. Every action is verified and credited to your app wallet automatically.",
+    "Complete social engagements — follow pages, join channels, finish multi-step tasks — answer daily quizzes, take surveys and build your check-in streak. Every action is verified before points are credited; most results are immediate, and anything inconclusive goes to human review.",
   ],
   [
     "How do reward points work?",
-    "Points accumulated from verified activities can be redeemed for eligible digital rewards, vouchers, and ecosystem perks as made available by verified partners.",
+    "Points from verified activities are redeemed for mobile airtime and data bundles, delivered automatically through our fulfilment partner. Points are an in-app reward with no cash value, and if a delivery fails your points are returned automatically.",
   ],
   [
-    "What is the difference between Pi and Sidra?",
-    "View2Earn runs two separate, fully isolated economies — one on Pi Network and one on Sidra Chain. Your ecosystem is chosen at sign-in and your points stay within it.",
+    "What about Pi Network and Sidra Chain?",
+    "View2Earn is built for two fully separate economies that never mix. Pi Network sign-in and payments are in development, and Sidra Chain support is planned — see our roadmap for where each one stands today.",
   ],
   [
     "Is my personal data safe?",
-    "We never store user secrets or seed phrases. Logins use the Pi SDK and Sidra's secure auth, and our backend enforces strict anti-fraud rules on every engagement.",
+    "We never ask for a seed phrase, private key or social media password. Sign-in uses email, a one-time email code or Telegram, and our backend enforces anti-fraud checks on every engagement. Proof screenshots are deleted automatically after 14 days.",
   ],
   [
     "How do redemptions work?",
-    "Eligible rewards and digital vouchers are processed through integrated redemption providers. Simply follow the redemption steps inside the app wallet.",
+    "Choose a bundle in the app, confirm, and the top-up is requested from our fulfilment partner straight away. You can watch the status change in your redemption history, and a failed delivery refunds your points automatically.",
   ],
   [
     "I'm an advertiser or creator — can I join?",
@@ -228,7 +231,7 @@ export default function HomePage() {
             <div>
               <div className="hero-badge">
                 <span className="dot" />
-                Now live on Pi Network & Sidra Chain
+                Now live on Android
               </div>
               <h1>
                 Earn points for <span className="grad">verified engagements</span>
@@ -245,7 +248,7 @@ export default function HomePage() {
                 </Link>
               </div>
               <p className="hero-note">
-                Available on Google Play & Android APK · iOS coming soon · Pi &amp; Sidra Chain
+                Available on Google Play & Android APK · iOS coming soon
               </p>
             </div>
             <PhoneMockup />
@@ -261,18 +264,18 @@ export default function HomePage() {
         <div className="container">
           <Reveal className="section-head">
             <span className="kicker">Live platform</span>
-            <h2 className="section-title">Engagements are earning points right now</h2>
+            <h2 className="section-title">What&rsquo;s live today</h2>
             <p className="section-sub">
-              Real activity across the platform — updated as members complete
-              engagements and redeem available rewards.
+              The platform as it stands right now — not a projection. See the{" "}
+              <Link href="/roadmap">roadmap</Link> for what is still being built.
             </p>
           </Reveal>
           <div className="stats-band">
             {[
-              { to: 1200000, prefix: "", suffix: "+", label: "Points earned" },
-              { to: 34000, prefix: "", suffix: "+", label: "Engagements completed" },
-              { to: 8700, prefix: "", suffix: "+", label: "Rewards redeemed" },
-              { to: 12600, prefix: "", suffix: "+", label: "Active members" },
+              { to: 4, prefix: "", suffix: "", label: "Social platforms supported" },
+              { to: 5, prefix: "", suffix: "", label: "Ways to earn points" },
+              { to: 3, prefix: "", suffix: "", label: "Ways to sign in" },
+              { to: 14, prefix: "", suffix: " days", label: "Until proof screenshots are deleted" },
             ].map((s, i) => (
               <Reveal key={s.label} delay={i * 90}>
                 <div className="stat-card">
@@ -322,10 +325,10 @@ export default function HomePage() {
         <div className="container">
           <Reveal className="section-head">
             <span className="kicker">Roadmap</span>
-            <h2 className="section-title">Modern features, coming next</h2>
+            <h2 className="section-title">What we’re building next</h2>
             <p className="section-sub">
-              We're building a smarter way to earn. Here's what's on the way —
-              built on the social engagement engine you already use.
+              What we are building now, on top of the engagement engine you already use. Items marked{" "}
+              <strong>Gated</strong> wait on an outside approval, so we publish no date for them.
             </p>
           </Reveal>
           <div style={{ height: 36 }} />
@@ -346,6 +349,11 @@ export default function HomePage() {
                 </div>
               </Reveal>
             ))}
+          </div>
+          <div className="cta-actions">
+            <Link href="/roadmap" className="btn btn-secondary btn-lg">
+              See the full roadmap
+            </Link>
           </div>
         </div>
       </section>

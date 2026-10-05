@@ -1,6 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  Modal,
+  Pressable,
   ScrollView,
+  TextInput,
   Share,
   StyleSheet,
   Text,
@@ -10,14 +14,14 @@ import {
 } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { api } from '../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
-import { colors, radius, shadow } from '../theme';
+import { colors, radius, shadow, spacing } from '../theme';
 import type { RootStackParamList, RootTabParamList } from '../navigation/types';
 import PageHeader from '../components/PageHeader';
 import Icon from '../components/Icon';
@@ -33,6 +37,56 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { userId } = useAuth();
   const nav = useNavigation<Nav>();
+  const account = useQuery(api.accountLinkDb.myAccount);
+  const updateProfile = useMutation(api.accountLinkDb.updateProfile);
+  const linkPassword = useAction(api.accountLink.linkPassword);
+
+  // Profile editor. Telegram/Pi users arrive with no name, email or password,
+  // so this is how they complete the account and gain a second way back in.
+  const [editOpen, setEditOpen] = useState(false);
+  const [fName, setFName] = useState('');
+  const [fEmail, setFEmail] = useState('');
+  const [fPhone, setFPhone] = useState('');
+  const [fPassword, setFPassword] = useState('');
+  const [fPassword2, setFPassword2] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!account) return;
+    setFName(account.name);
+    setFEmail(account.email);
+    setFPhone(account.phone);
+  }, [account]);
+
+  const saveProfile = async () => {
+    // Catch a typo here rather than after the password is already hashed and
+    // stored — at that point the user would be locked out of their own login.
+    if (fPassword.trim() && fPassword !== fPassword2) {
+      Alert.alert('Passwords do not match', 'Please retype the same password in both fields.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateProfile({ name: fName, email: fEmail, phone: fPhone });
+      // Setting a password is a separate step: it creates a real sign-in
+      // credential, so it only runs when a password was actually typed.
+      if (fPassword.trim()) {
+        await linkPassword({ email: fEmail.trim(), password: fPassword });
+        setFPassword('');
+        setFPassword2('');
+      }
+      setEditOpen(false);
+      Alert.alert('Saved', fPassword.trim()
+        ? 'Profile updated. You can now sign in with your email and password too.'
+        : 'Profile updated.');
+    } catch (e) {
+      Alert.alert('Could not save', String(e).replace('[CONVEX] ', ''));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const data = useQuery(api.profile.smartDashboard, userId ? { userId } : 'skip');
   const referral = useQuery(api.rewards.myReferral, userId ? { userId } : 'skip');
 
@@ -106,6 +160,42 @@ export default function ProfileScreen() {
               </View>
             )}
           </View>
+
+          {account ? (
+            <View style={styles.signInRow}>
+              {([
+                ['password', 'Password', 'key'],
+                ['email', 'Email code', 'envelope'],
+                ['telegram', 'Telegram', 'paper-plane'],
+                ['pi', 'Pi', 'circle-nodes'],
+              ] as const).map(([k, label, icon]) => (
+                <View
+                  key={k}
+                  style={[styles.methodChip, account.methods[k] && styles.methodChipOn]}>
+                  <Icon
+                    name={icon}
+                    iconStyle="solid"
+                    size={10}
+                    color={account.methods[k] ? colors.success : colors.textFaint}
+                  />
+                  <Text
+                    style={[styles.methodText, account.methods[k] && styles.methodTextOn]}>
+                    {label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <TouchableOpacity
+            style={styles.editProfileBtn}
+            activeOpacity={0.85}
+            onPress={() => setEditOpen(true)}>
+            <Icon name="pen" iconStyle="solid" size={12} color={colors.primaryDeep} />
+            <Text style={styles.editProfileText}>
+              {account?.methods.password ? 'Edit profile' : 'Complete your profile'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Navigation to new Settings Tab */}
@@ -170,11 +260,177 @@ export default function ProfileScreen() {
         ) : null}
 
       </ScrollView>
+
+      {/* Edit profile / link a password */}
+      <Modal visible={editOpen} transparent animationType="slide" onRequestClose={() => setEditOpen(false)}>
+        <Pressable style={styles.editBackdrop} onPress={() => setEditOpen(false)}>
+          <Pressable style={[styles.editSheet, dark && styles.editSheetDark]} onPress={() => {}}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={[styles.editTitle, dark && styles.textLight]}>Edit profile</Text>
+
+              <Text style={styles.editLabel}>Full name</Text>
+              <TextInput
+                style={[styles.editInput, dark && styles.editInputDark]}
+                value={fName}
+                onChangeText={setFName}
+                placeholder="Your name"
+                placeholderTextColor={colors.textFaint}
+              />
+
+              <Text style={styles.editLabel}>Email</Text>
+              <TextInput
+                style={[styles.editInput, dark && styles.editInputDark]}
+                value={fEmail}
+                onChangeText={setFEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.textFaint}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+
+              <Text style={styles.editLabel}>Phone number</Text>
+              <TextInput
+                style={[styles.editInput, dark && styles.editInputDark]}
+                value={fPhone}
+                onChangeText={setFPhone}
+                placeholder="+234 800 000 0000"
+                placeholderTextColor={colors.textFaint}
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.editLabel}>
+                {account?.methods.password ? 'New password (optional)' : 'Create a password (optional)'}
+              </Text>
+              <View style={styles.pwRow}>
+                <TextInput
+                  style={[styles.editInput, styles.pwInput, dark && styles.editInputDark]}
+                  value={fPassword}
+                  onChangeText={setFPassword}
+                  placeholder="At least 8 characters"
+                  placeholderTextColor={colors.textFaint}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={styles.pwEye}
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={10}
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                  <Icon
+                    name={showPassword ? 'eye-slash' : 'eye'}
+                    iconStyle="solid"
+                    size={15}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {fPassword.length > 0 ? (
+                <>
+                  <Text style={styles.editLabel}>Confirm password</Text>
+                  <TextInput
+                    style={[styles.editInput, dark && styles.editInputDark]}
+                    value={fPassword2}
+                    onChangeText={setFPassword2}
+                    placeholder="Retype the password"
+                    placeholderTextColor={colors.textFaint}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  {fPassword2.length > 0 && fPassword !== fPassword2 ? (
+                    <Text style={styles.pwMismatch}>Passwords do not match</Text>
+                  ) : null}
+                </>
+              ) : null}
+
+              <Text style={styles.editHelp}>
+                {account?.methods.password
+                  ? 'Leave blank to keep your current password.'
+                  : 'Adding a password lets you sign in with your email as well as ' +
+                    (account?.methods.telegram ? 'Telegram' : 'Pi') +
+                    ' — useful if you ever lose access to it.'}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.editSave, saving && { opacity: 0.6 }]}
+                disabled={saving}
+                activeOpacity={0.85}
+                onPress={saveProfile}>
+                <Text style={styles.editSaveText}>{saving ? 'Saving…' : 'Save changes'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.editCancel} onPress={() => setEditOpen(false)}>
+                <Text style={styles.editCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  signInRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm },
+  methodChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(120,120,140,0.12)',
+  },
+  methodChipOn: { backgroundColor: 'rgba(16,185,129,0.14)' },
+  methodText: { fontSize: 10, fontWeight: '700', color: colors.textFaint },
+  methodTextOn: { color: colors.success },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+  },
+  editProfileText: { fontSize: 13, fontWeight: '800', color: colors.primaryDeep },
+  editBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  editSheet: {
+    maxHeight: '88%',
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+  },
+  editSheetDark: { backgroundColor: '#17171F' },
+  editTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginBottom: spacing.sm },
+  editLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted, marginTop: spacing.md, marginBottom: 6 },
+  editInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: '#FAFAFC',
+  },
+  editInputDark: { backgroundColor: '#1F1F2A', borderColor: '#2E2E3C', color: '#FFF' },
+  editHelp: { fontSize: 11, color: colors.textFaint, marginTop: 6, lineHeight: 15 },
+  pwRow: { position: 'relative', justifyContent: 'center' },
+  pwInput: { paddingRight: 44 },
+  pwEye: { position: 'absolute', right: 12, padding: 4 },
+  pwMismatch: { fontSize: 11, color: colors.danger, marginTop: 6, fontWeight: '600' },
+  editSave: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  editSaveText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+  editCancel: { paddingVertical: 12, alignItems: 'center' },
+  editCancelText: { color: colors.textMuted, fontWeight: '700', fontSize: 13 },
   container: { flex: 1, backgroundColor: colors.bg },
   containerDark: { backgroundColor: colors.bgDark },
   textLight: { color: colors.textDark },

@@ -54,7 +54,7 @@ used; if **neither** is configured, VAS runs in **dev-sandbox simulate** mode
 ### Website build (`apps/website/.env.local`)
 | Variable | Purpose |
 | -------- | ------- |
-| `NEXT_PUBLIC_CONVEX_URL` | `https://valuable-ostrich-597.convex.cloud` |
+| `NEXT_PUBLIC_CONVEX_URL` | the backend API origin (see `.env.production.example`) |
 | `NEXT_PUBLIC_PI_SANDBOX` | `"false"` for mainnet; unset/`"true"` for sandbox development. |
 
 ## 4. Payment flow (already implemented, plan §7.8)

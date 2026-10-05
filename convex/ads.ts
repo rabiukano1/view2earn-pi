@@ -3,6 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { requireUser, requireUserAndSurface } from "./lib/guards";
 import { applySpinDouble } from "./spin";
 import { consumeRewardedAd } from "./piAds";
+import { insertLedgerRow } from "./lib/ledger";
 
 /** Query active ad config including admin-configured reward points. */
 export const getAdRewardConfig = query({
@@ -210,7 +211,7 @@ export const rewardForAd = mutation({
 
     const balanceAfter = (last?.balanceAfter ?? 0) + finalReward;
 
-    await ctx.db.insert("pointsLedger", {
+    await insertLedgerRow(ctx, {
       userId: args.userId,
       economy,
       delta: finalReward,

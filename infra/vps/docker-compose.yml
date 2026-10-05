@@ -1,0 +1,66 @@
+# Self-hosted Convex — production (InterServer VPS).
+# Based on get-convex/convex-backend/self-hosted/docker/docker-compose.yml,
+# trimmed to what this project uses and locked down for a public server:
+# ports bind to 127.0.0.1 only, Caddy terminates TLS in front of them.
+services:
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    container_name: convex-backend
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      # 127.0.0.1 prefix = not reachable from the internet; only Caddy can.
+      - "127.0.0.1:3210:3210"   # client API      -> https://${CONVEX_CLOUD_ORIGIN}
+      - "127.0.0.1:3211:3211"   # HTTP actions    -> https://${CONVEX_SITE_ORIGIN}
+    volumes:
+      - data:/convex/data
+    environment:
+      # Public origins. MUST match the Caddy site addresses: auth tokens are
+      # issued for CONVEX_SITE_ORIGIN (convex/auth.config.ts reads it), so a
+      # mismatch rejects every existing session.
+      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN}
+      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN}
+      - INSTANCE_NAME=${INSTANCE_NAME}
+      - INSTANCE_SECRET=${INSTANCE_SECRET}
+      # Storage: unset POSTGRES_URL => built-in SQLite in the `data` volume.
+      - POSTGRES_URL
+      - DO_NOT_REQUIRE_SSL
+      # Telemetry off; don't leak server-side error detail to clients.
+      - DISABLE_BEACON=${DISABLE_BEACON:-true}
+      - REDACT_LOGS_TO_CLIENT=${REDACT_LOGS_TO_CLIENT:-true}
+      # Action timeouts. NOTE: the migration prompt called this
+      # ACTIONS_USER_TIMEOUT_SECS; upstream splits it into these two.
+      - V8_ACTION_USER_TIMEOUT_SECS=${V8_ACTION_USER_TIMEOUT_SECS:-60}
+      - NODE_ACTION_USER_TIMEOUT_SECS=${NODE_ACTION_USER_TIMEOUT_SECS:-120}
+      # 4 GB box: keep concurrency modest.
+      - APPLICATION_MAX_CONCURRENT_MUTATIONS=${APPLICATION_MAX_CONCURRENT_MUTATIONS:-16}
+      - APPLICATION_MAX_CONCURRENT_QUERIES=${APPLICATION_MAX_CONCURRENT_QUERIES:-16}
+      - APPLICATION_MAX_CONCURRENT_V8_ACTIONS=${APPLICATION_MAX_CONCURRENT_V8_ACTIONS:-8}
+      - APPLICATION_MAX_CONCURRENT_NODE_ACTIONS=${APPLICATION_MAX_CONCURRENT_NODE_ACTIONS:-8}
+      - DOCUMENT_RETENTION_DELAY=${DOCUMENT_RETENTION_DELAY:-172800}
+      - DISABLE_METRICS_ENDPOINT=${DISABLE_METRICS_ENDPOINT:-true}
+      - RUST_LOG=${RUST_LOG:-info}
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    container_name: convex-dashboard
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      # Local only. Reach it with an SSH tunnel (see infra/README.md) —
+      # it has no auth of its own beyond the admin key.
+      - "127.0.0.1:6791:6791"
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=${CONVEX_CLOUD_ORIGIN}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  data:

@@ -12,105 +12,79 @@ import { colors, radius, spacing, shadow } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'WatchHub'>;
 
-const SECTIONS = [
-  {
-    key: 'football' as const,
-    title: 'Live Football',
-    subtitle: 'Licensed football & sports streams',
-    icon: 'futbol',
-    tint: '#10B981',
-  },
-  {
-    key: 'youtube' as const,
-    title: 'YouTube Videos',
-    subtitle: 'YouTube watch & live videos',
-    icon: 'youtube',
-    tint: '#EF4444',
-  },
-  {
-    key: 'other' as const,
-    title: 'Live Streams',
-    subtitle: 'Other live channels & broadcasts',
-    icon: 'tv',
-    tint: '#3B82F6',
-  },
-  {
-    key: 'movies' as const,
-    title: 'Movies',
-    subtitle: 'Full-length movies & shows',
-    icon: 'film',
-    tint: '#A855F7',
-  },
-] as const;
-
 export default function WatchHubScreen() {
   const dark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const docs = useQuery(api.iptv.list);
   const voiceCount = useQuery(api.voiceNotes.list)?.length ?? 0;
+  // Admin panel -> Features. A missing flag means enabled, so nothing changes
+  // until an admin explicitly turns a row off.
+  const flags = useQuery(api.features.getFlags) || {};
+  const on = (key: string) => flags[key] !== false;
 
-  const counts = {
-    football: docs?.filter((d) => d.type === 'football').length ?? 0,
-    youtube: docs?.filter((d) => d.type === 'youtube').length ?? 0,
-    other: docs?.filter((d) => d.type === 'other').length ?? 0,
-    movies: docs?.filter((d) => d.type === 'movies').length ?? 0,
-  };
+  if (!on('feature:watch')) {
+    return (
+      <View style={[styles.container, dark && styles.containerDark]}>
+        <PageHeader title="Watch" subtitle="Temporarily unavailable" back />
+      </View>
+    );
+  }
+
+  // Every destination in one list so they all render as identical tiles,
+  // matching the "Explore Platform" grid on the home screen.
+  const tiles = [
+    ...(on('feature:watch.videos')
+      ? [{
+          key: 'videos',
+          label: 'Videos',
+          desc: 'Short tutorials from View2Earn',
+          icon: 'video',
+          brand: false,
+          tint: '#EC4899',
+          count: undefined as number | undefined,
+          go: () => navigation.navigate('CommunityVideos'),
+        }]
+      : []),
+    ...(on('feature:watch.voice')
+      ? [{
+          key: 'voice',
+          label: 'Mentors',
+          desc: 'Voice notes & episodes',
+          icon: 'microphone',
+          brand: false,
+          tint: '#F59E0B',
+          count: voiceCount,
+          go: () => navigation.navigate('VoiceNotes'),
+        }]
+      : []),
+  ];
 
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
-      <PageHeader title="Watch" subtitle="Football, YouTube & other live streams" back />
+      <PageHeader title="Watch" subtitle="Short tutorials & mentors" back />
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}>
-        {SECTIONS.map((s) => (
-          <TouchableOpacity
-            key={s.key}
-            style={[styles.card, dark && styles.cardDark]}
-            activeOpacity={0.88}
-            onPress={() => navigation.navigate('LiveStreams', { kind: s.key })}>
-            <View style={[styles.iconWrap, { backgroundColor: s.tint + '22' }]}>
-              <Icon name={s.icon} iconStyle={s.key === 'youtube' ? 'brand' : 'solid'} size={24} color={s.tint} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.title, dark && styles.textLight]}>{s.title}</Text>
-              <Text style={styles.subtitle}>{s.subtitle}</Text>
-            </View>
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{counts[s.key]}</Text>
-            </View>
-            <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity
-          style={[styles.card, dark && styles.cardDark]}
-          activeOpacity={0.88}
-          onPress={() => navigation.navigate('CommunityVideos')}>
-          <View style={[styles.iconWrap, { backgroundColor: '#EC489922' }]}>
-            <Icon name="video" iconStyle="solid" size={24} color="#EC4899" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, dark && styles.textLight]}>Videos</Text>
-            <Text style={styles.subtitle}>Short videos from View2Earn</Text>
-          </View>
-          <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.card, dark && styles.cardDark]}
-          activeOpacity={0.88}
-          onPress={() => navigation.navigate('VoiceNotes')}>
-          <View style={[styles.iconWrap, { backgroundColor: '#F59E0B22' }]}>
-            <Icon name="microphone" iconStyle="solid" size={24} color="#F59E0B" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, dark && styles.textLight]}>Mentors</Text>
-            <Text style={styles.subtitle}>Voice notes, episodes & announcements</Text>
-          </View>
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{voiceCount}</Text>
-          </View>
-          <Icon name="chevron-right" iconStyle="solid" size={18} color={colors.textFaint} />
-        </TouchableOpacity>
+        <View style={styles.grid}>
+          {tiles.map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.tile, dark && styles.cardDark]}
+              activeOpacity={0.85}
+              onPress={t.go}>
+              <View style={[styles.tileIcon, { backgroundColor: t.tint + '22' }]}>
+                <Icon name={t.icon} iconStyle={t.brand ? 'brand' : 'solid'} size={22} color={t.tint} />
+              </View>
+              <Text style={[styles.tileLabel, dark && styles.textLight]}>{t.label}</Text>
+              <Text style={styles.tileDesc} numberOfLines={1}>{t.desc}</Text>
+              {t.count !== undefined && t.count > 0 ? (
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>{t.count}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          ))}
+        </View>
       </ScrollView>
     </View>
   );
@@ -119,36 +93,45 @@ export default function WatchHubScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   containerDark: { backgroundColor: colors.bgDark },
-  card: {
+  // Mirrors the Explore Platform grid in HomeScreen — keep the two in step.
+  grid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  tile: {
+    width: '48%',
+    flexGrow: 1,
     alignItems: 'center',
-    gap: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.sm,
+    gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadow.card,
   },
   cardDark: { backgroundColor: colors.surfaceDark, borderColor: colors.borderDark },
-  iconWrap: {
-    width: 52,
-    height: 52,
+  tileIcon: {
+    width: 48,
+    height: 48,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
-  title: { fontSize: 16, fontWeight: '800', color: colors.text },
-  subtitle: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  tileLabel: { fontSize: 14, fontWeight: '800', color: colors.text, textAlign: 'center' },
+  tileDesc: { fontSize: 11, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
   countBadge: {
     minWidth: 26,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
     alignItems: 'center',
+    marginTop: spacing.xs,
   },
-  countText: { fontSize: 12, fontWeight: '900', color: colors.primaryDeep },
+  countText: { fontSize: 11, fontWeight: '900', color: colors.primaryDeep },
   textLight: { color: colors.textDark },
 });

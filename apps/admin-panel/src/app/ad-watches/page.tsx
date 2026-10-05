@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useAdminQuery } from "../useAdmin";
+import { useEffect, useState } from "react";
+import { useAdminAction, useAdminQuery } from "../useAdmin";
 import { api } from "@convex/api";
-import { PageHeader, EmptyRow, timeAgo } from "@/components/ui";
+import { PageHeader, EmptyRow, timeAgo, usePaged } from "@/components/ui";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const KIND_LABEL: Record<string, string> = {
@@ -15,7 +15,15 @@ const KIND_LABEL: Record<string, string> = {
 // Admin-only. Ad watch logs and the leaderboard are never shown to users.
 export default function AdWatchesPage() {
   const logs = useAdminQuery(api.admin.listAdWatches);
-  const board = useAdminQuery(api.admin.adWatchLeaderboard);
+  const loadBoard = useAdminAction(api.admin.adWatchLeaderboard);
+  const [board, setBoard] = useState<Awaited<ReturnType<typeof loadBoard>>>();
+  const [boardError, setBoardError] = useState("");
+  const refreshBoard = () => {
+    setBoardError("");
+    loadBoard().then(setBoard, (e) => setBoardError(String(e)));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(refreshBoard, []);
   const [tab, setTab] = useState<"log" | "board">("log");
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<"all" | "rewarded" | "spin_double" | "spin_bonus">("all");
@@ -24,6 +32,8 @@ export default function AdWatchesPage() {
     const s = q.trim().toLowerCase();
     return (kind === "all" || l.kind === kind) && (!s || l.username.toLowerCase().includes(s) || l.provider.toLowerCase().includes(s));
   });
+  const logPage = usePaged(filtered);
+  const boardPage = usePaged(board?.topUsers);
 
   const downloadCsv = () => {
     const rows = [
@@ -79,15 +89,16 @@ export default function AdWatchesPage() {
       <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
         <button className={`btn ${tab === "log" ? "btn-primary" : "btn-ghost"} btn-sm`} onClick={() => setTab("log")}>Watch log</button>
         <button className={`btn ${tab === "board" ? "btn-primary" : "btn-ghost"} btn-sm`} onClick={() => setTab("board")}>Leaderboard</button>
+        {tab === "board" && <button className="btn btn-ghost btn-sm" onClick={refreshBoard}>↻ Refresh</button>}
         {tab === "log" && (
           <>
-            <select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)} style={{ marginLeft: "auto", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)" }}>
+            <select value={kind} onChange={(e) => { setKind(e.target.value as typeof kind); logPage.reset(); }} style={{ marginLeft: "auto", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)" }}>
               <option value="all">All kinds</option>
               <option value="rewarded">Rewarded video</option>
               <option value="spin_double">Spin 2× ad</option>
               <option value="spin_bonus">Bonus-spin ad</option>
             </select>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by user or provider…" style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", minWidth: 220 }} />
+            <input value={q} onChange={(e) => { setQ(e.target.value); logPage.reset(); }} placeholder="Filter by user or provider…" style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", minWidth: 220 }} />
           </>
         )}
       </div>
@@ -97,7 +108,7 @@ export default function AdWatchesPage() {
           <table>
             <thead><tr><th>When</th><th>User</th><th>Kind</th><th>Provider</th><th>Points</th><th>Platform</th></tr></thead>
             <tbody>
-              {filtered.map((l) => (
+              {logPage.rows?.map((l) => (
                 <tr key={l._id}>
                   <td>{timeAgo(l.at)}</td>
                   <td style={{ fontWeight: 600 }}>{l.username}</td>
@@ -110,15 +121,16 @@ export default function AdWatchesPage() {
               {(!logs || filtered.length === 0) && <EmptyRow colSpan={6} text={logs ? "No ad watches match" : "Loading…"} />}
             </tbody>
           </table>
+          {logPage.pager}
         </div>
       ) : (
         <div className="card table-wrap">
           <table>
             <thead><tr><th>#</th><th>User</th><th>Ads watched</th><th>Rewarded</th><th>Spin 2×</th><th>Bonus spin</th><th>Points earned</th><th></th></tr></thead>
             <tbody>
-              {board?.topUsers.map((u, i) => (
+              {boardPage.rows?.map((u, i) => (
                 <tr key={u.userId}>
-                  <td>{i + 1}</td>
+                  <td>{boardPage.start + i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{u.username}</td>
                   <td style={{ fontWeight: 700 }}>{u.watches}</td>
                   <td>{u.rewarded}</td>
@@ -128,9 +140,10 @@ export default function AdWatchesPage() {
                   <td><button className="btn btn-ghost btn-sm" onClick={() => pdfUser(u.userId)}>PDF</button></td>
                 </tr>
               ))}
-              {(!board || board.topUsers.length === 0) && <EmptyRow colSpan={8} text="No ad watches yet" />}
+              {(!board || board.topUsers.length === 0) && <EmptyRow colSpan={8} text={boardError || (board ? "No ad watches yet" : "Loading…")} />}
             </tbody>
           </table>
+          {boardPage.pager}
         </div>
       )}
     </div>

@@ -151,3 +151,59 @@ function extractFacebookPageId(url: string): string | null {
   }
   return null;
 }
+
+// A stable identity for the social ACCOUNT a task points at, independent of
+// which URL form was used. normalizeUrl() alone is not enough: the same
+// channel can be listed as youtube.com/@foo, m.youtube.com/@foo or
+// youtube.com/@foo/videos, and each would look like a different target.
+//
+// Used to guarantee a user never sees a task for an account they have already
+// completed — even if it is re-listed later by an admin or another user.
+// Returns null when no handle can be determined (callers fall back to the URL).
+const HOST_PREFIXES = /^(www|m|mobile|vm|vt|web)\./;
+// Path segments that are routes, not account names.
+const NOT_A_HANDLE = new Set([
+  "p", "reel", "reels", "tv", "stories", "explore", "watch", "video", "videos",
+  "shorts", "post", "posts", "status", "share", "home", "about", "featured",
+  "playlist", "playlists", "community", "channels", "live", "s", "i",
+]);
+
+export function accountKeyOf(platform: string | undefined, url: string): string | null {
+  if (!url) return null;
+  const raw = url.trim();
+
+  // facebook.com/profile.php?id=123 — the id lives in the query string, which
+  // normalizeUrl() throws away, so read it before normalising.
+  const fbId = /facebook\.com\/profile\.php\?.*\bid=(\d+)/i.exec(raw);
+  if (fbId) return `facebook:${fbId[1]}`;
+
+  const n = normalizeUrl(raw);
+  const slash = n.indexOf("/");
+  if (slash < 0) return null;
+  const host = n.slice(0, slash).replace(HOST_PREFIXES, "");
+  const segments = n
+    .slice(slash + 1)
+    .split("/")
+    .filter(Boolean);
+  if (segments.length === 0) return null;
+
+  const plat = (platform || "").toLowerCase() || hostPlatform(host);
+  if (!plat) return null;
+
+  // youtube.com/channel/UC… and /c/name, /user/name keep the SECOND segment.
+  let handle = segments[0];
+  if (["channel", "c", "user"].includes(handle.toLowerCase()) && segments[1]) {
+    handle = segments[1];
+  }
+  handle = handle.replace(/^@/, "").toLowerCase();
+  if (!handle || NOT_A_HANDLE.has(handle)) return null;
+
+  return `${plat}:${handle}`;
+}
+
+function hostPlatform(host: string): string | null {
+  for (const [platform, hosts] of Object.entries(PROFILE_HOST_ALLOWLIST)) {
+    if (hosts.some((h) => host === h || host.endsWith(`.${h}`))) return platform;
+  }
+  return null;
+}

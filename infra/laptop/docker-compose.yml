@@ -1,0 +1,44 @@
+# Self-hosted Convex — local development on your laptop.
+# Throw-away data: wipe with `docker compose down -v` whenever you like.
+#
+#   docker compose -f infra/laptop/docker-compose.yml up -d
+#   docker compose -f infra/laptop/docker-compose.yml exec backend ./generate_admin_key.sh
+#
+# NOTE: the Convex CLI's own local deployment also binds 3210.
+# Run only one of the two at a time.
+services:
+  backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    container_name: convex-backend-local
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - "3210:3210"   # client API
+      - "3211:3211"   # HTTP actions
+    volumes:
+      - data:/convex/data
+    environment:
+      - CONVEX_CLOUD_ORIGIN=http://127.0.0.1:3210
+      - CONVEX_SITE_ORIGIN=http://127.0.0.1:3211
+      - INSTANCE_NAME=view2earn-local
+      - INSTANCE_SECRET=0000000000000000000000000000000000000000000000000000000000000001
+      - DISABLE_BEACON=true
+      - RUST_LOG=info
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      start_period: 10s
+
+  dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    container_name: convex-dashboard-local
+    ports:
+      - "6791:6791"
+    environment:
+      - NEXT_PUBLIC_DEPLOYMENT_URL=http://127.0.0.1:3210
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  data:

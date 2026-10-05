@@ -60,7 +60,10 @@ export default defineSchema({
     // 2x EXTRA on double, or marks the row claimed. Absent on rows written
     // before this change — treated as "not yet credited".
     baseCredited: v.optional(v.boolean()),
-  }).index("by_user", ["userId"]),
+  }).index("by_user", ["userId"])
+    // Without this, recoverStalePendingSpins' .filter() reads the WHOLE table
+    // every hour looking for unclaimed rows. Also drives the retention purge.
+    .index("by_claimed_createdAt", ["claimed", "createdAt"]),
 
   // Pi Ad Network rewarded-ad completions (plan §7.9 / Pi Ads). One row per
   // adId so a claimed rewarded ad can never be replayed for another reward.
@@ -458,7 +461,13 @@ export default defineSchema({
   completedTargets: defineTable({
     userId: v.id("users"),
     normalizedUrl: v.string(),
-  }).index("by_user_url", ["userId", "normalizedUrl"]),
+    // Stable "platform:handle" for the account behind normalizedUrl
+    // (packages/core accountKeyOf). A completed account is hidden from this
+    // user for life, however it is re-listed later. Optional: rows written
+    // before this field fall back to normalizedUrl matching.
+    accountKey: v.optional(v.string()),
+  }).index("by_user_url", ["userId", "normalizedUrl"])
+    .index("by_user_account", ["userId", "accountKey"]),
 
   platformLimits: defineTable({
     platform: v.string(),
@@ -533,6 +542,39 @@ export default defineSchema({
     userId: v.id("users"),
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
+
+  // Materialized current balance per (user, economy). Maintained ONLY by
+  // lib/ledger.ts:insertLedgerRow, so it cannot drift from pointsLedger.
+  // It exists so the leaderboard reads a handful of indexed rows instead of
+  // scanning every user's ledger. It is a DISPLAY cache: money logic still
+  // reads the authoritative balanceAfter from pointsLedger (lastBalance).
+  economyBalances: defineTable({
+    userId: v.id("users"),
+    // Same union as pointsLedger.economy, including the non-earning "wallet".
+    economy: v.union(v.literal("android"), v.literal("pi-browser"), v.literal("telegram"), v.literal("wallet")),
+    balance: v.number(),
+    // Sum of positive deltas ever credited on this (user, economy). Drives
+    // level progression (xp.ts) and the cash-out gate (identity.ts), so it is
+    // only ever written by insertLedgerRow and rebuilt exactly by
+    // backfill:backfillEconomyBalances. Optional: rows predating this field
+    // read as 0 until the backfill runs.
+    lifetimeEarned: v.optional(v.number()),
+  }).index("by_economy_balance", ["economy", "balance"])
+    .index("by_user_economy", ["userId", "economy"]),
+
+  // User reports on community videos. Required for UGC moderation (Play /
+  // AdMob policy): anyone watching must be able to flag content, and an admin
+  // must be able to act on it. One report per user per video.
+  contentReports: defineTable({
+    reporterId: v.id("users"),
+    videoId: v.id("videos"),
+    reason: v.string(),
+    details: v.optional(v.string()),
+    status: v.string(), // "open" | "reviewed" | "dismissed"
+    createdAt: v.number(),
+  }).index("by_video", ["videoId"])
+    .index("by_status", ["status"])
+    .index("by_reporter_video", ["reporterId", "videoId"]),
 
   sessionSurfaces: defineTable({
     sessionId: v.id("authSessions"),

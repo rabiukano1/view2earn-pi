@@ -6,7 +6,7 @@
     "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
-    "deploy": "next build && wrangler pages deploy --branch production",
+    "deploy": "next build && wrangler pages deploy --branch main",
     "deploy:preview": "next build && wrangler pages deploy",
     "deploy:setup": "wrangler pages project create view2earn-admin --force --production-branch production"
   },

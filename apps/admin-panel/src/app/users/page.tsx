@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api } from "@convex/api";
 import { useAdminAction, useAdminMutation, useAdminQuery } from "../useAdmin";
 import type { Id } from "@convex/dataModel";
-import { Modal, Field, PageHeader, EmptyRow, confirmThen } from "@/components/ui";
+import { Modal, Field, PageHeader, EmptyRow, confirmThen, usePaged } from "@/components/ui";
 
 type UserForm = { tier: number; fraudScore: number; country: string };
 
@@ -50,6 +50,8 @@ export default function UsersPage() {
     const matchesFilter = statusFilter === "all" || status === statusFilter;
     return matchesSearch && matchesFilter;
   });
+
+  const { rows: pageUsers, pager, reset: resetPage } = usePaged(filteredUsers);
 
   const openEdit = (u: NonNullable<typeof users>[number]) => {
     setEditing(u._id);
@@ -136,13 +138,13 @@ export default function UsersPage() {
               type="text" 
               placeholder="Search by username, ID, or country..." 
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => { setSearchQuery(e.target.value); resetPage(); }}
               style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', outline: 'none' }}
             />
           </div>
           <select 
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+            onChange={e => { setStatusFilter(e.target.value); resetPage(); }}
             style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', outline: 'none', cursor: 'pointer' }}
           >
             <option value="all">All Statuses</option>
@@ -164,8 +166,12 @@ export default function UsersPage() {
                 <input
                   type="checkbox"
                   aria-label="Select all shown users"
-                  checked={!!filteredUsers?.length && filteredUsers.every((u) => selected.has(u._id))}
-                  onChange={(e) => setSelected(e.target.checked ? new Set(filteredUsers?.map((u) => u._id)) : new Set())}
+                  checked={!!pageUsers?.length && pageUsers.every((u) => selected.has(u._id))}
+                  onChange={(e) => setSelected((prev) => {
+                    const next = new Set(prev);
+                    pageUsers?.forEach((u) => (e.target.checked ? next.add(u._id) : next.delete(u._id)));
+                    return next;
+                  })}
                 />
               </th>
               <th>Username</th>
@@ -179,7 +185,7 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredUsers?.map((u) => (
+            {pageUsers?.map((u) => (
               <tr key={u._id}>
                 <td>
                   <input
@@ -271,6 +277,7 @@ export default function UsersPage() {
             {(!filteredUsers || filteredUsers.length === 0) && <EmptyRow colSpan={9} text="No users found matching filters" />}
           </tbody>
         </table>
+        {pager}
       </div>
 
       <Modal title="Edit user" open={editing !== null} onClose={() => setEditing(null)}>

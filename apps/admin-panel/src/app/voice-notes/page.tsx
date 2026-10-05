@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { api } from "@convex/api";
 import { useAdminAction, useAdminMutation, useAdminQuery } from "../useAdmin";
 import { Modal, Field, PageHeader, EmptyRow, confirmThen, timeAgo } from "@/components/ui";
-import { AudioLines, Edit2, Trash2, FolderInput, Plus, Play, Download, X } from "lucide-react";
+import { AudioLines, Edit2, Trash2, FolderInput, Plus, Play, Download, X, ChevronUp, ChevronDown } from "lucide-react";
 import type { Id } from "@convex/dataModel";
+import { CONVEX_SITE_URL as SITE_URL } from "@/lib/convex";
 
 const TYPES = [
   { value: "episode", label: "Episode" },
@@ -14,10 +15,12 @@ const TYPES = [
 ];
 
 // Convex HTTP actions live on the .site domain of the same deployment.
-const SITE_URL = (process.env.NEXT_PUBLIC_CONVEX_URL ?? "").replace(".convex.cloud", ".convex.site");
 const audioUrl = (id: string, dl = false) => `${SITE_URL}/voice/file?id=${id}${dl ? "&dl=1" : ""}`;
 
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+type SortCol = "title" | "mentor" | "type" | "series" | "duration" | "createdAt";
+type SortDir = "asc" | "desc";
 
 type EditForm = {
   id: Id<"voiceNotes">;
@@ -45,6 +48,8 @@ export default function VoiceNotesAdminPage() {
   const [group, setGroup] = useState({ series: "", mentor: "", type: "", renumber: true });
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState("");
+  const [sortCol, setSortCol] = useState<SortCol>("createdAt");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [playing, setPlaying] = useState<{ id: string; title: string } | null>(null);
   const [creating, setCreating] = useState<null | {
     file: File | null;
@@ -56,13 +61,44 @@ export default function VoiceNotesAdminPage() {
     note: string;
   }>(null);
 
+  const toggleSort = (col: SortCol) => {
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir(col === "createdAt" || col === "duration" ? "desc" : "asc");
+    }
+  };
+
   const rows = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return notes;
-    return notes?.filter((n) =>
-      [n.title, n.mentor, n.series, n.note].filter(Boolean).join(" ").toLowerCase().includes(q),
-    );
-  }, [notes, filter]);
+    const filtered = q
+      ? (notes ?? []).filter((n) =>
+          [n.title, n.mentor, n.series, n.note].filter(Boolean).join(" ").toLowerCase().includes(q),
+        )
+      : notes;
+
+    if (!filtered) return filtered;
+
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortCol) {
+        case "title":
+          return a.title.localeCompare(b.title) * dir;
+        case "mentor":
+          return (a.mentor ?? "").localeCompare(b.mentor ?? "") * dir;
+        case "type":
+          return (a.type ?? "").localeCompare(b.type ?? "") * dir;
+        case "series":
+          return (a.series ?? "").localeCompare(b.series ?? "") * dir;
+        case "duration":
+          return ((a.duration ?? 0) - (b.duration ?? 0)) * dir;
+        case "createdAt":
+        default:
+          return ((a.createdAt ?? 0) - (b.createdAt ?? 0)) * dir;
+      }
+    });
+  }, [notes, filter, sortCol, sortDir]);
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -174,6 +210,24 @@ export default function VoiceNotesAdminPage() {
 
   const emptyCreate = { file: null, title: "", mentor: "", type: "update", series: "", episodeNumber: "", note: "" };
 
+  const SortTh = ({ col, children, style }: { col: SortCol; children: ReactNode; style?: CSSProperties }) => (
+    <th
+      style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }}
+      onClick={() => toggleSort(col)}
+      title={`Sort by ${children}`}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        {children}
+        {sortCol === col ? (
+          sortDir === "asc" ? (
+            <ChevronUp size={14} color="var(--primary)" />
+          ) : (
+            <ChevronDown size={14} color="var(--primary)" />
+          )
+        ) : null}
+      </span>
+    </th>
+  );
+
   return (
     <div>
       <PageHeader
@@ -210,12 +264,12 @@ export default function VoiceNotesAdminPage() {
                   onChange={() => setSelected(allSelected ? new Set() : new Set(allShown))}
                 />
               </th>
-              <th>Title</th>
-              <th>Mentor</th>
-              <th>Type</th>
-              <th>Series</th>
-              <th>Length</th>
-              <th>Posted</th>
+              <SortTh col="title">Title</SortTh>
+              <SortTh col="mentor">Mentor</SortTh>
+              <SortTh col="type">Type</SortTh>
+              <SortTh col="series">Series</SortTh>
+              <SortTh col="duration">Length</SortTh>
+              <SortTh col="createdAt">Posted</SortTh>
               <th></th>
             </tr>
           </thead>

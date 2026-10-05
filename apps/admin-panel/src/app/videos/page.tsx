@@ -6,6 +6,7 @@ import { PW_KEY, useAdminAction, useAdminMutation, useAdminQuery } from "../useA
 import { Modal, Field, PageHeader, EmptyRow, RiskBadge, confirmThen, timeAgo } from "@/components/ui";
 import { Video, Trash2, Play, Plus } from "lucide-react";
 import type { Id } from "@convex/dataModel";
+import { CONVEX_SITE_URL as SITE_URL } from "@/lib/convex";
 
 const FILTERS = [
   { value: "PROCESSING", label: "Awaiting review" },
@@ -15,7 +16,6 @@ const FILTERS = [
 ];
 
 // Convex HTTP actions live on the .site domain of the same deployment.
-const SITE_URL = (process.env.NEXT_PUBLIC_CONVEX_URL ?? "").replace(".convex.cloud", ".convex.site");
 // The admin secret lets the proxy serve uploads that are still pending review.
 const fileUrl = (id: string, thumb = false) => {
   const token = typeof window === "undefined" ? "" : localStorage.getItem(PW_KEY) ?? "";
@@ -33,6 +33,11 @@ export default function VideosPage() {
   const [preview, setPreview] = useState<{ id: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState<null | { file: File | null; title: string; description: string }>(null);
+
+  // User reports on videos (convex/videos.ts). Three reports auto-block a
+  // video; this is where a human confirms or clears it.
+  const reports = useAdminQuery(api.videos.listReports, { status: "open" });
+  const resolveReport = useAdminMutation(api.videos.resolveReport);
 
   const pending = (rows ?? []).filter((r) => r.status === "PROCESSING").map((r) => r._id as string);
 
@@ -93,8 +98,52 @@ export default function VideosPage() {
     }
   };
 
+  const reportsBlock =
+    reports && reports.length > 0 ? (
+      <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid #EF4444" }}>
+        <h3 style={{ margin: "0 0 10px", fontSize: 15 }}>
+          🚩 Reported videos ({reports.length})
+        </h3>
+        <table style={{ width: "100%", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", color: "var(--text-2)" }}>
+              <th>Video</th>
+              <th>Reason</th>
+              <th>By</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((r) => (
+              <tr key={r._id} style={{ borderTop: "1px solid var(--border)" }}>
+                <td style={{ padding: "8px 0" }}>{r.videoTitle}</td>
+                <td>{r.reason}</td>
+                <td>{r.reporter}</td>
+                <td>{r.videoStatus}</td>
+                <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button
+                    className="btn"
+                    style={{ marginRight: 6 }}
+                    onClick={() => act(() => resolveReport({ reportId: r._id, action: "dismiss" }))}>
+                    Dismiss
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => act(() => resolveReport({ reportId: r._id, action: "remove" }))}>
+                    Block video
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : null;
+
   return (
     <div>
+      {reportsBlock}
       <PageHeader
         title="Videos"
         sub="Videos shown in the app Videos screen. Files are stored in the private Telegram channel, up to 20 MB each."

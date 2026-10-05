@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { deriveEconomy, requireUser, requireUserAndSurface } from "./lib/guards";
 import type { Surface } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
@@ -291,16 +292,15 @@ export const spin = mutation({
       });
     }
 
-    // Base points are credited RIGHT HERE, synchronously, before the client
-    // does anything else. This used to be deferred to a separate claimSpin()
-    // call that the client had to remember to trigger (a tap, or an
-    // unmount-time fallback that never fires on a force-close/app-kill) —
-    // when that follow-up call never landed, the reward was silently never
-    // credited. Crediting immediately closes that gap entirely, for every
-    // client version that calls this mutation, not just an updated one.
-    // claimSpin() is now used ONLY for the optional watch-ad-to-double
-    // top-up on a positive-pts row (or as a legacy fallback/no-op for older
-    // clients that still call it after a plain claim).
+    // Points are NOT credited here: the wheel is still spinning on the client,
+    // and crediting now makes the balance jump before the wheel stops.
+    // The prize is reserved on this row and paid by:
+    //   claimSpin()          - the normal path, once the animation finishes
+    //   applySpinDouble()    - the watch-ad-to-double path (pays pts * 2)
+    //   recoverStalePendingSpins (hourly cron) - the safety net, for a client
+    //       that never claims (force-close/app-kill). It pays any uncredited
+    //       row older than SPIN_CLOSEOUT_AFTER_MS, so a reward is delayed at
+    //       worst, never lost.
     const pendingId = await ctx.db.insert("pendingSpins", {
       userId,
       pts,
@@ -310,26 +310,14 @@ export const spin = mutation({
       baseCredited: false,
     });
 
-    if (pts > 0) {
-      await creditSpinPoints(
-        ctx,
-        userId,
-        economy,
-        pts,
-        "SPIN_WHEEL",
-        `spin-${pendingId}`,
-        `Spin Wheel Prize (+${pts} PTS, ${economy})`,
-      );
-      await ctx.db.patch(pendingId, { baseCredited: true });
-    }
-
     const balanceAfter = await lastBalance(ctx, userId, economy);
     return {
       spinId: pendingId,
       pts,
       prizeIndex,
       spinsRemaining: remaining - 1,
-      credited: pts > 0 ? pts : 0,
+      // Nothing is credited yet — claimSpin() pays after the wheel stops.
+      credited: 0,
       balanceAfter,
     };
   },
@@ -544,9 +532,11 @@ export const syncUnclaimedSpins = mutation({
 export const recoverStalePendingSpins = internalMutation({
   args: {},
   handler: async (ctx) => {
+    // Indexed: reads at most 200 rows. The previous .filter() version was a
+    // post-read filter and scanned the entire table on every run.
     const stale = await ctx.db
       .query("pendingSpins")
-      .filter((q) => q.eq(q.field("claimed"), false))
+      .withIndex("by_claimed_createdAt", (q) => q.eq("claimed", false))
       .take(200);
     const byUser = new Map<string, typeof stale>();
     for (const p of stale) {
@@ -638,5 +628,52 @@ export const earnBonusSpin = mutation({
       adBonusRemaining: Math.max(0, adBonusLimit - (earnedInWindow + addCount)),
       spinsPerWindow: windowHours,
     };
+  },
+});
+
+// Retention for pendingSpins. Settled rows (claimed, past the close-out
+// window) are history: their points are already in pointsLedger. Without this
+// the table only grows — it reached 43 868 rows (36% of all documents) before
+// retention existed.
+//
+// Batched and self-rescheduling: it drains a backlog in minutes, then does
+// almost nothing each day. Bounded by PURGE_OLDER_THAN_MS, so it terminates.
+const PURGE_OLDER_THAN_MS = 7 * 24 * 60 * 60 * 1000;
+// A mutation is capped at ~1s and a limited number of DB operations, and each
+// row costs a read AND a delete. Measured: 200 works, 500 exceeds the limit.
+const PURGE_BATCH = 200;
+
+export const purgeSettledSpins = internalMutation({
+  args: { dryRun: v.optional(v.boolean()) },
+  handler: async (ctx, { dryRun }) => {
+    const cutoff = Date.now() - PURGE_OLDER_THAN_MS;
+    const batch = await ctx.db
+      .query("pendingSpins")
+      .withIndex("by_claimed_createdAt", (q) =>
+        q.eq("claimed", true).lt("createdAt", cutoff),
+      )
+      .take(PURGE_BATCH);
+
+    if (dryRun) {
+      // Report only; nothing is deleted. `more` means another full batch exists.
+      // oldestRemaining advances as the purge drains (rows go oldest-first),
+      // which is the only progress signal that is not capped by PURGE_BATCH.
+      return {
+        dryRun: true,
+        wouldDelete: batch.length,
+        more: batch.length === PURGE_BATCH,
+        oldestRemaining: batch[0] ? new Date(batch[0].createdAt).toISOString() : null,
+      };
+    }
+
+    for (const row of batch) await ctx.db.delete(row._id);
+
+    // Full batch => more to go. Continue immediately: batches are sequential,
+    // so this drains a large backlog in minutes instead of hours, then the
+    // daily cron finds almost nothing to do.
+    if (batch.length === PURGE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.spin.purgeSettledSpins, {});
+    }
+    return { deleted: batch.length, more: batch.length === PURGE_BATCH };
   },
 });

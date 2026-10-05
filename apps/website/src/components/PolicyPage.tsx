@@ -1,5 +1,22 @@
+import type { ReactNode } from "react";
 import type { PolicyKey } from "@view2earn/core";
 import { getPolicyDoc, type PolicyBlock } from "@view2earn/core";
+
+// Policy text is plain strings, so any address written in it renders as dead
+// text. Turn every email into a real mailto link — one place, every policy page.
+const EMAIL = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+
+function linkEmails(text: string): ReactNode[] {
+  return text.split(EMAIL).map((part, i) =>
+    i % 2 === 1 ? (
+      <a key={i} href={`mailto:${part}`}>
+        {part}
+      </a>
+    ) : (
+      part
+    ),
+  );
+}
 
 function Block({ block }: { block: PolicyBlock }) {
   switch (block.t) {
@@ -15,13 +32,13 @@ function Block({ block }: { block: PolicyBlock }) {
       );
     case "p":
       return (
-        <p className="text-slate-300 text-sm leading-relaxed mb-3">{block.x}</p>
+        <p className="text-slate-300 text-sm leading-relaxed mb-3">{linkEmails(block.x)}</p>
       );
     case "l":
       return (
         <ul className="list-disc pl-5 space-y-2 text-slate-300 text-sm mb-4">
           {block.x.map((item, i) => (
-            <li key={i}>{item}</li>
+            <li key={i}>{linkEmails(item)}</li>
           ))}
         </ul>
       );
@@ -36,7 +53,7 @@ export function PolicyPageContent({ policy }: { policy: PolicyKey }) {
     <div className="legal-page py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-slate-200">
       <div className="container">
         <div className="text-center mb-10 pb-6 border-b border-slate-800">
-          <span className="inline-block px-3 py-1 bg-violet-500/10 text-violet-400 text-xs font-semibold uppercase tracking-wider rounded-full mb-3">
+          <span className="kicker">
             {doc.badge}
           </span>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
@@ -60,14 +77,14 @@ export function PolicyPageContent({ policy }: { policy: PolicyKey }) {
               For any questions, data requests, or legal notices regarding this document, please
               reach out via our official communication channels:
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">General Support</span>
-                <a href="mailto:support@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">support@view2earn.org</a>
+            <div className="contact-grid">
+              <div className="contact-card">
+                <span className="contact-label">General Support</span>
+                <a href="mailto:support@view2earn.org">support@view2earn.org</a>
               </div>
-              <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                <span className="block text-xs font-semibold text-slate-400 uppercase mb-1">Legal Notices</span>
-                <a href="mailto:legal@view2earn.org" className="text-violet-400 font-medium hover:underline text-sm">legal@view2earn.org</a>
+              <div className="contact-card">
+                <span className="contact-label">Legal Notices</span>
+                <a href="mailto:legal@view2earn.org">legal@view2earn.org</a>
               </div>
             </div>
           </section>

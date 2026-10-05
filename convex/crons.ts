@@ -32,6 +32,7 @@ crons.interval("recompute-fraud-scores", { hours: 24 }, internal.fraud.recompute
 // Recover spin points orphaned by old clients (spin consumed, claim never
 // landed). Hourly; only touches pendings older than 15 minutes.
 crons.interval("recover-unclaimed-spins", { hours: 1 }, internal.spin.recoverStalePendingSpins, {});
+crons.interval("purge-settled-spins", { hours: 24 }, internal.spin.purgeSettledSpins, {});
 
 // Auto-detect SIDRA sent to the platform address from registered user
 // addresses, so deposits credit without the user pasting a hash.

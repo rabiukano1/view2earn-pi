@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Debug builds only. Allows plain HTTP so a debug APK can reach the Metro
+       bundler and the laptop Convex backend (http://127.0.0.1:3210 via
+       `adb reverse`, or http://10.0.2.2:3210 on the emulator).
+       Release builds do NOT include this file and stay HTTPS-only. -->
+  <application android:usesCleartextTraffic="true" />
+</manifest>

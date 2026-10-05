@@ -107,7 +107,7 @@ export default function MentorVoiceScreen() {
   return (
     <View style={[styles.container, dark && styles.containerDark]}>
       <PageHeader title="Mentor" back />
-      <VoiceNoteList notes={notes} emptyText={emptyText} hideMentor ListHeaderComponent={header} />
+      <VoiceNoteList notes={notes} emptyText={emptyText} hideMentor hideSearch hideTypeFilter ListHeaderComponent={header} />
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
