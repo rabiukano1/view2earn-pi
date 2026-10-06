@@ -13,6 +13,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import LoginScreen from './src/screens/LoginScreen';
 import { colors } from './src/theme';
 import { initializeAdMob } from './src/services/admobService';
+import { initializeYandexAds } from './src/services/yandexAdsService';
 import { initInterstitial } from './src/services/interstitialService';
 
 const convex = new ConvexReactClient(CONVEX_URL, {
@@ -138,7 +139,10 @@ function App() {
   React.useEffect(() => {
     // Defer AdMob SDK init so it doesn't compete with cold-start network/auth.
     const t = setTimeout(() => {
-      initializeAdMob().then(() => initInterstitial());
+      // Yandex after AdMob: it reuses the UMP consent decision AdMob collects.
+      initializeAdMob()
+        .then(() => initInterstitial())
+        .then(() => initializeYandexAds());
     }, 1500);
     return () => clearTimeout(t);
   }, []);

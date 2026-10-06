@@ -65,7 +65,8 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-webview": "^14.0.1",
     "resend": "^6.17.2",
-    "stellar-sdk": "^10.4.1"
+    "stellar-sdk": "^10.4.1",
+    "yandex-mobile-ads": "^8.5.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

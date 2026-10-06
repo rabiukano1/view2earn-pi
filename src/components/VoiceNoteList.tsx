@@ -18,6 +18,8 @@ import WebView from 'react-native-webview';
 import { CONVEX_SITE_URL } from '../config';
 import Icon from './Icon';
 import { colors, radius, spacing, shadow } from '../theme';
+import YandexBannerRow from './YandexBannerRow';
+import { isAdRow, withAdRows, type AdRow } from './adRows';
 import { useVoicePlayer } from '../audio/VoicePlayerContext';
 
 const WebViewPlayer = WebView as any;
@@ -105,6 +107,8 @@ const audioHtml = (url: string, rate: number) => `<!DOCTYPE html><html><head><me
   window.skip = function(s){ a.currentTime = Math.max(0, a.currentTime + s); };
   window.setRate = function(r){ a.playbackRate = r; };
 </script></body></html>`;
+
+type Row = Note | AdRow;
 
 type Props = {
   notes: Note[] | undefined;
@@ -243,6 +247,8 @@ export default function VoiceNoteList({
     return sorted;
   }, [notes, search, sortBy, typeFilter]);
 
+  const rows = useMemo<Row[]>(() => withAdRows(visible), [visible]);
+
   const download = (n: Note) => Linking.openURL(fileUrl(n, true)).catch(() => {});
   const progress = scrub ?? (duration > 0 ? Math.min(1, time / duration) : 0);
   const bars = useMemo(() => (current ? waveform(current._id) : []), [current]);
@@ -251,8 +257,8 @@ export default function VoiceNoteList({
   return (
     <View style={{ flex: 1 }}>
       <FlatList
-        data={visible}
-        keyExtractor={(n) => n._id}
+        data={rows}
+        keyExtractor={(r) => r._id}
         ListHeaderComponent={
           <>
             {ListHeaderComponent}
@@ -321,6 +327,7 @@ export default function VoiceNoteList({
           ) : null
         }
         renderItem={({ item }) => {
+          if (isAdRow(item)) return <YandexBannerRow />;
           const active = current?._id === item._id;
           return (
             <TouchableOpacity
