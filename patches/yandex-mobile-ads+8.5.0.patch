@@ -1,0 +1,50 @@
+diff --git a/node_modules/yandex-mobile-ads/android/build.gradle b/node_modules/yandex-mobile-ads/android/build.gradle
+index 2a1a203..89386a7 100644
+--- a/node_modules/yandex-mobile-ads/android/build.gradle
++++ b/node_modules/yandex-mobile-ads/android/build.gradle
+@@ -4,16 +4,18 @@ buildscript {
+         mavenCentral()
+     }
+ 
+-    dependencies {
+-        classpath("com.android.tools.build:gradle:7.4.2")
+-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
++    // Only needed when this android folder is opened stand-alone. As a module
++    // of an app project the root build.gradle already puts AGP and Kotlin on
++    // the classpath, and pinning AGP 7.4.2 / Kotlin 1.9.22 here conflicts with
++    // it (AGP 7.4.2 does not support Gradle 9).
++    if (project == rootProject) {
++        dependencies {
++            classpath("com.android.tools.build:gradle:7.4.2")
++            classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22"
++        }
+     }
+ }
+ 
+-plugins {
+-    id("io.gitlab.arturbosch.detekt") version "1.21.0"
+-}
+-
+ apply plugin: 'com.android.library'
+ 
+ if (project.extensions.findByName('kotlin') == null) {
+@@ -79,11 +81,6 @@ repositories {
+     google()
+ }
+ 
+-detekt {
+-    parallel = true
+-    config.setFrom("$projectDir/detekt-config.yml")
+-}
+-
+ def kotlin_version = getExtOrDefault("kotlinVersion")
+ 
+ dependencies {
+@@ -94,7 +91,6 @@ dependencies {
+     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+     implementation 'com.yandex.android:mobileads:8.5.0'
+ 
+-    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:${detekt.toolVersion}")
+     testImplementation "junit:junit:4.12"
+     testImplementation "io.mockk:mockk:1.13.7"
+ }
