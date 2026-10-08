@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/pi/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -166,7 +167,7 @@ export default function PiProfile() {
       const result = await generatePdf({ userId });
       if (result?.url) window.open(result.url, "_blank", "noopener,noreferrer");
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     } finally {
       setPdfBusy(false);
     }

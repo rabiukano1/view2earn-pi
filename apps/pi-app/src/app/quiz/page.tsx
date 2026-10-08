@@ -1,5 +1,6 @@
 "use client";
 
+import { toast, askConfirm } from "@/pi/ui/toast";
 import { PiRewardedAdButton } from "@/pi/components/PiRewardedAdButton";
 import { showPiInterstitial } from "@/pi/pi";
 
@@ -92,7 +93,7 @@ export default function DailyQuizPage() {
 
   const handleSubmit = async () => {
     if (Object.keys(selectedAnswers).length < list.length) {
-      if (!confirm("You haven't answered all questions. Submit anyway?")) {
+      if (!(await askConfirm("You haven't answered all questions. Submit anyway?"))) {
         return;
       }
     }
@@ -113,7 +114,7 @@ export default function DailyQuizPage() {
       setGameState("result");
       void showPiInterstitial();
     } catch (e) {
-      alert(String((e as Error)?.message ?? e).replace("[CONVEX] ", ""));
+      toast(String((e as Error)?.message ?? e), "error");
     } finally {
       setBusy(false);
     }

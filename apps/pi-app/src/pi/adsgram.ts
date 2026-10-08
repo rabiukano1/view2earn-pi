@@ -45,16 +45,26 @@ export const adsgramConfigured = () => REWARD_BLOCK.length > 0;
 // Resolves { done: true } only when the user watched to the end; otherwise
 // carries Adsgram's own description (no fill, closed early, not approved…).
 // Throws if not configured or the SDK cannot load, so callers can fall back.
-export async function showAdsgramRewarded(): Promise<{ done: boolean; reason: string }> {
+export function adsgramViewerId(): string {
+  const id = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+  return id === undefined ? "" : String(id);
+}
+
+export async function showAdsgramRewarded(): Promise<{
+  done: boolean;
+  reason: string;
+  viewerId: string;
+}> {
   if (!REWARD_BLOCK) throw new Error("Adsgram not configured");
   const Adsgram = await loadSdk();
+  const viewerId = adsgramViewerId();
   try {
     const res = await Adsgram.init({ blockId: REWARD_BLOCK, debug: isDebugUser() }).show();
-    return { done: res.done === true, reason: res.description ?? res.state ?? "AD_CLOSED" };
+    return { done: res.done === true, reason: res.description ?? res.state ?? "AD_CLOSED", viewerId };
   } catch (e) {
     const r = e as ShowResult | Error;
     const reason = (r as ShowResult)?.description ?? (r as Error)?.message ?? "AD_ERROR";
-    return { done: false, reason: `Adsgram: ${reason}` };
+    return { done: false, reason: `Adsgram: ${reason}`, viewerId };
   }
 }
 

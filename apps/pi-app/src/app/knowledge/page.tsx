@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/pi/ui/toast";
 import Link from "next/link";
 import { showPiInterstitial } from "@/pi/pi";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -96,7 +97,7 @@ function KnowledgeInner() {
     if (!lesson || view.name !== "lesson") return;
     const ordered = lesson.quiz.map((_, i) => answers[i] ?? -1);
     if (ordered.some((a) => a < 0)) {
-      alert("Answer every question first");
+      toast("Answer every question first", "error");
       return;
     }
     setBusy(true);
@@ -110,7 +111,7 @@ function KnowledgeInner() {
       setResult(res as LessonQuizResult);
       void showPiInterstitial();
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     } finally {
       setBusy(false);
     }

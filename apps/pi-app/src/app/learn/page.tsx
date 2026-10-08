@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/pi/ui/toast";
 import { useRouter } from "next/navigation";
 import { showPiInterstitial } from "@/pi/pi";
 import { useEffect, useMemo, useState } from "react";
@@ -68,7 +69,7 @@ export default function PiLearn() {
     if (!open) return;
     const ordered = open.quiz.map((_: unknown, i: number) => answers[i] ?? -1);
     if (ordered.some((a: number) => a < 0)) {
-      alert("Answer every question first");
+      toast("Answer every question first", "error");
       return;
     }
     setBusy(true);
@@ -82,7 +83,7 @@ export default function PiLearn() {
       setResult(res as SubmitResult);
       void showPiInterstitial();
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     } finally {
       setBusy(false);
     }

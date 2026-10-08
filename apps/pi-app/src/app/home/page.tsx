@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/pi/ui/toast";
 import { useIsTelegram } from "@/pi/telegram";
 
 import Link from "next/link";
@@ -87,7 +88,7 @@ export default function PiHome() {
       const gate = await requireRewardedAd();
       await checkIn({ userId, adId: gate.ok ? gate.adId ?? undefined : undefined });
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     } finally {
       setBusy(false);
     }
@@ -103,7 +104,7 @@ export default function PiHome() {
       const res = await openBox({ userId, adId: gate.adId ?? undefined });
       setBoxWon(res.reward);
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     } finally {
       setBusy(false);
     }
@@ -119,7 +120,7 @@ export default function PiHome() {
       const res = await claimCombo({ userId, adId: gate.adId ?? undefined });
       setComboWon(res.reward);
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     } finally {
       setBusy(false);
     }

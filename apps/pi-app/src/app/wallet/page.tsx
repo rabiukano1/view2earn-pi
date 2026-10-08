@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/pi/ui/toast";
 import { useIsTelegram } from "@/pi/telegram";
 
 import Link from "next/link";
@@ -445,7 +446,7 @@ export default function PiWallet() {
                     await authenticatePiWallet();
                     window.location.reload();
                   } catch (e) {
-                    alert(String(e));
+                    toast(String(e), "error");
                   }
                 }}
               >

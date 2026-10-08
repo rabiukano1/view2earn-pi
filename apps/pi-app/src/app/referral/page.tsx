@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "@/pi/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -52,7 +53,7 @@ export default function ReferralPage() {
         setTimeout(() => setCopiedLink(false), 2000);
       }
     } catch {
-      alert(`Copied: ${text}`);
+      toast(`Copied: ${text}`);
     }
   };
 

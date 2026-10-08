@@ -1,5 +1,6 @@
 "use client";
 
+import { toast, askConfirm } from "@/pi/ui/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -141,14 +142,14 @@ export default function PromoteHubPage() {
   };
 
   const handleCancel = async (listingId: Id<"marketplaceListings">) => {
-    if (!confirm("Are you sure you want to cancel this campaign? Unused points will be refunded.")) {
+    if (!(await askConfirm("Are you sure you want to cancel this campaign? Unused points will be refunded."))) {
       return;
     }
     try {
       const res = await cancelListing({ userId, listingId });
-      alert(`Campaign cancelled. ${res.refund} unused points refunded to your wallet!`);
+      toast(`Campaign cancelled. ${res.refund} unused points refunded to your wallet!`);
     } catch (e) {
-      alert(String(e).replace("[CONVEX] ", ""));
+      toast(String(e), "error");
     }
   };
 

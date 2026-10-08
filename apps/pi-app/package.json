@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node -e \"require('node:fs').rmSync('.next',{recursive:true,force:true})\"",
     "build": "next build",
     "start": "next start",
-    "deploy": "next build && wrangler pages deploy --branch production",
-    "deploy:preview": "next build && wrangler pages deploy",
+    "deploy": "npm run build && wrangler pages deploy --branch production",
+    "deploy:preview": "npm run build && wrangler pages deploy",
     "deploy:setup": "wrangler pages project create view2earn-pi --force --production-branch production"
   },
   "dependencies": {

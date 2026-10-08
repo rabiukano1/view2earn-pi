@@ -12,7 +12,6 @@
 "use client";
 
 import { isTelegram } from "@/pi/telegram";
-import { adsgramConfigured, showAdsgramInterstitial, showAdsgramRewarded } from "@/pi/adsgram";
 
 type PiUser = { uid: string; username?: string; wallet_address?: string };
 export type PiAuthResult = {
@@ -296,11 +295,17 @@ export async function showPiRewardedAd(
   sandbox = getPiSandbox(),
 ): Promise<PiRewardedAdResult> {
   if (isTelegram()) {
+    const { adsgramConfigured, showAdsgramRewarded } = await import("@/pi/adsgram");
     if (!adsgramConfigured()) return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
     try {
       const ad = await showAdsgramRewarded();
       return ad.done
-        ? { supported: true, rewarded: true }
+        ? {
+            supported: true,
+            rewarded: true,
+            // Server matches this against the Adsgram Reward URL postback.
+            adId: ad.viewerId ? `adsgram:${ad.viewerId}` : undefined,
+          }
         : { supported: true, rewarded: false, reason: ad.reason };
     } catch {
       return { supported: false, rewarded: false, reason: "ADS_NOT_SUPPORTED" };
@@ -359,6 +364,7 @@ export async function showPiInterstitial(sandbox = getPiSandbox()): Promise<void
   if (Date.now() - lastInterstitialAt < INTERSTITIAL_MIN_INTERVAL_MS) return;
   if (isTelegram()) {
     lastInterstitialAt = Date.now();
+    const { showAdsgramInterstitial } = await import("@/pi/adsgram");
     await showAdsgramInterstitial().catch(() => {});
     return;
   }
