@@ -184,6 +184,7 @@ vidoomy.com, 8953515, RESELLER
 adwmg.com, 159512, RESELLER, c9688a22012618e7
 brightmountainmedia.com, 2686958, RESELLER
 programmaticx.ai, 84448, RESELLER, b42d42eb28400efa
+smaato.com, 1100059345, RESELLER, 07bcf65f187117b4
 
 # ------------------------------------------------------- Yandex (Boost)
 
