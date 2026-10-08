@@ -58,6 +58,12 @@ async function init(): Promise<void> {
     // or context). That is what keeps "Location" off the Play Data safety
     // declaration — see docs/YANDEX-ADS.md.
     MobileAds.setLocationConsent(false);
+    if (__DEV__) {
+      // Logcat gets the request/no-fill reasons, and failed requests paint a
+      // visible indicator on the banner instead of silently rendering nothing.
+      MobileAds.enableLogging(true);
+      MobileAds.enableDebugErrorIndicator(true);
+    }
     await MobileAds.initialize();
   } catch (e) {
     consented = false;
@@ -74,4 +80,24 @@ export function yandexBannerUnit(): string | null {
   if (!consented) return null;
   if (__DEV__) return YANDEX_DEMO_BANNER_UNIT;
   return YANDEX_VOICES_BANNER_UNIT || null;
+}
+
+/**
+ * Yandex's Debug Panel: SDK version, integration status, which adapters loaded,
+ * the privacy settings actually in force, and an error report to send to their
+ * support. This is what Yandex has instead of AdMob's test-device allowlist —
+ * there is no device to register, because testing uses the demo placement.
+ *
+ * Wired to a long-press on the footer line in SettingsScreen, mirroring how
+ * the AdMob Ad Inspector is reached from the version text below it.
+ */
+export async function showYandexDebugPanel(): Promise<void> {
+  // Bounded wait, not a plain await: MobileAds.initialize() resolves a native
+  // promise that never settles if the SDK cannot start, and awaiting it outright
+  // made the long-press look like it was loading forever without ever opening.
+  await Promise.race([
+    initializeYandexAds(),
+    new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+  ]);
+  MobileAds.showDebugPanel();
 }

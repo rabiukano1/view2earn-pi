@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,7 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import Icon from './Icon';
-import { ADMOB_AD_UNITS, ADMOB_TEST_AD_UNIT, shouldUseLiveAdUnits } from '../services/admobService';
+import { ADMOB_AD_UNITS, ADMOB_TEST_AD_UNIT, shouldUseLiveAdUnits, canRequestAds } from '../services/admobService';
 import { noteRewardedAdShown } from '../services/interstitialService';
 
 interface RewardedAdModalProps {
@@ -61,7 +61,12 @@ export default function RewardedAdModal({
   const [claiming, setClaiming] = useState(false);
   const claimedRef = useRef(false);
 
-  const adConfig = useQuery(api.ads.getAdRewardConfig, visible && userId ? { userId } : 'skip');
+  // Fetched on mount, NOT gated on `visible`. While this query is in flight
+  // liveAdUnitId falls back to the hardcoded unit, so gating it on the modal
+  // opening meant the ad unit CHANGED mid-load once the config arrived — which
+  // throws away the in-flight request and starts the load over, in front of the
+  // user. It also put a backend round trip on the critical path of every tap.
+  const adConfig = useQuery(api.ads.getAdRewardConfig, userId ? { userId } : 'skip');
   const rewardForAd = useMutation(api.ads.rewardForAd);
 
   // Parse active ad network config from Convex backend if configured by Admin Panel
@@ -85,7 +90,23 @@ export default function RewardedAdModal({
   const effectiveAdUnitId = shouldUseLiveAdUnits() ? liveAdUnitId : ADMOB_TEST_AD_UNIT;
   const loadAttempts = useRef(0);
 
-  const { isLoaded, isClosed, isEarnedReward, error, load, show } = useRewardedAd(effectiveAdUnitId);
+  // AdMob Server-Side Verification: Google signs a callback to
+  // /admob/ssv carrying this nonce, which proves the ad really played.
+  // New nonce per modal opening, so one verification cannot cover two claims.
+  const ssvNonce = useMemo(
+    () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visible, effectiveAdUnitId],
+  );
+  const { isLoaded, isClosed, isEarnedReward, error, load, show } = useRewardedAd(
+    effectiveAdUnitId,
+    {
+      serverSideVerificationOptions: {
+        userId: userId ? String(userId) : undefined,
+        customData: ssvNonce,
+      },
+    },
+  );
 
   // Debug: log which unit is actually being used (helps catch prod no-fill)
   useEffect(() => {
@@ -95,8 +116,36 @@ export default function RewardedAdModal({
     }
   }, [visible, effectiveAdUnitId, activeProvider?.name, error]);
 
-  // Load the ad fresh each time the modal opens or unit changes.
-  // If ad was prefetched (isLoaded true), go ready immediately — fixes 2nd request delay.
+  // Warm the ad when the host screen mounts, not when the user taps.
+  //
+  // This is what made ads feel slow in production: every call site keeps this
+  // component mounted, but load() only ran once `visible` flipped, so the first
+  // reward of a session paid the full cold-load cost in front of the user — 3-10s
+  // for rewarded video, longer through the Unity waterfall. Warming here means
+  // the tap usually finds isLoaded already true and goes straight to 'ready'.
+  //
+  // The cost is a request that may never be shown, which lowers show rate (not
+  // match rate). That is the trade Google's own preload guidance accepts, and it
+  // is one request per mount, not per tap.
+  const warmedRef = useRef(false);
+  useEffect(() => {
+    if (warmedRef.current || !effectiveAdUnitId || isLoaded) return;
+    warmedRef.current = true;
+    // A3: never request an ad while UMP consent forbids it.
+    canRequestAds().then((allowed) => {
+      if (!allowed) return;
+      try {
+        console.log('[RewardedAd] warm load() ->', effectiveAdUnitId);
+        load();
+      } catch (err) {
+        warmedRef.current = false;
+        console.warn('[RewardedAd] warm load() threw:', err);
+      }
+    });
+  }, [effectiveAdUnitId, isLoaded, load]);
+
+  // Opening the modal: a warm ad is shown immediately; otherwise fall through to
+  // the loading state and let the timeout/error effects below drive the retries.
   useEffect(() => {
     if (visible && effectiveAdUnitId) {
       claimedRef.current = false;
@@ -107,9 +156,19 @@ export default function RewardedAdModal({
         return;
       }
       setPhase('loading');
+      // A warm load is already in flight — issuing a second request here would
+      // just burn inventory without arriving any sooner.
+      if (warmedRef.current) return;
       try {
         console.log('[RewardedAd] load() ->', effectiveAdUnitId);
-        load();
+        canRequestAds().then((allowed) => {
+          if (!allowed) {
+            setAdError('Ads are unavailable until you accept the privacy choices.');
+            setPhase('error');
+            return;
+          }
+          load();
+        });
       } catch (err: any) {
         console.warn('[RewardedAd] load() threw:', err);
         setAdError('');
@@ -133,6 +192,7 @@ export default function RewardedAdModal({
       return;
     }
     loadAttempts.current += 1;
+    warmedRef.current = false;
     setPhase('loading');
     setAdError('');
     const t = setTimeout(() => {
@@ -199,6 +259,7 @@ export default function RewardedAdModal({
         }
       } else {
         const newBalance = await rewardForAd({
+          ssvNonce,
           userId,
           provider: effectiveAdUnitId,
           adType: adType ?? 'rewarded_video',

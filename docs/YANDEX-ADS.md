@@ -177,6 +177,32 @@ remove the `isAdRow` branch in `renderItem`. `adRows.ts` and its test can stay
 
 ---
 
+## Testing: there is no test device to register
+
+Yandex has no equivalent of AdMob's test-device allowlist. Three tools instead:
+
+1. **Demo placement** — `demo-banner-yandex`, used automatically in `__DEV__`.
+   Always fills, anywhere, earns nothing. This is the sanctioned test path.
+2. **Debug Panel** — long-press *"View2Earn • Community Engagement & Growth"*
+   in Settings (the version line below it still opens AdMob's Ad Inspector).
+   Shows SDK version, integration status, which adapters loaded, the privacy
+   settings actually in force, and builds an error report for Yandex support.
+3. **Dev logging** — `enableLogging` and `enableDebugErrorIndicator` are on in
+   `__DEV__`: logcat carries the no-fill reasons and a failed request paints a
+   visible indicator instead of rendering nothing.
+
+   ```
+   adb logcat | findstr Yandex
+   ```
+
+**Never test by pointing a debug build at the live placement and tapping the
+ads.** With no test-device list there is nothing to exempt the device, so those
+are invalid impressions under Yandex's participation rules — the same trap as
+AdMob. `yandexBannerUnit()` returns the demo ID whenever `__DEV__` is true, so
+this is safe by default; it only becomes a risk if someone edits that branch.
+
+---
+
 ## Play Console — Data safety declaration
 
 Fill this in **before** shipping a release that contains the Yandex SDK:

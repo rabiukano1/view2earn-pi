@@ -94,8 +94,8 @@ android {
         applicationId "com.view2earn"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 4
+        versionName "1.0.3"
 
         // react-native-app-auth: redirect back to the app after Google OAuth consent.
         manifestPlaceholders = [
