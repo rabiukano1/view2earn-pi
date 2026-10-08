@@ -11,13 +11,17 @@ export const ADMOB_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/5224354917';
 
 // Mediation (Unity, ironSource, …) NEVER serves on Google's test ad units —
 // those only ever return Google's own demo ads. To verify Unity actually fills
-// you must request the LIVE unit from a device listed in ADMOB_TEST_DEVICE_IDS.
-// Flip this to true in a debug build to do that. It is DEV-ONLY: release builds
-// always use live units via the !__DEV__ term below, so leaving this true cannot
-// affect production. The only cost of leaving it on is that debug builds request
-// real ads, so keep every dev device registered in ADMOB_TEST_DEVICE_IDS or in
-// AdMob's Test devices list — clicking live ads otherwise is invalid traffic.
-export const FORCE_LIVE_ADS_IN_DEV = true;
+// you must request the LIVE unit, which this flag enables for debug builds.
+//
+// DEFAULT false, deliberately. With it on, every debug build requests real,
+// revenue-earning ads; a tap from a device that is NOT registered in
+// ADMOB_TEST_DEVICE_IDS (or AdMob -> Settings -> Test devices) is invalid
+// traffic, which is the most common cause of AdMob account suspension.
+//
+// Turn it on only while actively verifying mediation, on a registered device,
+// and turn it back off. Release builds are unaffected either way: they always
+// use live units via the !__DEV__ term below.
+export const FORCE_LIVE_ADS_IN_DEV = false;
 
 /** True when ad requests should go to the real (revenue-earning) ad units. */
 export function shouldUseLiveAdUnits(): boolean {
@@ -51,6 +55,23 @@ export const ADMOB_TEST_DEVICE_IDS = [
 ] as const;
 
 let isMobileAdsInitialized = false;
+
+/**
+ * A3 — consent gate. The SDK is always initialized (early-returning here once
+ * left useRewardedAd permanently "not initialized"), but no ad may be
+ * REQUESTED while UMP says we cannot. Google's requirement applies to ad
+ * requests, not to SDK startup, so gating here is both compliant and safe.
+ * Shared by the rewarded and interstitial paths so they cannot drift.
+ */
+export async function canRequestAds(): Promise<boolean> {
+  try {
+    const info = await AdsConsent.getConsentInfo();
+    if (info.canRequestAds === false) return false;
+  } catch {
+    // UMP unavailable (no network, non-EEA): Google treats this as allowed.
+  }
+  return true;
+}
 
 /**
  * Initialize Google Mobile Ads SDK, handle GDPR/CCPA UMP consent, and register known test devices.

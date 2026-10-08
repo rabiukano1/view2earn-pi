@@ -641,5 +641,131 @@ router.route({
   }),
 });
 router.route({ path: "/wallet/verify-deposit", method: "POST", handler: handleVerifyDeposit });
-export default router;
 
+
+// ---------------------------------------------------------------------------
+// AdMob rewarded Server-Side Verification
+//   AdMob console -> the rewarded ad unit -> Server-side verification ->
+//   https://site.view2earn.org/admob/ssv
+//
+// Google signs each callback with ECDSA P-256. We verify against their
+// published verifier keys, so a forged request cannot grant a reward.
+// Docs: https://developers.google.com/admob/android/ssv
+// ---------------------------------------------------------------------------
+const ADMOB_KEYS_URL = "https://gstatic.com/admob/reward/verifier-keys.json";
+type AdmobKey = { keyId: number; base64: string; pem?: string };
+let admobKeyCache: { at: number; keys: AdmobKey[] } | null = null;
+
+async function admobVerifierKeys(): Promise<AdmobKey[]> {
+  // Keys rotate rarely; cache for an hour so every callback is not a fetch.
+  if (admobKeyCache && Date.now() - admobKeyCache.at < 60 * 60 * 1000) {
+    return admobKeyCache.keys;
+  }
+  const res = await fetch(ADMOB_KEYS_URL);
+  if (!res.ok) throw new Error(`verifier keys HTTP ${res.status}`);
+  const body = (await res.json()) as { keys: AdmobKey[] };
+  admobKeyCache = { at: Date.now(), keys: body.keys ?? [] };
+  return admobKeyCache.keys;
+}
+
+function b64ToBytes(b64: string): Uint8Array {
+  const norm = b64.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(norm.padEnd(Math.ceil(norm.length / 4) * 4, "="));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/**
+ * Google sends a DER-encoded ECDSA signature; Web Crypto expects the raw
+ * r||s form. Converting is required — skipping it makes every verification
+ * fail, which would look like "Google never calls us".
+ */
+function derToRawEcdsa(der: Uint8Array): Uint8Array {
+  let i = 0;
+  if (der[i++] !== 0x30) throw new Error("bad DER");
+  if (der[i] & 0x80) i += 1 + (der[i] & 0x7f);
+  else i += 1;
+  const readInt = (): Uint8Array => {
+    if (der[i++] !== 0x02) throw new Error("bad DER int");
+    const len = der[i++];
+    let val = der.slice(i, i + len);
+    i += len;
+    while (val.length > 32 && val[0] === 0x00) val = val.slice(1);
+    const padded = new Uint8Array(32);
+    padded.set(val, 32 - val.length);
+    return padded;
+  };
+  const r = readInt();
+  const s = readInt();
+  const raw = new Uint8Array(64);
+  raw.set(r, 0);
+  raw.set(s, 32);
+  return raw;
+}
+
+const handleAdmobSsv = httpAction(async (ctx, request) => {
+  const url = new URL(request.url);
+  const query = url.search.startsWith("?") ? url.search.slice(1) : url.search;
+
+  // Everything before "&signature=" is what Google signed.
+  const sigIndex = query.indexOf("&signature=");
+  if (sigIndex < 0) return new Response("missing signature", { status: 400 });
+  const signedContent = query.slice(0, sigIndex);
+
+  const p = url.searchParams;
+  const signature = p.get("signature");
+  const keyId = p.get("key_id");
+  const transactionId = p.get("transaction_id");
+  const customData = p.get("custom_data") ?? "";
+  const userId = p.get("user_id") ?? undefined;
+  const rewardAmount = Number(p.get("reward_amount") ?? "0");
+  if (!signature || !keyId) {
+    return new Response("missing params", { status: 400 });
+  }
+
+  try {
+    const keys = await admobVerifierKeys();
+    const key = keys.find((k) => String(k.keyId) === String(keyId));
+    if (!key) return new Response("unknown key_id", { status: 403 });
+
+    const pubKey = await crypto.subtle.importKey(
+      "spki",
+      b64ToBytes(key.base64) as unknown as ArrayBuffer,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
+    );
+    const ok = await crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      pubKey,
+      derToRawEcdsa(b64ToBytes(signature)) as unknown as ArrayBuffer,
+      new TextEncoder().encode(signedContent) as unknown as ArrayBuffer,
+    );
+    if (!ok) return new Response("bad signature", { status: 403 });
+  } catch (e) {
+    console.warn("[AdMobSSV] verification error:", (e as Error)?.message);
+    return new Response("verification error", { status: 403 });
+  }
+
+  // Signature is good. Record the reward when it carries a transaction id;
+  // Google's "Verify URL" probe may omit it, and that must still return 200
+  // or the console reports the callback as unreachable.
+  if (transactionId) {
+    try {
+      await ctx.runMutation(internal.admobSsv.markVerified, {
+        nonce: customData,
+        transactionId,
+        userId,
+        rewardAmount: Number.isFinite(rewardAmount) ? rewardAmount : undefined,
+      });
+    } catch (e) {
+      console.warn("[AdMobSSV] record failed:", (e as Error)?.message);
+    }
+  }
+  // Google expects a 200 with any body.
+  return new Response("ok", { status: 200 });
+});
+router.route({ path: "/admob/ssv", method: "GET", handler: handleAdmobSsv });
+
+export default router;

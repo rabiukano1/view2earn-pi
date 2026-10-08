@@ -18,6 +18,7 @@ import type * as accountLinkDb from "../accountLinkDb.js";
 import type * as achievements from "../achievements.js";
 import type * as activities from "../activities.js";
 import type * as admin from "../admin.js";
+import type * as admobSsv from "../admobSsv.js";
 import type * as ads from "../ads.js";
 import type * as adsgram from "../adsgram.js";
 import type * as anchor from "../anchor.js";
@@ -105,6 +106,7 @@ declare const fullApi: ApiFromModules<{
   achievements: typeof achievements;
   activities: typeof activities;
   admin: typeof admin;
+  admobSsv: typeof admobSsv;
   ads: typeof ads;
   adsgram: typeof adsgram;
   anchor: typeof anchor;

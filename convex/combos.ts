@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser, requireUserAndEconomy } from "./lib/guards";
 import { getNum } from "./rewardsConfig";
-import { consumeRewardedAd } from "./piAds";
+import { requireAdProof } from "./piAds";
 import { appendLedger } from "./lib/ledger";
 
 function dayNumber(ms: number): number {
@@ -78,7 +78,7 @@ export const claimCombo = mutation({
 
     // Rewarded-ad gate (mirrors Android's ComboTracker): verify the ad
     // server-side before granting the combo bonus.
-    if (adId) await consumeRewardedAd(ctx, userId, adId);
+    await requireAdProof(ctx, userId, adId);
 
     const reward = await getNum(ctx, "comboBonus");
 

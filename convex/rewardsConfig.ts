@@ -40,7 +40,13 @@ export const REWARD_KEYS = {
   academyXp: "200",
   // Withdrawal settings (identity.ts / wallets.ts / sidra.ts). Per-app
   // overrides ("withdrawMinLevel@telegram") are honoured for withdrawMinLevel.
-  withdrawMinLevel: "9",          // level a surface must reach to claim/cash out
+  withdrawMinLevel: "9",
+  // Ad-gated rewards (bonus spin, 2x, daily box, combo, check-in) when NO ad
+  // proof is supplied. "true" keeps them working where an ad network is not
+  // live yet (Adsgram pending approval, Pi Ad Network pending). Set "false"
+  // once ads serve everywhere: the client reports "ads unavailable" on any
+  // error, so leaving this on lets a modified client claim rewards for free.
+  allowRewardWithoutAd: "true",          // level a surface must reach to claim/cash out
   claimMaxPoints: "0",            // max points per claim into the wallet; 0 = no cap
   minWithdrawSidra: "0",          // minimum SIDRA per withdrawal; 0 = none
   minWithdrawPipro: "0",

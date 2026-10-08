@@ -17,6 +17,9 @@ export default function WatchHubScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const voiceCount = useQuery(api.voiceNotes.list)?.length ?? 0;
+  // Stream channels, grouped by type — the counts shown on each tile.
+  const channels = useQuery(api.iptv.list) ?? [];
+  const countOf = (type: string) => channels.filter((c) => c.type === type).length;
   // Admin panel -> Features. A missing flag means enabled, so nothing changes
   // until an admin explicitly turns a row off.
   const flags = useQuery(api.features.getFlags) || {};
@@ -33,6 +36,54 @@ export default function WatchHubScreen() {
   // Every destination in one list so they all render as identical tiles,
   // matching the "Explore Platform" grid on the home screen.
   const tiles = [
+    ...(on('feature:watch.football')
+      ? [{
+          key: 'football',
+          label: 'Live Football',
+          desc: 'Licensed football & sports streams',
+          icon: 'futbol',
+          brand: false,
+          tint: '#10B981',
+          count: countOf('football') as number | undefined,
+          go: () => navigation.navigate('LiveStreams', { kind: 'football' }),
+        }]
+      : []),
+    ...(on('feature:watch.movies')
+      ? [{
+          key: 'movies',
+          label: 'Movies',
+          desc: 'Full-length movies & shows',
+          icon: 'film',
+          brand: false,
+          tint: '#A855F7',
+          count: countOf('movies') as number | undefined,
+          go: () => navigation.navigate('LiveStreams', { kind: 'movies' }),
+        }]
+      : []),
+    ...(on('feature:watch.other')
+      ? [{
+          key: 'other',
+          label: 'Live Streams',
+          desc: 'Other live channels & broadcasts',
+          icon: 'tv',
+          brand: false,
+          tint: '#3B82F6',
+          count: countOf('other') as number | undefined,
+          go: () => navigation.navigate('LiveStreams', { kind: 'other' }),
+        }]
+      : []),
+    ...(on('feature:watch.youtube')
+      ? [{
+          key: 'youtube',
+          label: 'YouTube Videos',
+          desc: 'YouTube watch & live videos',
+          icon: 'youtube',
+          brand: true,
+          tint: '#EF4444',
+          count: countOf('youtube') as number | undefined,
+          go: () => navigation.navigate('LiveStreams', { kind: 'youtube' }),
+        }]
+      : []),
     ...(on('feature:watch.videos')
       ? [{
           key: 'videos',

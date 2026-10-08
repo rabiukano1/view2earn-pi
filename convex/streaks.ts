@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getOptionalUser, requireUser, requireUserAndEconomy } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
-import { consumeRewardedAd } from "./piAds";
+import { requireAdProof } from "./piAds";
 import { appendLedger } from "./lib/ledger";
 import { awardXP } from "./xp";
 
@@ -77,7 +77,7 @@ export const checkIn = mutation({
     // Rewarded-ad gate (mirrors Android's StreakCard): the check-in reward is
     // only granted after the ad is verified server-side. Runs before the ledger
     // write so a failed ad rolls the whole transaction back.
-    if (adId) await consumeRewardedAd(ctx, userId, adId);
+    await requireAdProof(ctx, userId, adId);
 
     const streak = effectiveStreak(row?.current ?? 0, row?.lastDay ?? null, today);
     const longest = Math.max(row?.longest ?? 0, streak);

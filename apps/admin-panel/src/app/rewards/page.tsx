@@ -395,6 +395,25 @@ export default function RewardsPage() {
               </div>
             </div>
 
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>
+                Allow ad-gated rewards without an ad
+              </label>
+              <select
+                value={form.allowRewardWithoutAd ?? "true"}
+                onChange={(e) => updateField("allowRewardWithoutAd", e.target.value)}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontWeight: 700 }}>
+                <option value="true">Yes — grant when no ad is available (default)</option>
+                <option value="false">No — require a verified ad</option>
+              </select>
+              <p style={{ fontSize: 11, color: "var(--text-2)", marginTop: 6 }}>
+                Bonus spin, 2x reward, daily box, combo and check-in. Set to
+                &quot;No&quot; once ads serve on every platform — the app reports
+                &quot;ads unavailable&quot; on any error, so leaving this on lets a modified
+                client claim those rewards for free.
+              </p>
+            </div>
+
             <div>
               <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", display: "block", marginBottom: 6 }}>
                 Tasks Needed for Daily Mystery Box

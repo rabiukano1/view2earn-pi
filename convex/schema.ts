@@ -531,7 +531,12 @@ export default defineSchema({
   adsgramRewards: defineTable({
     telegramUserId: v.string(),
     at: v.number(),
-  }).index("by_telegramUserId", ["telegramUserId"]),
+    // Each postback is a single-use ticket: the matching reward claim consumes
+    // it (convex/adsgram.ts:consumeTicket), so one ad cannot pay twice.
+    consumedAt: v.optional(v.number()),
+    consumedBy: v.optional(v.id("users")),
+  }).index("by_telegramUserId", ["telegramUserId"])
+    .index("by_tg_consumed", ["telegramUserId", "consumedAt"]),
 
   // One row per auth session: which app surface (economy) the session runs on.
   // Bound lazily on the session's first mutation (lib/guards.ts).
@@ -575,6 +580,25 @@ export default defineSchema({
   }).index("by_video", ["videoId"])
     .index("by_status", ["status"])
     .index("by_reporter_video", ["reporterId", "videoId"]),
+
+  // AdMob rewarded Server-Side Verification (convex/admobSsv.ts). One row per
+  // rewarded-ad claim: written unverified by the client credit, flipped to
+  // verified when Google's signed callback arrives.
+  admobRewards: defineTable({
+    userId: v.id("users"),
+    nonce: v.string(),
+    adType: v.string(),
+    points: v.number(),
+    verified: v.boolean(),
+    claimedAt: v.number(),
+    transactionId: v.optional(v.string()),
+    verifiedAt: v.optional(v.number()),
+    rewardAmount: v.optional(v.number()),
+    reconciled: v.optional(v.boolean()),
+  }).index("by_nonce", ["nonce"])
+    .index("by_transaction", ["transactionId"])
+    .index("by_user", ["userId"])
+    .index("by_verified_claimedAt", ["verified", "claimedAt"]),
 
   sessionSurfaces: defineTable({
     sessionId: v.id("authSessions"),

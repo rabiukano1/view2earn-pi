@@ -4,6 +4,8 @@ import type { MutationCtx } from "./_generated/server";
 import { api } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./lib/guards";
+import { getSetting } from "./rewardsConfig";
+import { consumeTicket } from "./adsgram";
 
 // Pi Ad Network rewarded ads (plan §7.9 / Pi Ads). The client SDK
 // (Pi.Ads.showAd("rewarded")) returns an adId after the user watches the ad.
@@ -44,6 +46,33 @@ async function isAdGranted(adId: string): Promise<boolean> {
 // Pi's Platform API and records it in adCompletions (replay protection). Any
 // calling mutation must run this BEFORE granting its reward so the whole
 // transaction rolls back if the ad isn't verified.
+/**
+ * Every ad-gated reward funnels through here. With an adId we verify it with
+ * the network; without one we only proceed while `allowRewardWithoutAd` is on.
+ * Keeping this in a single function means a new reward type cannot forget it.
+ */
+export async function requireAdProof(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  adId: string | undefined,
+): Promise<void> {
+  // Adsgram (Telegram) sends "adsgram:<telegramUserId>" — its postback has no
+  // per-ad token, so proof is a single-use ticket written by the Reward URL.
+  if (adId?.startsWith("adsgram:")) {
+    const ok = await consumeTicket(ctx, userId, adId.slice("adsgram:".length));
+    if (ok) return;
+    // No ticket yet (postback delayed or absent): fall through to the switch
+    // rather than refusing a user who genuinely watched the ad.
+  } else if (adId) {
+    await consumeRewardedAd(ctx, userId, adId);
+    return;
+  }
+  const allowed = (await getSetting(ctx, "allowRewardWithoutAd")) !== "false";
+  if (!allowed) {
+    throw new Error("Ads are unavailable right now — please try again shortly.");
+  }
+}
+
 export async function consumeRewardedAd(
   ctx: MutationCtx,
   userId: Id<"users">,
@@ -87,7 +116,7 @@ export const claimRewardedAd = mutation({
     // verification and still grant the bonus — mirroring check-in/openBox.
     // If the grant throws (limit reached), the outer transaction rolls back
     // and the ad is NOT consumed, so the user can retry in the next window.
-    if (adId) await consumeRewardedAd(ctx, userId, adId);
+    await requireAdProof(ctx, userId, adId);
     const grant = await ctx.runMutation(api.spin.earnBonusSpin, { userId, amount: 1 });
 
     return grant;

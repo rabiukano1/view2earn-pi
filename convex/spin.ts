@@ -7,7 +7,7 @@ import { deriveEconomy, requireUser, requireUserAndSurface } from "./lib/guards"
 import type { Surface } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
 import { appendLedger, economyOfUser, lastBalance } from "./lib/ledger";
-import { consumeRewardedAd } from "./piAds";
+import { requireAdProof } from "./piAds";
 
 // Wheel sector order must match SvgSpinWheel TEN_WHEEL_PRIZES exactly
 const WHEEL_PTS = [10, 25, 50, -1, 100, 15, -2, -3, 0, 35] as const;
@@ -333,7 +333,7 @@ export const claimSpin = mutation({
   handler: async (ctx, { userId, spinId, doubled, adId }) => {
     const { economy } = await requireUserAndSurface(ctx, userId);
     // Pi Ad Network 2x: verify the rewarded adId before paying the double.
-    if (doubled && adId) await consumeRewardedAd(ctx, userId, adId);
+    if (doubled) await requireAdProof(ctx, userId, adId);
     const pending = await ctx.db.get(spinId);
     if (!pending || pending.userId !== userId) throw new Error("Spin not found");
     const pts = pending.pts;

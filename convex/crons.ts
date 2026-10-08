@@ -33,6 +33,8 @@ crons.interval("recompute-fraud-scores", { hours: 24 }, internal.fraud.recompute
 // landed). Hourly; only touches pendings older than 15 minutes.
 crons.interval("recover-unclaimed-spins", { hours: 1 }, internal.spin.recoverStalePendingSpins, {});
 crons.interval("purge-settled-spins", { hours: 24 }, internal.spin.purgeSettledSpins, {});
+// Flags rewarded-ad credits that Google's SSV callback never confirmed.
+crons.interval("reconcile-admob-ssv", { hours: 1 }, internal.admobSsv.reconcileAdmobRewards, {});
 
 // Auto-detect SIDRA sent to the platform address from registered user
 // addresses, so deposits credit without the user pasting a hash.

@@ -1,5 +1,5 @@
 import { InterstitialAd, AdEventType, AdsConsent } from 'react-native-google-mobile-ads';
-import { shouldUseLiveAdUnits } from './admobService';
+import { shouldUseLiveAdUnits , canRequestAds as sharedCanRequestAds } from './admobService';
 
 // Live interstitial ad unit (AdMob account ca-app-pub-5278018921408798).
 export const INTERSTITIAL_AD_UNIT = 'ca-app-pub-5278018921408798/5251615181';
@@ -25,15 +25,11 @@ let lastShownAt = 0;
 let shownInSession = 0;
 let failStreak = 0;
 
+// Shared with the rewarded path (admobService) so the two cannot diverge.
 async function canRequestAds(): Promise<boolean> {
-  try {
-    const info = await AdsConsent.getConsentInfo();
-    if (info.canRequestAds === false) {
-      console.log('[Interstitial] canRequestAds=false — skip');
-      return false;
-    }
-  } catch { }
-  return true;
+  const ok = await sharedCanRequestAds();
+  if (!ok) console.log('[Interstitial] canRequestAds=false — skip');
+  return ok;
 }
 
 function createAndLoad() {

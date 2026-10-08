@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireUser, requireUserAndSurface } from "./lib/guards";
 import { applySpinDouble } from "./spin";
 import { consumeRewardedAd } from "./piAds";
@@ -96,12 +97,25 @@ export const rewardForAd = mutation({
     adType: v.optional(v.string()),
     rewardAmount: v.optional(v.number()),
     piAdId: v.optional(v.string()),
+    /** AdMob SSV nonce (customData). Lets Google's callback confirm this claim. */
+    ssvNonce: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { economy } = await requireUserAndSurface(ctx, args.userId);
     // Pi Ad Network: verify adId against the Platform API (+ replay-protect)
     // before crediting anything. Native AdMob callers don't send piAdId.
     if (args.piAdId) await consumeRewardedAd(ctx, args.userId, args.piAdId);
+    // AdMob: the client says the ad was watched. Record the claim so Google's
+    // signed SSV callback can confirm it; unconfirmed claims are flagged by
+    // admobSsv.reconcileAdmobRewards.
+    if (args.ssvNonce) {
+      await ctx.runMutation(internal.admobSsv.recordClientClaim, {
+        userId: args.userId,
+        nonce: args.ssvNonce,
+        adType: args.adType ?? "rewarded",
+        points: args.rewardAmount ?? 0,
+      });
+    }
     const normalizedAdType = args.adType?.trim().toLowerCase() ?? "";
 
     // Spin rewards never take the generic flat-reward path below — that would

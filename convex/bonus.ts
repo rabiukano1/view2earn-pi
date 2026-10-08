@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireUser, getOptionalUser, requireUserAndEconomy } from "./lib/guards";
 import { getJSON, getNum } from "./rewardsConfig";
-import { consumeRewardedAd } from "./piAds";
+import { requireAdProof } from "./piAds";
 import { appendLedger } from "./lib/ledger";
 
 function dayNumber(ms: number): number {
@@ -84,7 +84,7 @@ export const openBox = mutation({
 
     // Rewarded-ad gate (mirrors Android's DailyBox): verify the ad server-side
     // before granting the box prize.
-    if (adId) await consumeRewardedAd(ctx, userId, adId);
+    await requireAdProof(ctx, userId, adId);
 
     const prizes = await getJSON<{ pts: number; weight: number }[]>(ctx, "mysteryBoxPrizes");
     const reward = pickPrize(prizes);

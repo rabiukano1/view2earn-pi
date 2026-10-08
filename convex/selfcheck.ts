@@ -4,6 +4,7 @@ import { cashOutStatus } from "./identity";
 import { appendLedger, lastBalance } from "./lib/ledger";
 import { getNum } from "./rewardsConfig";
 import { attachTelegram } from "./telegramAuth";
+import { requireAdProof } from "./piAds";
 
 // One runnable check for the 3-in-1 identity logic. Run against the LOCAL
 // deployment only:  npx convex run selfcheck:identity
@@ -144,6 +145,56 @@ export const identity = internalMutation({
     }
     for (const r of await ctx.db.query("economyBalances").withIndex("by_user_economy", (q) => q.eq("userId", spinner)).collect()) await ctx.db.delete(r._id);
     await ctx.db.delete(spinner);
+
+    // 9. ad-gated rewards honour the allowRewardWithoutAd switch
+    const adUser = await ctx.db.insert("users", {
+      ecosystem: "SIDRA", externalUid: `auth:selfcheck-ad-${Date.now()}`, username: "selfcheck-ad",
+      tier: 0, fraudScore: 0, deviceFingerprint: "test", signupIp: "0.0.0.0", country: "test",
+    });
+    const setFlag = async (val: string) => {
+      const row = await ctx.db.query("platformSettings")
+        .withIndex("by_key", (q) => q.eq("key", "allowRewardWithoutAd")).unique();
+      if (row) await ctx.db.patch(row._id, { value: val, updatedAt: Date.now() });
+      else await ctx.db.insert("platformSettings", { key: "allowRewardWithoutAd", value: val, updatedAt: Date.now() });
+    };
+    await setFlag("true");
+    let threwNoAd = false;
+    try { await requireAdProof(ctx, adUser, undefined); } catch { threwNoAd = true; }
+    assert(!threwNoAd, "no-ad reward allowed while the switch is on");
+
+    await setFlag("false");
+    threwNoAd = false;
+    try { await requireAdProof(ctx, adUser, undefined); } catch { threwNoAd = true; }
+    assert(threwNoAd, "no-ad reward refused once the switch is off");
+    // Adsgram: a Reward URL postback is a single-use ticket.
+    await setFlag("false"); // so only a real ticket can pass
+    const agTgId = `sc-adsgram-${Date.now()}`;
+    await ctx.db.insert("adsgramRewards", { telegramUserId: agTgId, at: Date.now() });
+    let ticketOk = true;
+    try { await requireAdProof(ctx, adUser, `adsgram:${agTgId}`); } catch { ticketOk = false; }
+    assert(ticketOk, "adsgram ticket accepted once");
+
+    let reuse = false;
+    try { await requireAdProof(ctx, adUser, `adsgram:${agTgId}`); } catch { reuse = true; }
+    assert(reuse, "the same adsgram ticket cannot pay twice");
+
+    // A stale postback must not authorise a much later claim.
+    const staleTg = `sc-stale-${Date.now()}`;
+    await ctx.db.insert("adsgramRewards", {
+      telegramUserId: staleTg,
+      at: Date.now() - 60 * 60 * 1000,
+    });
+    let staleRejected = false;
+    try { await requireAdProof(ctx, adUser, `adsgram:${staleTg}`); } catch { staleRejected = true; }
+    assert(staleRejected, "an expired adsgram ticket is refused");
+
+    for (const r of await ctx.db.query("adsgramRewards")
+      .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", agTgId)).collect()) await ctx.db.delete(r._id);
+    for (const r of await ctx.db.query("adsgramRewards")
+      .withIndex("by_telegramUserId", (q) => q.eq("telegramUserId", staleTg)).collect()) await ctx.db.delete(r._id);
+
+    await setFlag("true");
+    await ctx.db.delete(adUser);
 
     // cleanup
     for (const t of ["pointsLedger"] as const) {
