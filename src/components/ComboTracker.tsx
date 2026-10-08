@@ -79,6 +79,7 @@ export default function ComboTracker({ userId }: { userId: Id<'users'> }) {
       </View>
 
       <RewardedAdModal
+        warm={Boolean(status.canClaim)}
         visible={adVisible}
         onClose={() => setAdVisible(false)}
         onSuccess={handleAdSuccess}

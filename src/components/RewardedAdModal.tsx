@@ -29,6 +29,14 @@ interface RewardedAdModalProps {
   /** When true, skip the generic ads.rewardForAd ledger credit and only call onSuccess.
    *  Use for flows where points/spins are credited by a dedicated mutation (spin claim, bonus spin). */
   skipReward?: boolean;
+  /**
+   * Request the ad on mount so the user's tap finds it ready. Pass the same
+   * condition that enables the button: three of these modals are mounted on
+   * Home at once, and warming all three fires three ad requests for one
+   * eventual impression, which wastes inventory and tanks show rate. Defaults
+   * to true for call sites where reaching the screen is itself the intent.
+   */
+  warm?: boolean;
 }
 
 type AdPhase = 'loading' | 'ready' | 'error';
@@ -54,6 +62,7 @@ export default function RewardedAdModal({
   rewardAmount,
   adType,
   skipReward,
+  warm = true,
 }: RewardedAdModalProps) {
   const { userId } = useAuth();
   const [phase, setPhase] = useState<AdPhase>('loading');
@@ -129,7 +138,7 @@ export default function RewardedAdModal({
   // is one request per mount, not per tap.
   const warmedRef = useRef(false);
   useEffect(() => {
-    if (warmedRef.current || !effectiveAdUnitId || isLoaded) return;
+    if (!warm || warmedRef.current || !effectiveAdUnitId || isLoaded) return;
     warmedRef.current = true;
     // A3: never request an ad while UMP consent forbids it.
     canRequestAds().then((allowed) => {
@@ -142,7 +151,7 @@ export default function RewardedAdModal({
         console.warn('[RewardedAd] warm load() threw:', err);
       }
     });
-  }, [effectiveAdUnitId, isLoaded, load]);
+  }, [warm, effectiveAdUnitId, isLoaded, load]);
 
   // Opening the modal: a warm ad is shown immediately; otherwise fall through to
   // the loading state and let the timeout/error effects below drive the retries.

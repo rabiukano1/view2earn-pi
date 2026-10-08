@@ -98,6 +98,7 @@ export default function DailyBox({ userId }: { userId: Id<'users'> }) {
         ) : null}
       </TouchableOpacity>
       <RewardedAdModal
+        warm={Boolean(status.eligible)}
         visible={adVisible}
         onClose={() => setAdVisible(false)}
         onSuccess={handleAdSuccess}

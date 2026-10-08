@@ -101,6 +101,7 @@ export default function StreakCard({ userId }: { userId: Id<'users'> }) {
         })}
       </View>
       <RewardedAdModal
+        warm={Boolean(streak.canCheckIn)}
         visible={adVisible}
         onClose={() => setAdVisible(false)}
         onSuccess={handleAdSuccess}
