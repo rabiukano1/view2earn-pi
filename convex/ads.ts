@@ -56,36 +56,10 @@ export const getAdRewardConfig = query({
       rewardPoints = 0;
     }
 
-    return {
-      rewardPoints,
-      providers: providers.map((p) => ({
-        id: p._id,
-        name: p.name,
-        platform: p.platform,
-        configJson: p.configJson,
-      })),
-    };
-  },
-});
-
-/** Backward-compatible query alias */
-export const listEnabled = query({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    await requireUser(ctx, userId);
-    const providers = await ctx.db
-      .query("providers")
-      .filter((q) => q.and(
-        q.eq(q.field("kind"), "ADS"),
-        q.eq(q.field("enabled"), true),
-      ))
-      .collect();
-    return providers.map((p) => ({
-      id: p._id,
-      name: p.name,
-      platform: p.platform,
-      configJson: p.configJson,
-    }));
+    // rewardPoints only. configJson used to be handed to the client, which is
+    // how an admin-panel row could redirect ad requests to another publisher's
+    // ad unit. Ad units are fixed in the app now, so nothing needs this.
+    return { rewardPoints };
   },
 });
 
