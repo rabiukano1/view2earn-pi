@@ -136,18 +136,25 @@ export default function RewardedAdModal({
   // The cost is a request that may never be shown, which lowers show rate (not
   // match rate). That is the trade Google's own preload guidance accepts, and it
   // is one request per mount, not per tap.
-  const warmedRef = useRef(false);
+  // Two separate facts, and conflating them cost users a 6s spinner: that the
+  // warm-up has RUN (so it does not loop), and that a load() actually WENT OUT
+  // (so the open path does not duplicate it). If consent is withheld or load()
+  // throws, the warm-up has run but issued nothing — the tap must then do the
+  // work itself rather than wait for the timeout to rescue it.
+  const warmAttemptedRef = useRef(false);
+  const loadIssuedRef = useRef(false);
   useEffect(() => {
-    if (!warm || warmedRef.current || !effectiveAdUnitId || isLoaded) return;
-    warmedRef.current = true;
-    // A3: never request an ad while UMP consent forbids it.
+    if (!warm || warmAttemptedRef.current || !effectiveAdUnitId || isLoaded) return;
+    warmAttemptedRef.current = true;
+    // A3: never request an ad while UMP consent forbids it. Staying silent here
+    // is deliberate: the open path re-checks and shows the user why.
     canRequestAds().then((allowed) => {
       if (!allowed) return;
       try {
         console.log('[RewardedAd] warm load() ->', effectiveAdUnitId);
         load();
+        loadIssuedRef.current = true;
       } catch (err) {
-        warmedRef.current = false;
         console.warn('[RewardedAd] warm load() threw:', err);
       }
     });
@@ -165,9 +172,9 @@ export default function RewardedAdModal({
         return;
       }
       setPhase('loading');
-      // A warm load is already in flight — issuing a second request here would
-      // just burn inventory without arriving any sooner.
-      if (warmedRef.current) return;
+      // A warm request is genuinely in flight — a second one would burn
+      // inventory without arriving sooner. Only skip when one actually went out.
+      if (loadIssuedRef.current) return;
       try {
         console.log('[RewardedAd] load() ->', effectiveAdUnitId);
         canRequestAds().then((allowed) => {
@@ -201,7 +208,7 @@ export default function RewardedAdModal({
       return;
     }
     loadAttempts.current += 1;
-    warmedRef.current = false;
+    loadIssuedRef.current = false;
     setPhase('loading');
     setAdError('');
     const t = setTimeout(() => {
