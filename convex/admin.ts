@@ -6,6 +6,7 @@ import { recomputeUserScore } from "./fraud";
 import { fraudTier } from "@view2earn/core";
 import { REWARD_KEYS, getNum } from "./rewardsConfig";
 import { creditAnchorDeposit } from "./anchorDb";
+import { deriveEconomy } from "./lib/guards";
 import { adminAdjustSpins } from "./spin";
 import { economyOfUser, appendLedger, lastBalance, POINTS_ISSUED_KEY, POINTS_SPENT_KEY } from "./lib/ledger";
 
@@ -243,7 +244,10 @@ export const listUsers = query({
     requireAdmin(token);
     // ponytail: full scan (Convex caps a query at 16k docs / 8 MB); switch to
     // paginate() + server-side search when the user table nears that.
-    return await ctx.db.query("users").order("desc").collect();
+    const users = await ctx.db.query("users").order("desc").collect();
+    // Balances are per-economy, so an adjustment aimed at the wrong one is
+    // invisible to the user. The panel needs to know where each user lives.
+    return users.map((u) => ({ ...u, economy: deriveEconomy(u) }));
   },
 });
 

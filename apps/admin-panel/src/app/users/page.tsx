@@ -26,7 +26,10 @@ export default function UsersPage() {
   const [form, setForm] = useState<UserForm>({ tier: 0, fraudScore: 0, country: "" });
   // Who the points modal applies to: one user, the ticked users, or everyone.
   const [pointsModal, setPointsModal] = useState<
-    { kind: "one"; userId: Id<"users">; username: string } | { kind: "some" } | { kind: "all" } | null
+    | { kind: "one"; userId: Id<"users">; username: string }
+    | { kind: "some" }
+    | { kind: "all" }
+    | null
   >(null);
   const [pointsDelta, setPointsDelta] = useState<number>(100);
   const [pointsReason, setPointsReason] = useState<string>("ADMIN_BONUS");
@@ -234,7 +237,12 @@ export default function UsersPage() {
                       className="btn btn-ghost btn-sm"
                       title="Adjust Points"
                       style={{ padding: '4px 8px' }}
-                      onClick={() => setPointsModal({ kind: "one", userId: u._id, username: u.username })}>
+                      onClick={() => {
+                        // Default to the app this user actually uses. The old
+                        // default ("wallet") credited a pool they never see.
+                        if (u.economy) setPointsEconomy(u.economy);
+                        setPointsModal({ kind: "one", userId: u._id, username: u.username });
+                      }}>
                       🪙
                     </button>
                     <button
@@ -332,7 +340,14 @@ export default function UsersPage() {
             <select value={adjustKind} onChange={(e) => {
               const k = e.target.value as "points" | "spins";
               setAdjustKind(k);
-              if (k === "spins" && pointsEconomy === "wallet") setPointsEconomy("pi-browser");
+              // Spins do not exist on the wallet; fall back to the user's own
+              // app rather than guessing pi-browser.
+              if (k === "spins" && pointsEconomy === "wallet") {
+                const u = pointsModal?.kind === "one"
+                  ? users?.find((x) => x._id === pointsModal.userId)
+                  : undefined;
+                setPointsEconomy(u?.economy ?? "android");
+              }
             }}>
               <option value="points">Points</option>
               <option value="spins">Spins (never expire, used after free spins)</option>
