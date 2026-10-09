@@ -4,43 +4,28 @@ import mobileAds, {
   MaxAdContentRating,
 } from 'react-native-google-mobile-ads';
 
-// Live rewarded ad unit IDs (AdMob account ca-app-pub-5278018921408798).
-// Google test unit — __DEV__ ONLY. Never serve this in a release build:
-// it earns nothing and violates AdMob policy.
-export const ADMOB_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/5224354917';
-
-// Mediation (Unity, ironSource, …) NEVER serves on Google's test ad units —
-// those only ever return Google's own demo ads. To verify Unity actually fills
-// you must request the LIVE unit, which this flag enables for debug builds.
+// The only AdMob identifiers this app may use. App ID lives in
+// AndroidManifest.xml: ca-app-pub-5278018921408798~9302302185
 //
-// DEFAULT false, deliberately. With it on, every debug build requests real,
-// revenue-earning ads; a tap from a device that is NOT registered in
-// ADMOB_TEST_DEVICE_IDS (or AdMob -> Settings -> Test devices) is invalid
-// traffic, which is the most common cause of AdMob account suspension.
-//
-// Turn it on only while actively verifying mediation, on a registered device,
-// and turn it back off. Release builds are unaffected either way: they always
-// use live units via the !__DEV__ term below.
-export const FORCE_LIVE_ADS_IN_DEV = false;
-
-/** True when ad requests should go to the real (revenue-earning) ad units. */
-export function shouldUseLiveAdUnits(): boolean {
-  return !__DEV__ || FORCE_LIVE_ADS_IN_DEV;
-}
+// No test unit IDs exist here any more, deliberately. A Google sample unit
+// reaching a release build earns nothing and breaches AdMob policy, and the
+// branch that chose between them was one edit away from doing exactly that.
+// Every build now requests the live units; AdMob serves TEST ads to devices
+// registered below (and under AdMob -> Settings -> Test devices), which is
+// Google's own recommended way to test without inflating live traffic.
 export const ADMOB_AD_UNITS = {
   android: 'ca-app-pub-5278018921408798/8327151927',
   ios: 'ca-app-pub-5278018921408798/8327151927',
 } as const;
 
 export function getRewardedAdUnitId(): string {
-  return shouldUseLiveAdUnits() ? ADMOB_AD_UNITS.android : ADMOB_TEST_AD_UNIT;
+  return ADMOB_AD_UNITS.android;
 }
 export function getRewardedAdUnitIdIOS(): string {
-  return shouldUseLiveAdUnits() ? ADMOB_AD_UNITS.ios : ADMOB_TEST_AD_UNIT;
+  return ADMOB_AD_UNITS.ios;
 }
 
 export const INTERSTITIAL_AD_UNIT = 'ca-app-pub-5278018921408798/5251615181';
-export const INTERSTITIAL_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/1033173712';
 
 // Devices registered as test devices in the AdMob console (Advertising ID).
 // Keep in sync with AdMob → Settings → Test devices so real ads render in

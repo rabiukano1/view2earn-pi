@@ -15,7 +15,7 @@ import { api } from '../../convex/_generated/api';
 import { useAuth } from '../auth/AuthContext';
 import { colors, radius, shadow } from '../theme';
 import Icon from './Icon';
-import { ADMOB_AD_UNITS, ADMOB_TEST_AD_UNIT, shouldUseLiveAdUnits, canRequestAds } from '../services/admobService';
+import { ADMOB_AD_UNITS, canRequestAds } from '../services/admobService';
 import { noteRewardedAdShown } from '../services/interstitialService';
 
 interface RewardedAdModalProps {
@@ -79,24 +79,14 @@ export default function RewardedAdModal({
   const rewardForAd = useMutation(api.ads.rewardForAd);
 
   // Parse active ad network config from Convex backend if configured by Admin Panel
-  const activeProvider = adConfig?.providers?.[0];
-  let parsedConfig: Record<string, any> = {};
-  if (activeProvider?.configJson) {
-    try {
-      parsedConfig = JSON.parse(activeProvider.configJson);
-    } catch { }
-  }
-
   const rewardPoints = adConfig?.rewardPoints ?? 50;
   const displayReward = rewardAmount ?? rewardPoints;
-  const liveAdUnitId =
-    Platform.OS === 'ios'
-      ? (parsedConfig.adMobIosUnitId || ADMOB_AD_UNITS.ios)
-      : (parsedConfig.adMobAndroidUnitId || parsedConfig.unityPlacementId || ADMOB_AD_UNITS.android);
-  // The Google demo unit is for __DEV__ ONLY. Falling back to it in a release
-  // build served real users free test videos: $0 revenue, and against AdMob
-  // policy. A live no-fill now surfaces as the 'error' phase instead.
-  const effectiveAdUnitId = shouldUseLiveAdUnits() ? liveAdUnitId : ADMOB_TEST_AD_UNIT;
+  // Fixed, and not overridable from the backend. The admin panel used to be
+  // able to substitute an ad unit here, which is how a Google sample unit ended
+  // up configured against this app. adConfig is still read, for rewardPoints.
+  const effectiveAdUnitId =
+    Platform.OS === 'ios' ? ADMOB_AD_UNITS.ios : ADMOB_AD_UNITS.android;
+
   const loadAttempts = useRef(0);
 
   // AdMob Server-Side Verification: Google signs a callback to
@@ -120,10 +110,10 @@ export default function RewardedAdModal({
   // Debug: log which unit is actually being used (helps catch prod no-fill)
   useEffect(() => {
     if (visible) {
-      console.log('[RewardedAd] effectiveAdUnitId:', effectiveAdUnitId, shouldUseLiveAdUnits() ? '(LIVE)' : '(TEST)', 'provider:', activeProvider?.name ?? 'none');
+      console.log('[RewardedAd] effectiveAdUnitId:', effectiveAdUnitId);
       if (error) console.log('[RewardedAd] hook error:', JSON.stringify(error));
     }
-  }, [visible, effectiveAdUnitId, activeProvider?.name, error]);
+  }, [visible, effectiveAdUnitId, error]);
 
   // Warm the ad when the host screen mounts, not when the user taps.
   //

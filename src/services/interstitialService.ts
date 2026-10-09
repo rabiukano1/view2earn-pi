@@ -1,13 +1,12 @@
 import { InterstitialAd, AdEventType, AdsConsent } from 'react-native-google-mobile-ads';
-import { shouldUseLiveAdUnits , canRequestAds as sharedCanRequestAds } from './admobService';
+import { canRequestAds as sharedCanRequestAds } from './admobService';
 
 // Live interstitial ad unit (AdMob account ca-app-pub-5278018921408798).
 export const INTERSTITIAL_AD_UNIT = 'ca-app-pub-5278018921408798/5251615181';
 // Google test interstitial — used ONLY in __DEV__ (never in production builds).
-export const INTERSTITIAL_TEST_AD_UNIT = 'ca-app-pub-3940256099942544/1033173712';
 
 function getInterstitialUnitId(): string {
-  return shouldUseLiveAdUnits() ? INTERSTITIAL_AD_UNIT : INTERSTITIAL_TEST_AD_UNIT;
+  return INTERSTITIAL_AD_UNIT;
 }
 
 // AdMob interstitial best practices:
@@ -36,7 +35,7 @@ function createAndLoad() {
   if (loading) return;
 
   const unitId = getInterstitialUnitId();
-  console.log('[Interstitial] loading unit', unitId, shouldUseLiveAdUnits() ? '(LIVE)' : '(TEST)');
+  console.log('[Interstitial] loading unit', unitId);
 
   // Dispose any previous instance + listeners before requesting a new ad.
   try {
